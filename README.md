@@ -40,15 +40,6 @@ cd "c:\Users\patro\OneDrive\Documentos\EEMM"
 
 ---
 
-## 🔑 Credenciales de Acceso
-
-| Rol | Usuario | RUT | Contraseña |
-| :--- | :--- | :---: | :---: |
-| **Administrador** | Administrador General | **`20.967.660-5`** | **`4277`** |
-| **Técnico** | Patricio | `18.123.456-7` | `1234` |
-| **Técnico** | Martin | `17.234.567-8` | `1234` |
-| **Técnico** | Luis | `16.345.678-9` | `1234` |
-| **Técnico** | Jorge | `15.456.789-0` | `1234` |
 
 > [!NOTE]
 > Nuevos usuarios técnicos y administradores pueden ser registrados directamente por el Administrador desde la pestaña **Administración > Gestión de Usuarios del Sistema**.
