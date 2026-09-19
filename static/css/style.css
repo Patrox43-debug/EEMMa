@@ -156,10 +156,11 @@ code, kbd, samp, pre {
    APP HEADER (Slim, Frosted Minimalist)
    ========================================================================== */
 .header {
-  height: 58px;
+  height: auto;
+  min-height: 64px;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border);
-  padding: 0 1.5rem;
+  padding: 0.5rem 1.5rem;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -217,8 +218,10 @@ code, kbd, samp, pre {
 
 .header-right {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.35rem;
 }
 
 .header-user-badge {
@@ -230,7 +233,7 @@ code, kbd, samp, pre {
 .header-actions-group {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 /* ==========================================================================
@@ -1523,11 +1526,11 @@ select.form-control {
   /* Espacio superior para la bandeja de notificaciones del dispositivo y borde delimitador */
   .header {
     height: auto !important;
-    min-height: 68px !important;
+    min-height: 72px !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 50 !important;
-    padding-top: max(26px, env(safe-area-inset-top, 26px)) !important; /* Espacio para bandeja de notificaciones */
+    padding-top: max(28px, env(safe-area-inset-top, 28px)) !important; /* Espacio para bandeja de notificaciones */
     padding-bottom: 0.55rem !important;
     padding-left: max(0.85rem, env(safe-area-inset-left, 0.85rem)) !important;
     padding-right: max(0.85rem, env(safe-area-inset-right, 0.85rem)) !important;
