@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  eemm:
+    build: .
+    container_name: eemm-hospital
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_PATH=/app/data/eemm.db
+      - UPLOADS_DIR=/app/uploads
+    volumes:
+      - eemm_uploads:/app/uploads
+      - eemm_data:/app/data
+
+volumes:
+  eemm_uploads:
+    driver: local
+  eemm_data:
+    driver: local

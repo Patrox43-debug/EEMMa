@@ -1344,7 +1344,14 @@ const app = {
 
               <div class="box-footer">
                 <span>📍 E${info.numero || 1} • R${repisaNum}</span>
-                <span style="color:var(--primary); font-weight:600; font-size:0.68rem;">Ver ficha →</span>
+                <div style="display:flex; gap:3px; align-items:center;">
+                  <button type="button" class="btn btn-outline btn-sm" style="font-size:0.65rem; padding:1px 5px;" onclick="event.stopPropagation(); app.openIngresoStockModal('${box.id_caja}')" title="Ingresar stock">
+                    +Stock
+                  </button>
+                  <button type="button" class="btn btn-outline-danger btn-sm" style="font-size:0.65rem; padding:1px 5px;" onclick="event.stopPropagation(); app.deleteInsumo('${box.id_caja}', '${(box.nombre_caja || '').replace(/'/g, "\\'")}')" title="Eliminar producto">
+                    🗑️
+                  </button>
+                </div>
               </div>
             </div>
           `;
@@ -1357,7 +1364,12 @@ const app = {
                 <span class="shelf-tag-icon">${repisaNum}</span>
                 <span>${repisaTitle}</span>
               </div>
-              <span class="badge badge-subtle" style="font-size:0.7rem;">${repisaCajas.length} caja(s)</span>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="badge badge-subtle" style="font-size:0.7rem;">${repisaCajas.length} caja(s)</span>
+                <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem; padding:2px 7px;" onclick="event.stopPropagation(); app.openNewInsumoModal('${eid}', '${repisaNum}')" title="Crear un producto directamente en esta repisa">
+                  + Insumo aquí
+                </button>
+              </div>
             </div>
 
             <div class="boxes-grid">
@@ -1433,9 +1445,17 @@ const app = {
         <td><small>${inv.barcode || "S/C"}</small></td>
         <td>${statusBadge}</td>
         <td class="col-actions">
-          <button class="btn btn-outline btn-sm" onclick="app.openBoxModal(${boxJson})" title="Ver ficha de caja">
-            Ver Ficha
-          </button>
+          <div style="display:flex; gap:0.35rem; justify-content:center;">
+            <button class="btn btn-outline btn-sm" onclick="app.openBoxModal(${boxJson})" title="Ver ficha completa">
+              Ver
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="app.openIngresoStockModal('${inv.id_caja}')" title="Ingresar stock">
+              +Stock
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="app.deleteInsumo('${inv.id_caja}', '${(inv.nombre_caja || '').replace(/'/g, "\\'")}')" title="Eliminar producto">
+              🗑️
+            </button>
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
@@ -1462,6 +1482,9 @@ const app = {
     const statusBadge = isBajo
       ? `<span class="badge" style="background:var(--warning-subtle); color:var(--warning); font-weight:700;">STOCK BAJO</span>`
       : `<span class="badge badge-success" style="font-weight:700;">STOCK ÓPTIMO (OK)</span>`;
+
+    const boxJson = JSON.stringify(box).replace(/"/g, '&quot;');
+    const safeNombre = (box.nombre_caja || '').replace(/'/g, "\\'");
 
     document.getElementById("modal-caja-title").textContent = box.nombre_caja;
     document.getElementById("modal-caja-subtitle").textContent = `Identificador de Caja: ${box.id_caja}`;
@@ -1528,10 +1551,26 @@ const app = {
           ` : ""}
         </div>
 
-        <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="app.closeCajaModal()">
-            Entendido
+        <!-- Botones de Acción de la Ficha -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle); gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="app.deleteInsumo('${box.id_caja}', '${safeNombre}')" title="Eliminar permanentemente este producto">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Eliminar
           </button>
+          
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="app.openIngresoStockModal('${box.id_caja}')" title="Sumar stock a este producto">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Ingresar Stock
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick='app.openEditInsumoModal(${boxJson})' title="Editar información o ubicación">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              Editar
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="app.closeCajaModal()">
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -1544,6 +1583,274 @@ const app = {
     if (modal) modal.classList.remove("active");
   },
 
+  /* ==========================================================================
+     CRUD DE INSUMOS / PRODUCTOS DE BODEGA
+     ========================================================================== */
+  populateEstanteriaSelect(selectId, selectedValue = null) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = "";
+
+    const estantes = (this.estantesSummary && this.estantesSummary.length > 0)
+      ? this.estantesSummary
+      : Object.values(this.estanteMap);
+
+    if (estantes.length === 0) {
+      for (let i = 1; i <= 16; i++) {
+        const opt = document.createElement("option");
+        opt.value = `shelf_${i}`;
+        opt.textContent = `Estante #${i}`;
+        select.appendChild(opt);
+      }
+      return;
+    }
+
+    const sorted = [...estantes].sort((a, b) => (a.numero || 0) - (b.numero || 0));
+
+    sorted.forEach(e => {
+      const opt = document.createElement("option");
+      opt.value = e.id_estanteria;
+      opt.textContent = e.nombre || `Estante #${e.numero}`;
+      if (selectedValue && e.id_estanteria === selectedValue) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
+  },
+
+  openNewInsumoModal(defaultEstante = null, defaultRepisa = null) {
+    const form = document.getElementById("form-insumo");
+    if (form) form.reset();
+
+    const title = document.getElementById("modal-form-insumo-title");
+    if (title) title.textContent = "Crear Nuevo Insumo / Caja";
+
+    document.getElementById("insumo-edit-id").value = "";
+    document.getElementById("btn-save-insumo").textContent = "Crear Producto";
+
+    this.populateEstanteriaSelect("insumo-estanteria", defaultEstante);
+
+    if (defaultRepisa) {
+      const repisaSelect = document.getElementById("insumo-repisa");
+      if (repisaSelect) repisaSelect.value = String(defaultRepisa);
+    }
+
+    document.getElementById("insumo-cantidad").value = "1";
+    document.getElementById("insumo-estado").value = "OK";
+    document.getElementById("insumo-barcode").value = "";
+
+    const modal = document.getElementById("modal-form-insumo");
+    if (modal) modal.classList.add("active");
+  },
+
+  closeInsumoModal() {
+    const modal = document.getElementById("modal-form-insumo");
+    if (modal) modal.classList.remove("active");
+  },
+
+  openEditInsumoModal(box) {
+    if (typeof box === "string") {
+      box = this.inventarioData.find(b => b.id_caja === box);
+    }
+    if (!box) return;
+
+    this.closeCajaModal();
+
+    const title = document.getElementById("modal-form-insumo-title");
+    if (title) title.textContent = `Editar Insumo: ${box.nombre_caja}`;
+
+    document.getElementById("insumo-edit-id").value = box.id_caja;
+    document.getElementById("insumo-nombre").value = box.nombre_caja || "";
+    document.getElementById("insumo-cantidad").value = box.cantidad || 0;
+    document.getElementById("insumo-estado").value = box.estado || "OK";
+    document.getElementById("insumo-barcode").value = box.barcode || "";
+
+    this.populateEstanteriaSelect("insumo-estanteria", box.estanteria_id);
+
+    let repisaNum = "1";
+    if (box.seccion_id && box.seccion_id.includes("_sec_")) {
+      repisaNum = box.seccion_id.split("_sec_")[1];
+    }
+    const repSelect = document.getElementById("insumo-repisa");
+    if (repSelect) repSelect.value = repisaNum;
+
+    document.getElementById("btn-save-insumo").textContent = "Guardar Cambios";
+
+    const modal = document.getElementById("modal-form-insumo");
+    if (modal) modal.classList.add("active");
+  },
+
+  async saveInsumo(event) {
+    event.preventDefault();
+
+    const editId = document.getElementById("insumo-edit-id").value;
+    const nombre = document.getElementById("insumo-nombre").value.trim();
+    const estanteriaId = document.getElementById("insumo-estanteria").value;
+    const repisa = document.getElementById("insumo-repisa").value;
+    const cantidad = parseInt(document.getElementById("insumo-cantidad").value, 10) || 0;
+    const estado = document.getElementById("insumo-estado").value;
+    const barcode = document.getElementById("insumo-barcode").value.trim();
+
+    if (!nombre) {
+      this.showToast("El nombre del insumo es obligatorio", "error");
+      return;
+    }
+
+    const payload = {
+      nombre_caja: nombre,
+      cantidad: cantidad,
+      estanteria_id: estanteriaId,
+      seccion_id: `${estanteriaId}_sec_${repisa}`,
+      barcode: barcode || null,
+      estado: estado
+    };
+
+    const saveBtn = document.getElementById("btn-save-insumo");
+    saveBtn.disabled = true;
+
+    try {
+      let res;
+      if (editId) {
+        res = await fetch(`/api/inventario/${encodeURIComponent(editId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch("/api/inventario", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Error al guardar producto");
+      }
+
+      this.showToast(editId ? "Producto actualizado correctamente" : "Producto registrado exitosamente en bodega", "success");
+      this.closeInsumoModal();
+
+      this.estantesSummary = [];
+      await this.loadInventario();
+
+    } catch (err) {
+      console.error("Error guardando producto:", err);
+      this.showToast(err.message, "error");
+    } finally {
+      saveBtn.disabled = false;
+    }
+  },
+
+  openIngresoStockModal(defaultBoxId = null) {
+    const select = document.getElementById("ingreso-select-caja");
+    if (!select) return;
+    select.innerHTML = "";
+
+    const sorted = [...this.inventarioData].sort((a, b) => (a.nombre_caja || "").localeCompare(b.nombre_caja || ""));
+
+    if (sorted.length === 0) {
+      this.showToast("No hay insumos disponibles para ingresar stock", "warning");
+      return;
+    }
+
+    sorted.forEach(box => {
+      const opt = document.createElement("option");
+      opt.value = box.id_caja;
+      const shelfInfo = this.estanteMap[box.estanteria_id];
+      const shelfText = shelfInfo ? `Estante #${shelfInfo.numero}` : box.estanteria_id;
+      opt.textContent = `${box.nombre_caja} (Stock actual: ${box.cantidad} un. | ${shelfText})`;
+      if (defaultBoxId && box.id_caja === defaultBoxId) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
+
+    document.getElementById("ingreso-cantidad").value = "1";
+
+    const modal = document.getElementById("modal-ingreso-stock");
+    if (modal) modal.classList.add("active");
+  },
+
+  closeIngresoStockModal() {
+    const modal = document.getElementById("modal-ingreso-stock");
+    if (modal) modal.classList.remove("active");
+  },
+
+  async submitIngresoStock(event) {
+    event.preventDefault();
+
+    const boxId = document.getElementById("ingreso-select-caja").value;
+    const cantidad = parseInt(document.getElementById("ingreso-cantidad").value, 10);
+
+    if (!boxId) {
+      this.showToast("Selecciona un producto para ingresar stock", "error");
+      return;
+    }
+    if (isNaN(cantidad) || cantidad <= 0) {
+      this.showToast("La cantidad a sumar debe ser mayor a 0", "error");
+      return;
+    }
+
+    const submitBtn = document.getElementById("btn-submit-ingreso");
+    submitBtn.disabled = true;
+
+    try {
+      const res = await fetch(`/api/inventario/${encodeURIComponent(boxId)}/ingreso`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cantidad: cantidad })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Error al sumar stock");
+      }
+
+      const data = await res.json();
+      this.showToast(`Stock actualizado exitosamente (+${cantidad} un.). Total ahora: ${data.caja.cantidad} un.`, "success");
+      this.closeIngresoStockModal();
+      this.closeCajaModal();
+
+      this.estantesSummary = [];
+      await this.loadInventario();
+
+    } catch (err) {
+      console.error("Error ingresando stock:", err);
+      this.showToast(err.message, "error");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  },
+
+  async deleteInsumo(idCaja, nombreCaja) {
+    if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente el producto "${nombreCaja}" (${idCaja}) de la bodega?\n\nEsta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/inventario/${encodeURIComponent(idCaja)}`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Error al eliminar producto");
+      }
+
+      this.showToast(`Producto "${nombreCaja}" eliminado de bodega`, "info");
+      this.closeCajaModal();
+
+      this.estantesSummary = [];
+      await this.loadInventario();
+
+    } catch (err) {
+      console.error("Error eliminando insumo:", err);
+      this.showToast(err.message, "error");
+    }
+  },
+
   filterInventario() {
     this.loadInventario();
   },
@@ -1551,6 +1858,26 @@ const app = {
   filterInventarioDebounced() {
     clearTimeout(this.debounceTimers.inv);
     this.debounceTimers.inv = setTimeout(() => this.loadInventario(), 300);
+  },
+
+  exportInventarioExcel() {
+    const qInput = document.getElementById("inventario-search");
+    const q = qInput ? qInput.value.trim() : "";
+    const estadoSelect = document.getElementById("inventario-filtro-estado");
+    const estado = estadoSelect ? estadoSelect.value : "";
+
+    let url = "/api/inventario/export/excel";
+    const params = new URLSearchParams();
+    if (q) params.append("q", q);
+    if (estado) params.append("estado", estado);
+    if (this.selectedEstante && this.selectedEstante !== "all") {
+      params.append("estanteria", this.selectedEstante);
+    }
+    const qs = params.toString();
+    if (qs) url += `?${qs}`;
+
+    this.showToast("Generando y descargando reporte Excel de bodega...", "info");
+    window.location.href = url;
   },
 
   /* ==========================================================================
