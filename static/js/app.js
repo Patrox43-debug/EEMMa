@@ -850,12 +850,12 @@ const app = {
         ${fotosHtml}
         ${firmaHtml}
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.25rem; padding-top:0.85rem; border-top:1px solid var(--border-color);">
-          <a href="/api/chequeos/${item.id_registro}/pdf" target="_blank" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.25rem; padding-top:0.85rem; border-top:1px solid var(--border-color); flex-wrap:wrap; gap:0.5rem;">
+          <a href="/api/chequeos/${item.id_registro}/pdf" target="_blank" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; flex:1 1 auto; justify-content:center;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
             Descargar Informe PDF Oficial
           </a>
-          <button type="button" class="btn btn-outline" onclick="app.closeModal()">Cerrar</button>
+          <button type="button" class="btn btn-outline" onclick="app.closeModal()" style="flex:0 0 auto;">Cerrar</button>
         </div>
       `;
 

@@ -85,7 +85,7 @@
       <!-- ====================================================================
            1. VISTA DE LOGIN MINIMALISTA (ACCESO POR RUT Y CONTRASEÑA)
            ==================================================================== -->
-      <section id="view-login" class="panel" style="max-width: 420px; margin: 3.5rem auto;">
+      <section id="view-login" class="panel login-panel">
         <div style="text-align: center; margin-bottom: 1.75rem;">
           <div class="brand-mark" style="width: 44px; height: 44px; font-size: 1.15rem; margin: 0 auto 0.75rem;">EM</div>
           <h2 style="font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em;">Sistema EEMM</h2>
@@ -232,11 +232,11 @@
             </div>
 
             <!-- Acciones de Envío -->
-            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+            <div class="form-actions-bar">
               <button type="reset" class="btn btn-subtle" onclick="app.resetChequeoForm()">
                 Restablecer
               </button>
-              <button type="submit" id="btn-submit-chequeo" class="btn btn-primary" style="min-width: 180px;">
+              <button type="submit" id="btn-submit-chequeo" class="btn btn-primary btn-submit-action">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                 Guardar Chequeo
               </button>
@@ -303,7 +303,7 @@
               <h2 class="panel-title">Catálogo Maestro de Equipos Médicos</h2>
               <p class="panel-subtitle">2.553 equipos registrados en el inventario hospitalario</p>
             </div>
-            <div style="max-width: 300px; width: 100%;">
+            <div class="catalog-search-wrapper">
               <input type="text" id="equipos-catalog-search" class="form-control" placeholder="Buscar equipo, serie o marca..." oninput="app.searchCatalogDebounced()">
             </div>
           </div>
@@ -377,7 +377,7 @@
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+        <div class="admin-stats-grid">
           <!-- Top Unidades -->
           <div class="panel" style="margin-bottom: 0;">
             <div class="panel-header">
@@ -669,7 +669,7 @@
             <input type="text" id="insumo-nombre" class="form-control" placeholder="Ej: BATERIAS DESFIBRILADOR TEC-5631" required>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="form-row-2col">
             <div class="form-group">
               <label class="form-label" for="insumo-estanteria">Estantería <span class="req">*</span>:</label>
               <select id="insumo-estanteria" class="form-control" required>
@@ -688,7 +688,7 @@
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="form-row-2col">
             <div class="form-group">
               <label class="form-label" for="insumo-cantidad">Cantidad en Stock <span class="req">*</span>:</label>
               <input type="number" id="insumo-cantidad" class="form-control" min="0" value="1" required>
