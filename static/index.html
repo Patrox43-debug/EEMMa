@@ -500,6 +500,20 @@
             </div>
 
             <div class="bodega-controls-right">
+              <!-- Botones de Acción de Bodega -->
+              <button type="button" class="btn btn-primary btn-sm" onclick="app.openNewInsumoModal()" title="Registrar nuevo producto o caja en bodega">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Crear Producto
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="app.openIngresoStockModal()" title="Ingresar o sumar stock a un producto existente">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Ingresar Stock
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="app.exportInventarioExcel()" title="Descargar planilla Excel (.xlsx) con todos los datos de bodega">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Exportar Excel
+              </button>
+
               <!-- Selector de Modo de Vista -->
               <div class="view-toggle-group">
                 <button type="button" class="view-toggle-btn active" id="btn-toggle-racks" onclick="app.setInventarioView('racks')" title="Ver como Estantes y Repisas Físicas">
@@ -627,6 +641,109 @@
         <div id="modal-caja-body">
           <!-- Rellenado dinámicamente por app.openBoxModal() -->
         </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         MODAL CREAR / EDITAR INSUMO O CAJA
+         ==================================================================== -->
+    <div id="modal-form-insumo" class="modal-overlay" onclick="if(event.target === this) app.closeInsumoModal();">
+      <div class="modal-card" style="max-width: 480px;">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <div>
+            <h3 class="panel-title" id="modal-form-insumo-title">Crear Nuevo Insumo / Caja</h3>
+            <p class="panel-subtitle">Asigna ubicación física en estante y repisa</p>
+          </div>
+          <button class="btn-icon" onclick="app.closeInsumoModal()">✕</button>
+        </div>
+
+        <form id="form-insumo" onsubmit="app.saveInsumo(event)">
+          <input type="hidden" id="insumo-edit-id">
+
+          <div class="form-group">
+            <label class="form-label" for="insumo-nombre">Descripción / Nombre del Insumo <span class="req">*</span>:</label>
+            <input type="text" id="insumo-nombre" class="form-control" placeholder="Ej: BATERIAS DESFIBRILADOR TEC-5631" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" for="insumo-estanteria">Estantería <span class="req">*</span>:</label>
+              <select id="insumo-estanteria" class="form-control" required>
+                <!-- Opciones generadas dinámicamente -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="insumo-repisa">Repisa / Nivel <span class="req">*</span>:</label>
+              <select id="insumo-repisa" class="form-control" required>
+                <option value="1">Repisa 1 (Superior)</option>
+                <option value="2">Repisa 2 (Medio)</option>
+                <option value="3">Repisa 3 (Inferior)</option>
+                <option value="4">Repisa 4 (Base)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" for="insumo-cantidad">Cantidad en Stock <span class="req">*</span>:</label>
+              <input type="number" id="insumo-cantidad" class="form-control" min="0" value="1" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="insumo-estado">Estado del Stock:</label>
+              <select id="insumo-estado" class="form-control">
+                <option value="OK">Stock Óptimo (OK)</option>
+                <option value="STOCK_BAJO">Stock Bajo</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="insumo-barcode">Código de Barras (Opcional):</label>
+            <input type="text" id="insumo-barcode" class="form-control" placeholder="Escanear o escribir código EAN...">
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn btn-subtle" onclick="app.closeInsumoModal()">Cancelar</button>
+            <button type="submit" id="btn-save-insumo" class="btn btn-primary">Guardar Producto</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         MODAL INGRESAR STOCK A PRODUCTO EXISTENTE
+         ==================================================================== -->
+    <div id="modal-ingreso-stock" class="modal-overlay" onclick="if(event.target === this) app.closeIngresoStockModal();">
+      <div class="modal-card" style="max-width: 440px;">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <div>
+            <h3 class="panel-title">Ingresar Stock a Bodega</h3>
+            <p class="panel-subtitle">Suma unidades físicas a un producto existente</p>
+          </div>
+          <button class="btn-icon" onclick="app.closeIngresoStockModal()">✕</button>
+        </div>
+
+        <form id="form-ingreso-stock" onsubmit="app.submitIngresoStock(event)">
+          <div class="form-group">
+            <label class="form-label" for="ingreso-select-caja">Seleccionar Insumo / Caja <span class="req">*</span>:</label>
+            <select id="ingreso-select-caja" class="form-control" required style="width: 100%;">
+              <!-- Rellenado dinámicamente por JS -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="ingreso-cantidad">Cantidad a Sumar <span class="req">*</span>:</label>
+            <input type="number" id="ingreso-cantidad" class="form-control" min="1" value="1" required placeholder="Número de unidades a ingresar">
+            <small style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 3px; display: block;">Esta cantidad se sumará directamente al stock actual del producto.</small>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn btn-subtle" onclick="app.closeIngresoStockModal()">Cancelar</button>
+            <button type="submit" id="btn-submit-ingreso" class="btn btn-primary">Confirmar Ingreso</button>
+          </div>
+        </form>
       </div>
     </div>
 

@@ -316,6 +316,31 @@ code, kbd, samp, pre {
   color: var(--text-primary);
 }
 
+.btn-danger {
+  background-color: var(--danger);
+  color: #ffffff;
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-danger:hover {
+  background-color: #b91c1c;
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-0.5px);
+}
+
+.btn-outline-danger {
+  background-color: var(--bg-surface);
+  border-color: var(--danger-border);
+  color: var(--danger);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-outline-danger:hover {
+  background-color: var(--danger-subtle);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .btn-icon {
   width: 32px;
   height: 32px;

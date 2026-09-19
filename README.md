@@ -58,6 +58,9 @@ cd "c:\Users\patro\OneDrive\Documentos\EEMM"
 ## 📁 Estructura del Proyecto
 
 * **`app.py`**: Servidor API REST con FastAPI (Login por RUT, CRUD usuarios, chequeos, equipos e inventario).
+* **`Dockerfile`**: Configuración optimizada para despliegue en Coolify / Docker.
+* **`docker-compose.yml`**: Orquestación con volúmenes persistentes para producción.
+* **`requirements.txt`**: Dependencias oficiales de Python.
 * **`eemm.db`**: Base de datos local SQLite con 2.553 equipos, historial e inventario.
 * **`uploads/`**: Almacenamiento local de fotografías y firmas adjuntas.
 * **`static/`**:
@@ -67,3 +70,16 @@ cd "c:\Users\patro\OneDrive\Documentos\EEMM"
   * `js/signature.js`: Controlador de firma sobre Canvas HTML5.
   * `js/photos.js`: Gestor de 4 ranuras de fotografías.
 * **`iniciar_eemm.bat`**: Script de arranque directo para Windows.
+
+---
+
+## ☁️ Despliegue en Producción con Coolify
+
+1. **Conectar Repositorio**: En Coolify, crea un nuevo recurso tipo **Application** apuntando a tu repositorio de GitHub.
+2. **Build Pack**: Selecciona **`Dockerfile`**.
+3. **Puerto de Escucha**: Configura el puerto expuesto en **`8000`**.
+4. **Verificación de Salud (Health Check)**: Apunta a `/api/health`.
+5. **Almacenamiento Persistente (Storages)**:
+   * `/app/uploads`: Para persistir fotos y firmas.
+   * `/app/data`: Para persistir la base de datos `eemm.db` (configurando la variable de entorno `DB_PATH=/app/data/eemm.db`).
+
