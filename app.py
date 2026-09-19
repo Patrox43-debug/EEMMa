@@ -9,14 +9,17 @@ import io
 import uuid
 import base64
 import sqlite3
+import shutil
+import tempfile
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from PIL import Image, ImageOps
 
-from fastapi import FastAPI, HTTPException, Query, Body, Response
+from fastapi import FastAPI, HTTPException, Query, Body, Response, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.background import BackgroundTask
 import csv
 from pydantic import BaseModel
 
@@ -363,6 +366,7 @@ class ChequeoCreate(BaseModel):
     fotos: Optional[List[str]] = []  # Lista de hasta 4 data URIs
     firma: Optional[str] = None      # Data URI del canvas
     firma_nombre: Optional[str] = ""
+    fecha: Optional[str] = None      # Fecha original en caso de guardado offline
 
 # Rutas de Autenticación con RUT
 @app.post("/api/auth/login")
@@ -545,6 +549,169 @@ def delete_admin_user(user_id: int):
     conn.close()
     return {"status": "ok", "message": "Usuario eliminado exitosamente"}
 
+# ==============================================================================
+# Rutas de Respaldo y Mantenimiento de Base de Datos (Exportar / Importar)
+# ==============================================================================
+@app.get("/api/admin/database/export")
+def export_database():
+    """Exportar copia de seguridad completa de la base de datos SQLite (.db)."""
+    if not os.path.exists(DB_PATH):
+        raise HTTPException(status_code=404, detail="Archivo de base de datos no encontrado")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"eemm_backup_{timestamp}.db"
+    temp_dir = tempfile.gettempdir()
+    temp_backup_path = os.path.join(temp_dir, f"export_{uuid.uuid4().hex[:8]}_{filename}")
+
+    try:
+        # Usar API de respaldo nativo de SQLite para copia consistente y atómica
+        src_conn = sqlite3.connect(DB_PATH)
+        dst_conn = sqlite3.connect(temp_backup_path)
+        with dst_conn:
+            src_conn.backup(dst_conn)
+        dst_conn.close()
+        src_conn.close()
+
+        def cleanup():
+            if os.path.exists(temp_backup_path):
+                try:
+                    os.remove(temp_backup_path)
+                except Exception:
+                    pass
+
+        return FileResponse(
+            path=temp_backup_path,
+            filename=filename,
+            media_type="application/x-sqlite3",
+            background=BackgroundTask(cleanup)
+        )
+    except Exception as e:
+        if os.path.exists(temp_backup_path):
+            try:
+                os.remove(temp_backup_path)
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Error generando respaldo de la base de datos: {str(e)}")
+
+
+@app.post("/api/admin/database/import")
+async def import_database(file: UploadFile = File(...)):
+    """Importar y restaurar la base de datos a partir de un archivo .db o .sql."""
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in [".db", ".sqlite", ".sqlite3", ".sql"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato no soportado. Debe seleccionar un archivo de base de datos (.db, .sqlite, .sqlite3 o .sql)"
+        )
+
+    temp_dir = tempfile.gettempdir()
+    temp_import_path = os.path.join(temp_dir, f"import_{uuid.uuid4().hex[:8]}{ext}")
+    temp_verified_db = os.path.join(temp_dir, f"verified_{uuid.uuid4().hex[:8]}.db")
+
+    try:
+        # Guardar archivo subido en ruta temporal
+        contents = await file.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="El archivo subido está vacío")
+
+        with open(temp_import_path, "wb") as f:
+            f.write(contents)
+
+        # Si es .sql, creamos una base SQLite temporal y ejecutamos el script
+        if ext == ".sql":
+            sql_text = contents.decode("utf-8-sig", errors="replace")
+            test_conn = sqlite3.connect(temp_verified_db)
+            try:
+                test_conn.executescript(sql_text)
+                test_conn.commit()
+            except Exception as sql_err:
+                test_conn.close()
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Error al procesar archivo SQL: {str(sql_err)}"
+                )
+        else:
+            # Es un archivo SQLite binario (.db)
+            # Verificar cabecera mágica de SQLite
+            if len(contents) < 16 or contents[:15] != b"SQLite format 3":
+                raise HTTPException(
+                    status_code=400,
+                    detail="El archivo proporcionado no es una base de datos SQLite válida (cabecera corrupta)"
+                )
+            shutil.copyfile(temp_import_path, temp_verified_db)
+            test_conn = sqlite3.connect(temp_verified_db)
+
+        # Verificar integridad y presencia de tablas requeridas
+        cursor = test_conn.cursor()
+        cursor.execute("PRAGMA quick_check;")
+        check_res = cursor.fetchone()
+        if not check_res or check_res[0] != "ok":
+            test_conn.close()
+            raise HTTPException(status_code=400, detail="La base de datos subida no superó la verificación de integridad de SQLite")
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in cursor.fetchall()]
+        if "perfiles" not in tables:
+            test_conn.close()
+            raise HTTPException(
+                status_code=400,
+                detail="La base de datos no contiene la tabla esencial 'perfiles'. No es un respaldo válido de EEMM."
+            )
+
+        # Obtener estadísticas de los datos que se van a restaurar
+        stats = {}
+        for tbl in ["perfiles", "equipos", "registros", "inventario", "unidades", "reparaciones"]:
+            if tbl in tables:
+                cursor.execute(f"SELECT COUNT(*) FROM {tbl}")
+                stats[tbl] = cursor.fetchone()[0]
+            else:
+                stats[tbl] = 0
+
+        test_conn.close()
+
+        # Generar respaldo automático de seguridad de la base actual antes de sobrescribir
+        if os.path.exists(DB_PATH):
+            backup_safety = f"{DB_PATH}.bak_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            try:
+                shutil.copyfile(DB_PATH, backup_safety)
+                print(f"[INFO] Respaldo automático de seguridad creado en: {backup_safety}")
+            except Exception as bak_err:
+                print(f"[WARN] No se pudo crear respaldo preventivo: {bak_err}")
+
+        # Reemplazar la base de datos activa con la verificada
+        shutil.copyfile(temp_verified_db, DB_PATH)
+
+        # Asegurar índices y estructuras actualizadas
+        ensure_db_initialized()
+
+        return {
+            "status": "ok",
+            "message": "Base de datos restaurada exitosamente",
+            "filename": filename,
+            "stats": {
+                "usuarios": stats.get("perfiles", 0),
+                "equipos": stats.get("equipos", 0),
+                "chequeos": stats.get("registros", 0),
+                "inventario": stats.get("inventario", 0),
+                "unidades": stats.get("unidades", 0),
+                "reparaciones": stats.get("reparaciones", 0)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al restaurar la base de datos: {str(e)}")
+    finally:
+        # Limpieza de temporales
+        for p in [temp_import_path, temp_verified_db]:
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+
 # Rutas de Catálogos (Equipos y Unidades)
 @app.get("/api/equipos")
 def get_equipos(q: Optional[str] = Query(None, description="Término de búsqueda"), limit: int = 50):
@@ -606,7 +773,7 @@ def create_chequeo(data: ChequeoCreate):
     elif isinstance(data.respuestas, str):
         respuestas_str = data.respuestas
 
-    fecha_ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    fecha_efectiva = (data.fecha and data.fecha.strip()) or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cursor.execute("""
         INSERT INTO registros (
@@ -614,7 +781,7 @@ def create_chequeo(data: ChequeoCreate):
             respuestas, obs, idpdf, foto_1, foto_2, foto_3, foto_4, firma_data, firma_nombre
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """, (
-        fecha_ahora,
+        fecha_efectiva,
         data.usuario or "Técnico",
         data.nombre_equipo or "Equipo",
         data.marca or "",

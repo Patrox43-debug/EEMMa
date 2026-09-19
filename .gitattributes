@@ -1,2 +1,26 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Manejo consistente de saltos de línea entre Windows y Linux / Docker
+* text=auto eol=lf
+
+# Archivos de código y web (siempre LF para Docker y Linux)
+*.py text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+
+# Scripts propios de Windows (mantener CRLF)
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Archivos binarios (sin conversión de texto)
+*.db binary
+*.apk binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary

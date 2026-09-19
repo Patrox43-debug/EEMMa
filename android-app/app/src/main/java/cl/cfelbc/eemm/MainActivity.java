@@ -75,10 +75,11 @@ public class MainActivity extends AppCompatActivity {
         setupBackNavigation();
 
         if (isNetworkAvailable()) {
-            webView.loadUrl(APP_URL);
+            webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
         } else {
-            showErrorScreen();
+            webView.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         }
+        webView.loadUrl(APP_URL);
     }
 
     private void initViews() {

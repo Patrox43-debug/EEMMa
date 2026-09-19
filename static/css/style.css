@@ -239,6 +239,64 @@ code, kbd, samp, pre {
   justify-content: flex-end !important;
 }
 
+/* Indicador de Red y Botón de Sincronización */
+.network-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.network-badge.online {
+  background: var(--success-subtle);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.network-badge.offline {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  animation: pulseOffline 2s infinite;
+}
+
+.network-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@keyframes pulseOffline {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.btn-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-full);
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-sync-badge:hover {
+  background: var(--primary);
+  color: #ffffff;
+}
+
 /* ==========================================================================
    MINIMALIST NAVIGATION TABS
    ========================================================================== */
@@ -1109,6 +1167,11 @@ select.form-control {
 @keyframes toastSlide {
   from { transform: translateY(10px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* ==========================================================================

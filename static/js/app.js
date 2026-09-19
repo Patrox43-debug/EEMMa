@@ -138,6 +138,7 @@ const app = {
 
   init() {
     this.initTheme();
+    this.initOfflineSupport();
     this.renderPlaceholderChecklist();
     this.loadUnidades();
 
@@ -165,6 +166,68 @@ const app = {
     document.getElementById("theme-toggle-btn").addEventListener("click", () => {
       this.toggleTheme();
     });
+  },
+
+  /* ==========================================================================
+     SOPORTE OFFLINE Y SINCRONIZACIÓN AUTOMÁTICA
+     ========================================================================== */
+  initOfflineSupport() {
+    if (!window.OfflineManager) return;
+
+    window.OfflineManager.init();
+
+    // Actualizar badge de red cuando cambie el estado
+    window.OfflineManager.onConnectionChange((isOnline) => {
+      const badge = document.getElementById("network-status-badge");
+      const text = document.getElementById("network-status-text");
+      if (badge && text) {
+        if (isOnline) {
+          badge.className = "network-badge online";
+          text.textContent = "En línea";
+          badge.title = "Conexión a Internet activa";
+        } else {
+          badge.className = "network-badge offline";
+          text.textContent = "Sin conexión";
+          badge.title = "Modo sin conexión: los datos se guardarán localmente";
+        }
+      }
+    });
+
+    // Actualizar contador de pendientes
+    window.OfflineManager.onQueueChange((count) => {
+      const btnSync = document.getElementById("btn-sync-pending");
+      const countEl = document.getElementById("sync-pending-count");
+      if (btnSync && countEl) {
+        countEl.textContent = count;
+        btnSync.style.display = count > 0 ? "inline-flex" : "none";
+      }
+    });
+
+    // Notificar cuando termine una sincronización automática
+    window.OfflineManager.onSyncComplete(({ syncedCount, remainingCount }) => {
+      this.showToast(`¡Sincronización completada! Se guardaron ${syncedCount} chequeo(s) en el servidor.`, "success");
+      // Si estamos en la pestaña historial o admin, refrescarlos
+      if (this.currentTab === "historial") {
+        this.loadHistorial();
+      } else if (this.currentTab === "admin") {
+        this.loadAdminDashboard();
+      }
+    });
+  },
+
+  async manualSync() {
+    if (!window.OfflineManager) return;
+    if (!window.OfflineManager.isOnline) {
+      this.showToast("Aún no tienes conexión a Internet. Se sincronizará en cuanto recuperes señal.", "warning");
+      return;
+    }
+    const count = await window.OfflineManager.getPendingCount();
+    if (count === 0) {
+      this.showToast("No hay registros pendientes de sincronización.", "info");
+      return;
+    }
+    this.showToast(`Sincronizando ${count} registro(s) con el servidor...`, "info");
+    await window.OfflineManager.syncAll();
   },
 
   /* ==========================================================================
@@ -341,22 +404,51 @@ const app = {
      ========================================================================== */
   async loadUnidades() {
     try {
-      const res = await fetch("/api/unidades");
-      const unidades = await res.json();
+      let unidades = [];
+      try {
+        const res = await fetch("/api/unidades");
+        if (res.ok) {
+          unidades = await res.json();
+          if (window.OfflineManager) {
+            window.OfflineManager.cacheData("unidades", unidades);
+          }
+        }
+      } catch (netErr) {
+        // Fallback a caché local si estamos sin conexión
+        if (window.OfflineManager) {
+          unidades = (await window.OfflineManager.getCachedData("unidades")) || [];
+        }
+      }
+
+      // Si aún está vacío (primera carga sin red), usar catálogo hospitalario de respaldo
+      if (!unidades || unidades.length === 0) {
+        unidades = [
+          "URGENCIA", "PABELLONES-QUIRURGICOS", "UPC", "ATENCION-OBSTETRICA",
+          "GINECOLOGIA-Y-OBSTETRICIA", "LABORATORIO", "AISLAMIENTO",
+          "MEDICO-QUIRURGICA-ADULTO", "MEDICO-QUIRURGICA-PEDIATRICA",
+          "DIALISIS", "KINESIOTERAPIA-Y-REHABILITACION", "PARTOS",
+          "PATOLOGICA(MORGUE)", "SOCIO-SANITARIO", "CIRUGIA-MENOR", "GES"
+        ];
+      }
       
       const select = document.getElementById("select-unidad");
       const filtro = document.getElementById("filtro-historial-unidad");
+      if (select) select.innerHTML = '<option value="">-- Seleccionar Servicio / Unidad --</option>';
+      if (filtro) filtro.innerHTML = '<option value="">Todas las Unidades</option>';
       
       unidades.forEach((u) => {
-        const opt = document.createElement("option");
-        opt.value = u;
-        opt.textContent = u;
-        select.appendChild(opt);
-
-        const opt2 = document.createElement("option");
-        opt2.value = u;
-        opt2.textContent = u;
-        filtro.appendChild(opt2);
+        if (select) {
+          const opt = document.createElement("option");
+          opt.value = u;
+          opt.textContent = u;
+          select.appendChild(opt);
+        }
+        if (filtro) {
+          const opt2 = document.createElement("option");
+          opt2.value = u;
+          opt2.textContent = u;
+          filtro.appendChild(opt2);
+        }
       });
     } catch (e) {
       console.error("Error cargando unidades:", e);
@@ -600,6 +692,7 @@ const app = {
       const firma = this.signaturePad.toDataURL();
       const firmaNombre = document.getElementById("input-firma-nombre").value.trim();
 
+      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
       const payload = {
         usuario: this.currentUser ? (this.currentUser.tecnico || this.currentUser.nombre) : "Técnico",
         nombre_equipo: this.selectedEquipment.nombre,
@@ -612,25 +705,61 @@ const app = {
         obs: document.getElementById("input-obs").value.trim(),
         fotos: fotos,
         firma: firma,
-        firma_nombre: firmaNombre
+        firma_nombre: firmaNombre,
+        fecha: nowStr
       };
 
-      const res = await fetch("/api/chequeos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      const extraInfo = {
+        nombre_equipo: payload.nombre_equipo,
+        marca: payload.marca,
+        modelo: payload.modelo,
+        serie: payload.serie,
+        unidad: payload.unidad,
+        categoria: payload.categoria,
+        usuario: payload.usuario,
+        fecha: payload.fecha,
+        fotosCount: fotos.length,
+        hasFirma: !!firma
+      };
 
-      if (!res.ok) {
-        throw new Error("Error en el servidor al registrar chequeo");
+      // Si estamos sin conexión, guardar directamente en la base de datos local
+      if (window.OfflineManager && !window.OfflineManager.isOnline) {
+        await window.OfflineManager.queueRequest("chequeo", "/api/chequeos", "POST", payload, extraInfo);
+        this.showToast("💾 Chequeo guardado localmente (Sin conexión). Se sincronizará automáticamente al recuperar señal.", "warning");
+        this.resetChequeoForm();
+        this.navigate("historial");
+        return;
       }
 
-      const result = await res.json();
-      this.showToast("¡Chequeo preventivo guardado exitosamente!", "success");
+      // Si parece online, intentar enviar por red
+      try {
+        const res = await fetch("/api/chequeos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
 
-      // Limpiar formulario y viajar a historial
-      this.resetChequeoForm();
-      this.navigate("historial");
+        if (!res.ok) {
+          throw new Error("Error en el servidor al registrar chequeo");
+        }
+
+        const result = await res.json();
+        this.showToast("¡Chequeo preventivo guardado exitosamente!", "success");
+        this.resetChequeoForm();
+        this.navigate("historial");
+
+      } catch (netErr) {
+        // Si falló por corte repentino de red, guardar en cola local
+        console.warn("Fallo de conexión al enviar chequeo, guardando localmente:", netErr);
+        if (window.OfflineManager) {
+          await window.OfflineManager.queueRequest("chequeo", "/api/chequeos", "POST", payload, extraInfo);
+          this.showToast("💾 Sin conexión: El chequeo quedó guardado localmente y se subirá automáticamente.", "warning");
+          this.resetChequeoForm();
+          this.navigate("historial");
+        } else {
+          throw netErr;
+        }
+      }
 
     } catch (err) {
       console.error(err);
@@ -650,25 +779,112 @@ const app = {
   async loadHistorial() {
     try {
       const qInput = document.getElementById("filtro-historial-query") || document.getElementById("filtro-historial-search");
-      const q = qInput ? qInput.value.trim() : "";
+      const q = qInput ? qInput.value.trim().toLowerCase() : "";
 
       const uniEl = document.getElementById("filtro-historial-unidad");
       const unidad = uniEl ? uniEl.value : "";
 
-      let url = `/api/chequeos?limit=100`;
-      if (q) url += `&q=${encodeURIComponent(q)}`;
-      if (unidad) url += `&unidad=${encodeURIComponent(unidad)}`;
+      // 1. Obtener chequeos guardados localmente aún no sincronizados
+      const pendingItems = window.OfflineManager ? (await window.OfflineManager.getPendingItems("chequeo")) : [];
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Error al obtener el historial");
-      const data = await res.json();
+      // Filtrar pendientes según los filtros de búsqueda
+      const filteredPending = pendingItems.filter((item) => {
+        const ext = item.extra || {};
+        if (unidad && ext.unidad !== unidad) return false;
+        if (q) {
+          const matchEquipo = (ext.nombre_equipo || "").toLowerCase().includes(q);
+          const matchSerie = (ext.serie || "").toLowerCase().includes(q);
+          const matchUser = (ext.usuario || "").toLowerCase().includes(q);
+          if (!matchEquipo && !matchSerie && !matchUser) return false;
+        }
+        return true;
+      });
+
+      // 2. Obtener historial del servidor (si hay conexión)
+      let serverData = [];
+      let fetchFailed = false;
+      try {
+        let url = `/api/chequeos?limit=100`;
+        if (q) url += `&q=${encodeURIComponent(q)}`;
+        if (unidad) url += `&unidad=${encodeURIComponent(unidad)}`;
+
+        const res = await fetch(url);
+        if (res.ok) {
+          serverData = await res.json();
+        } else {
+          fetchFailed = true;
+        }
+      } catch (netErr) {
+        fetchFailed = true;
+        console.warn("[Historial] Modo sin conexión: mostrando datos locales");
+      }
+
       const tbody = document.getElementById("historial-tbody");
       tbody.innerHTML = "";
 
-      if (!data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No se encontraron chequeos preventivos.</td></tr>`;
+      if (filteredPending.length === 0 && serverData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-muted);">${fetchFailed ? "Sin conexión a Internet. No hay chequeos pendientes en este dispositivo." : "No se encontraron chequeos preventivos."}</td></tr>`;
         return;
       }
+
+      // Renderizar primero los chequeos pendientes guardados localmente
+      filteredPending.forEach((item) => {
+        const ext = item.extra || {};
+        const tr = document.createElement("tr");
+        tr.style.backgroundColor = "rgba(245, 158, 11, 0.06)";
+
+        const fotoCount = ext.fotosCount || (item.payload.fotos ? item.payload.fotos.filter(Boolean).length : 0);
+        const fotoBadge = fotoCount > 0 
+          ? `<span class="badge badge-success" title="${fotoCount} foto(s) guardadas localmente">📷 ${fotoCount}</span>`
+          : `<span style="color:var(--text-tertiary); font-size:0.7rem;">Sin fotos</span>`;
+
+        const firmaBadge = ext.hasFirma || item.payload.firma
+          ? `<span class="badge badge-tecnico" title="Firma digital guardada localmente">✍️ Sí</span>`
+          : `<span style="color:var(--text-tertiary); font-size:0.7rem;">Sin firma</span>`;
+
+        let fechaFormatted = ext.fecha || item.createdAt.substring(0, 19).replace("T", " ");
+        if (fechaFormatted.includes(" ")) {
+          const parts = fechaFormatted.split(" ");
+          fechaFormatted = `<div style="font-weight:600; font-size:0.78rem;">${parts[0]}</div><div style="font-size:0.7rem; color:var(--text-tertiary);">${parts[1]}</div>`;
+        }
+
+        tr.innerHTML = `
+          <td>
+            <span class="badge" style="background:rgba(245, 158, 11, 0.18); color:#d97706; border:1px solid rgba(245,158,11,0.4); font-size:0.68rem; font-weight:700;">
+              🟡 Pendiente
+            </span>
+          </td>
+          <td>${fechaFormatted}</td>
+          <td><div style="font-weight: 500; font-size: 0.8rem;">${ext.usuario || "Técnico"}</div></td>
+          <td>
+            <div style="font-weight: 600; color: var(--text-primary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${ext.nombre_equipo}">
+              ${ext.nombre_equipo || "Equipo"}
+            </div>
+            ${ext.categoria ? `<span style="font-size: 0.68rem; color: var(--text-tertiary); text-transform: uppercase;">${ext.categoria}</span>` : ""}
+          </td>
+          <td><code>${ext.serie || "-"}</code></td>
+          <td>
+            <span class="badge" style="background:var(--primary-subtle); color:var(--primary); font-size:0.72rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block;" title="${ext.unidad || "-"}">
+              ${ext.unidad || "-"}
+            </span>
+          </td>
+          <td style="text-align: center;">
+            <div style="display: flex; gap: 4px; justify-content: center; align-items: center;">
+              ${fotoBadge}
+              ${firmaBadge}
+            </div>
+          </td>
+          <td class="col-actions">
+            <div class="action-buttons-group">
+              <button class="btn btn-primary btn-sm" onclick="app.manualSync()" style="gap:4px; font-size:0.72rem; padding:0.25rem 0.6rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                Subir
+              </button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
 
       data.forEach((item) => {
         const tr = document.createElement("tr");
@@ -1107,6 +1323,147 @@ const app = {
       this.loadAdminUsers();
     } catch (err) {
       this.showToast(err.message, "error");
+    }
+  },
+
+  /* ==========================================================================
+     MANTENIMIENTO Y RESPALDO DE BASE DE DATOS (EXPORTAR / IMPORTAR)
+     ========================================================================== */
+  async exportDatabase() {
+    const btn = document.getElementById("btn-export-db");
+    const originalHtml = btn ? btn.innerHTML : "";
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path></svg>
+          Preparando respaldo...
+        `;
+      }
+      this.showToast("Generando respaldo de la base de datos...", "info");
+
+      const res = await fetch("/api/admin/database/export");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Error al descargar la base de datos");
+      }
+
+      // Obtener nombre sugerido por el backend
+      let filename = "eemm_backup.db";
+      const disposition = res.headers.get("content-disposition");
+      if (disposition && disposition.indexOf("filename=") !== -1) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1].replace(/['"]/g, "");
+        }
+      }
+
+      const blob = await res.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      a.remove();
+
+      this.showToast("Copia de seguridad descargada exitosamente", "success");
+    } catch (err) {
+      console.error("Error exportando base de datos:", err);
+      this.showToast(err.message || "Error al generar respaldo", "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+    }
+  },
+
+  onDatabaseFileSelected(event) {
+    const file = event.target.files && event.target.files[0];
+    const label = document.getElementById("db-file-label");
+    const btnImport = document.getElementById("btn-import-db");
+
+    if (!file) {
+      if (label) label.textContent = "📁 Haz clic para seleccionar archivo (.db o .sql)";
+      if (btnImport) btnImport.disabled = true;
+      return;
+    }
+
+    const sizeKb = (file.size / 1024).toFixed(1);
+    const sizeStr = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : `${sizeKb} KB`;
+
+    if (label) {
+      label.innerHTML = `<strong>${file.name}</strong> <span style="opacity:0.75;">(${sizeStr})</span>`;
+    }
+    if (btnImport) {
+      btnImport.disabled = false;
+    }
+  },
+
+  async importDatabase() {
+    const fileInput = document.getElementById("db-file-input");
+    const file = fileInput && fileInput.files && fileInput.files[0];
+
+    if (!file) {
+      this.showToast("Por favor selecciona un archivo de base de datos (.db o .sql)", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `⚠️ ATENCIÓN: ¿Estás seguro de que deseas restaurar la base de datos con el archivo "${file.name}"?\n\nEsta acción reemplazará todos los datos actuales del sistema. Se creará automáticamente un respaldo previo de seguridad.`
+    );
+    if (!confirmed) return;
+
+    const btn = document.getElementById("btn-import-db");
+    const originalHtml = btn ? btn.innerHTML : "";
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path></svg>
+          Restaurando y verificando...
+        `;
+      }
+      this.showToast("Restaurando base de datos, por favor espera...", "info");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/database/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Error al restaurar la base de datos");
+      }
+
+      let summary = "¡Base de datos restaurada con éxito!";
+      if (data.stats) {
+        summary += ` (${data.stats.usuarios || 0} usuarios, ${data.stats.equipos || 0} equipos, ${data.stats.chequeos || 0} chequeos)`;
+      }
+      this.showToast(summary, "success");
+
+      // Resetear selector
+      fileInput.value = "";
+      const label = document.getElementById("db-file-label");
+      if (label) label.textContent = "📁 Haz clic para seleccionar archivo (.db o .sql)";
+
+      // Recargar métricas y datos del panel
+      await this.loadAdminDashboard();
+      if (typeof this.loadCatalogos === "function") this.loadCatalogos();
+    } catch (err) {
+      console.error("Error restaurando base de datos:", err);
+      this.showToast(err.message || "Error al restaurar base de datos", "error");
+    } finally {
+      if (btn) {
+        btn.disabled = !(fileInput && fileInput.files && fileInput.files.length > 0);
+        btn.innerHTML = originalHtml;
+      }
     }
   },
 
