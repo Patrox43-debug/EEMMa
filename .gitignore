@@ -23,3 +23,12 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Android build outputs & local configs
+android-app/.gradle/
+android-app/build/
+android-app/*/build/
+android-app/local.properties
+*.apk
+*.ap_
+*.dex

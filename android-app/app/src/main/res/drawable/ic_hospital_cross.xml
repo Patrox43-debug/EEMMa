@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Outer rounded circle -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M48,8C25.9,8 8,25.9 8,48s17.9,40 40,40s40,-17.9 40,-40S70.1,8 48,8z" />
+    <!-- White Medical Cross with soft rounded edges -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,26h12v16h16v12H54v16H42V54H26V42h16V26z" />
+</vector>
