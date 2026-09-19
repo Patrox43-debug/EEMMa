@@ -32,6 +32,16 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 if os.path.dirname(DB_PATH):
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
+# Si se usa un volumen persistente y aún no existe la base de datos, copiar la base inicial completa
+default_db = os.path.join(BASE_DIR, "eemm.db")
+if os.path.abspath(DB_PATH) != os.path.abspath(default_db) and not os.path.exists(DB_PATH) and os.path.exists(default_db):
+    try:
+        import shutil
+        shutil.copy2(default_db, DB_PATH)
+        print(f"[INFO] Base de datos pre-cargada copiada exitosamente a {DB_PATH}")
+    except Exception as e:
+        print(f"[WARN] No se pudo copiar la base inicial a {DB_PATH}: {e}")
+
 app = FastAPI(title="EEMM - Gestión de Equipos Médicos", version="1.0.0")
 
 app.add_middleware(
@@ -823,6 +833,267 @@ def get_inventario(
     conn.close()
     return cajas
 
+@app.get("/api/inventario/export/excel")
+def export_inventario_excel(
+    q: Optional[str] = None,
+    estado: Optional[str] = None,
+    estanteria: Optional[str] = None
+):
+    """Exportar inventario de bodega en formato Excel profesional (.xlsx)."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Mapeo de identificadores de estantes a números amigables
+    cursor.execute("""
+        SELECT DISTINCT estanteria_id
+        FROM inventario
+        WHERE estanteria_id IS NOT NULL AND estanteria_id != ''
+        ORDER BY estanteria_id ASC
+    """)
+    shelf_rows = cursor.fetchall()
+    shelf_map = {}
+    for idx, sr in enumerate(shelf_rows, start=1):
+        shelf_map[sr["estanteria_id"]] = f"Estante #{idx}"
+
+    # Construir filtros opcionales
+    conditions = []
+    params = []
+    
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        conditions.append("(nombre_caja LIKE ? OR barcode LIKE ? OR id_caja LIKE ?)")
+        params.extend([term, term, term])
+        
+    if estado and estado.strip():
+        conditions.append("estado = ?")
+        params.append(estado.strip())
+        
+    if estanteria and estanteria.strip():
+        conditions.append("estanteria_id = ?")
+        params.append(estanteria.strip())
+
+    sql = """
+        SELECT id_caja, nombre_caja, cantidad, seccion_id, estanteria_id, barcode, finicio, ftermino, estado
+        FROM inventario
+    """
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += " ORDER BY estanteria_id ASC, seccion_id ASC, nombre_caja ASC;"
+
+    cursor.execute(sql, params)
+    items = cursor.fetchall()
+    conn.close()
+
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Inventario Bodega"
+        ws.views.sheetView[0].showGridLines = True
+
+        # Paleta y Estilos Visuales
+        font_title = Font(name="Segoe UI", size=14, bold=True, color="1E3A8A")
+        font_sub = Font(name="Segoe UI", size=9, italic=True, color="64748B")
+        font_header = Font(name="Segoe UI", size=10, bold=True, color="FFFFFF")
+        fill_header = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
+        font_data = Font(name="Segoe UI", size=10)
+        font_bold = Font(name="Segoe UI", size=10, bold=True)
+        fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+
+        fill_ok = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+        font_ok = Font(name="Segoe UI", size=9, bold=True, color="166534")
+
+        fill_bajo = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+        font_bajo = Font(name="Segoe UI", size=9, bold=True, color="92400E")
+
+        thin_side = Side(style="thin", color="CBD5E1")
+        border_cell = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+        thick_top = Border(top=Side(style="medium", color="1E40AF"), bottom=Side(style="double", color="1E40AF"))
+
+        # Encabezado corporativo
+        ws.merge_cells("A1:J1")
+        ws["A1"] = "HOSPITAL CLÍNICO - REPORTE GENERAL DE BODEGA E INSUMOS"
+        ws["A1"].font = font_title
+        ws["A1"].alignment = Alignment(vertical="center")
+
+        ws.merge_cells("A2:J2")
+        ws["A2"] = f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | Total de cajas listadas: {len(items)}"
+        ws["A2"].font = font_sub
+        ws["A2"].alignment = Alignment(vertical="center")
+
+        ws.row_dimensions[1].height = 24
+        ws.row_dimensions[2].height = 18
+        ws.row_dimensions[3].height = 6
+
+        # Fila 4: Columnas
+        headers = [
+            ("ID Caja", 18),
+            ("Descripción / Repuesto", 46),
+            ("Stock (Un.)", 14),
+            ("Estantería", 22),
+            ("Nivel / Repisa", 24),
+            ("Código Barra", 20),
+            ("Estado", 16),
+            ("Código Sección", 22),
+            ("Fecha Registro", 20),
+            ("Fecha Vencimiento", 20),
+        ]
+
+        header_row = 4
+        ws.row_dimensions[header_row].height = 26
+
+        for col_idx, (col_title, col_width) in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=col_idx, value=col_title)
+            cell.font = font_header
+            cell.fill = fill_header
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = border_cell
+
+        # Filas de datos
+        total_unidades = 0
+        current_row = 5
+
+        for item in items:
+            sec_id = item["seccion_id"] or ""
+            repisa_num = 1
+            if "_sec_" in sec_id:
+                try:
+                    repisa_num = int(sec_id.split("_sec_")[-1])
+                except ValueError:
+                    repisa_num = 1
+            
+            repisa_txt = f"Repisa {repisa_num}"
+            if repisa_num == 1:
+                repisa_txt += " (Superior)"
+            elif repisa_num == 2:
+                repisa_txt += " (Medio)"
+            elif repisa_num == 3:
+                repisa_txt += " (Inferior)"
+            elif repisa_num == 4:
+                repisa_txt += " (Base)"
+
+            estante_txt = shelf_map.get(item["estanteria_id"], item["estanteria_id"] or "S/E")
+            cant = int(item["cantidad"] or 0)
+            total_unidades += cant
+            is_bajo = (item["estado"] != "OK")
+
+            ws.row_dimensions[current_row].height = 20
+            is_even = (current_row % 2 == 0)
+            row_fill = fill_zebra if is_even else PatternFill(fill_type=None)
+
+            c1 = ws.cell(row=current_row, column=1, value=item["id_caja"])
+            c1.alignment = Alignment(horizontal="center", vertical="center")
+
+            c2 = ws.cell(row=current_row, column=2, value=item["nombre_caja"])
+            c2.alignment = Alignment(horizontal="left", vertical="center")
+
+            c3 = ws.cell(row=current_row, column=3, value=cant)
+            c3.alignment = Alignment(horizontal="right", vertical="center")
+            c3.number_format = "#,##0"
+
+            c4 = ws.cell(row=current_row, column=4, value=estante_txt)
+            c4.alignment = Alignment(horizontal="left", vertical="center")
+
+            c5 = ws.cell(row=current_row, column=5, value=repisa_txt)
+            c5.alignment = Alignment(horizontal="left", vertical="center")
+
+            c6 = ws.cell(row=current_row, column=6, value=item["barcode"] or "S/C")
+            c6.alignment = Alignment(horizontal="center", vertical="center")
+
+            c7 = ws.cell(row=current_row, column=7, value="STOCK BAJO" if is_bajo else "OK")
+            c7.alignment = Alignment(horizontal="center", vertical="center")
+            c7.font = font_bajo if is_bajo else font_ok
+            c7.fill = fill_bajo if is_bajo else fill_ok
+
+            c8 = ws.cell(row=current_row, column=8, value=sec_id)
+            c8.alignment = Alignment(horizontal="center", vertical="center")
+
+            c9 = ws.cell(row=current_row, column=9, value=item["finicio"] or "-")
+            c9.alignment = Alignment(horizontal="center", vertical="center")
+
+            c10 = ws.cell(row=current_row, column=10, value=item["ftermino"] or "-")
+            c10.alignment = Alignment(horizontal="center", vertical="center")
+
+            for col_idx in range(1, 11):
+                cell = ws.cell(row=current_row, column=col_idx)
+                if col_idx != 7:
+                    cell.font = font_data
+                    if row_fill.fill_type:
+                        cell.fill = row_fill
+                cell.border = border_cell
+
+            current_row += 1
+
+        # Fila de Totales
+        ws.row_dimensions[current_row].height = 24
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=2)
+        total_label = ws.cell(row=current_row, column=1, value=f"TOTALES ({len(items)} cajas registradas)")
+        total_label.font = font_bold
+        total_label.alignment = Alignment(horizontal="right", vertical="center")
+        total_label.border = thick_top
+
+        c_tot = ws.cell(row=current_row, column=3, value=total_unidades)
+        c_tot.font = font_bold
+        c_tot.alignment = Alignment(horizontal="right", vertical="center")
+        c_tot.number_format = "#,##0"
+        c_tot.border = thick_top
+
+        for c in range(4, 11):
+            cell = ws.cell(row=current_row, column=c)
+            cell.border = thick_top
+
+        for col_idx, (_, col_width) in enumerate(headers, start=1):
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = col_width
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        filename = f"Inventario_Bodega_EEMM_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        return Response(
+            content=output.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{filename}\"",
+                "Cache-Control": "no-cache"
+            }
+        )
+
+    except Exception as e:
+        print("Error generando Excel con openpyxl, generando CSV fallback:", e)
+        output = io.StringIO()
+        output.write('\ufeff')
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(["ID Caja", "Descripción / Repuesto", "Stock (Un.)", "Estantería", "Nivel / Repisa", "Código Barra", "Estado", "Código Sección", "Fecha Inicio", "Fecha Término"])
+        for it in items:
+            sec_id = it["seccion_id"] or ""
+            rep_n = sec_id.split("_sec_")[-1] if "_sec_" in sec_id else "1"
+            writer.writerow([
+                it["id_caja"],
+                it["nombre_caja"],
+                it["cantidad"],
+                shelf_map.get(it["estanteria_id"], it["estanteria_id"]),
+                f"Repisa {rep_n}",
+                it["barcode"] or "S/C",
+                it["estado"],
+                sec_id,
+                it["finicio"] or "",
+                it["ftermino"] or ""
+            ])
+        filename = f"Inventario_Bodega_EEMM_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+        return Response(
+            content=output.getvalue().encode('utf-8-sig'),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{filename}\"",
+                "Cache-Control": "no-cache"
+            }
+        )
+
 @app.get("/api/inventario/estanterias")
 def get_estanterias_summary():
     """Retorna los 16 estantes con sus métricas y repisas organizadas para la vista física."""
@@ -890,6 +1161,139 @@ def get_estanterias_summary():
         })
 
     return list(estantes_dict.values())
+
+class InsumoCreate(BaseModel):
+    id_caja: Optional[str] = None
+    nombre_caja: str
+    cantidad: int = 0
+    estanteria_id: str
+    seccion_id: str
+    barcode: Optional[str] = ""
+    finicio: Optional[str] = None
+    ftermino: Optional[str] = None
+    estado: Optional[str] = "OK"
+
+class InsumoUpdate(BaseModel):
+    nombre_caja: Optional[str] = None
+    cantidad: Optional[int] = None
+    estanteria_id: Optional[str] = None
+    seccion_id: Optional[str] = None
+    barcode: Optional[str] = None
+    finicio: Optional[str] = None
+    ftermino: Optional[str] = None
+    estado: Optional[str] = None
+
+class InsumoIngreso(BaseModel):
+    cantidad: int
+    estado: Optional[str] = None
+
+@app.post("/api/inventario")
+def create_insumo(item: InsumoCreate):
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Generar id_caja si no se proporciona
+    cid = item.id_caja.strip() if item.id_caja and item.id_caja.strip() else f"box_{int(datetime.now().timestamp() * 1000)}"
+    
+    cursor.execute("SELECT id_caja FROM inventario WHERE id_caja = ?", (cid,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Ya existe un insumo con el código {cid}")
+
+    cursor.execute("""
+        INSERT INTO inventario (id_caja, nombre_caja, cantidad, seccion_id, estanteria_id, barcode, finicio, ftermino, estado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        cid,
+        item.nombre_caja.strip(),
+        max(0, item.cantidad),
+        item.seccion_id.strip(),
+        item.estanteria_id.strip(),
+        (item.barcode or "").strip(),
+        item.finicio or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        item.ftermino,
+        item.estado or "OK"
+    ))
+    conn.commit()
+    
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (cid,))
+    row = cursor.fetchone()
+    conn.close()
+    return {"ok": True, "caja": dict(row)}
+
+@app.put("/api/inventario/{id_caja}")
+def update_insumo(id_caja: str, item: InsumoUpdate):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (id_caja,))
+    curr = cursor.fetchone()
+    if not curr:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+    
+    curr = dict(curr)
+    nombre = item.nombre_caja.strip() if item.nombre_caja is not None else curr["nombre_caja"]
+    cantidad = item.cantidad if item.cantidad is not None else curr["cantidad"]
+    seccion = item.seccion_id.strip() if item.seccion_id is not None else curr["seccion_id"]
+    estanteria = item.estanteria_id.strip() if item.estanteria_id is not None else curr["estanteria_id"]
+    barcode = item.barcode.strip() if item.barcode is not None else curr["barcode"]
+    estado = item.estado.strip() if item.estado is not None else curr["estado"]
+    
+    cursor.execute("""
+        UPDATE inventario
+        SET nombre_caja = ?, cantidad = ?, seccion_id = ?, estanteria_id = ?, barcode = ?, estado = ?
+        WHERE id_caja = ?
+    """, (nombre, max(0, cantidad), seccion, estanteria, barcode, estado, id_caja))
+    conn.commit()
+    
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (id_caja,))
+    updated = cursor.fetchone()
+    conn.close()
+    return {"ok": True, "caja": dict(updated)}
+
+@app.post("/api/inventario/{id_caja}/ingreso")
+def ingresar_stock(id_caja: str, ingreso: InsumoIngreso):
+    if ingreso.cantidad <= 0:
+        raise HTTPException(status_code=400, detail="La cantidad a ingresar debe ser mayor a 0")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (id_caja,))
+    curr = cursor.fetchone()
+    if not curr:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+    
+    curr_cant = curr["cantidad"] or 0
+    nueva_cant = curr_cant + ingreso.cantidad
+    nuevo_estado = ingreso.estado or ("OK" if nueva_cant >= 5 else curr["estado"])
+    
+    cursor.execute("""
+        UPDATE inventario
+        SET cantidad = ?, estado = ?
+        WHERE id_caja = ?
+    """, (nueva_cant, nuevo_estado, id_caja))
+    conn.commit()
+    
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (id_caja,))
+    updated = cursor.fetchone()
+    conn.close()
+    return {"ok": True, "caja": dict(updated)}
+
+@app.delete("/api/inventario/{id_caja}")
+def delete_insumo(id_caja: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_caja, nombre_caja FROM inventario WHERE id_caja = ?", (id_caja,))
+    curr = cursor.fetchone()
+    if not curr:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+    
+    cursor.execute("DELETE FROM inventario WHERE id_caja = ?", (id_caja,))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "message": f"Insumo '{curr['nombre_caja']}' eliminado correctamente"}
+
 
 # Catálogo oficial de pautas técnicas por categoría
 PAUTAS_POR_CATEGORIA = {
