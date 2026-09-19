@@ -1,0 +1,25 @@
+# Entornos virtuales y dependencias de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Archivos de registro y logs
+*.log
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Configuraciones de editores
+.vscode/
+.idea/
+*.swp
+*.swo
