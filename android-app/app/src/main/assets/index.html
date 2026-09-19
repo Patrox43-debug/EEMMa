@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>EEMM · Ingeniería Clínica & Control Preventivo</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=2.5">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Barra Superior / Header Minimalista -->
+    <header class="header">
+      <a href="#" class="brand" onclick="app.navigate('chequeo'); return false;">
+        <div class="brand-mark">EM</div>
+        <div class="brand-title">
+          EEMM <span class="brand-tag">Equipos Médicos</span>
+        </div>
+      </a>
+
+      <div class="header-right">
+        <!-- Usuario Activo -->
+        <div id="user-profile-badge" class="header-user-badge" style="display: none; align-items: center; gap: 0.5rem;">
+          <div style="width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--primary-subtle); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;" id="user-avatar-initials">U</div>
+          <span id="header-user-name" style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);"></span>
+          <span id="header-user-role" class="badge"></span>
+        </div>
+
+        <!-- Grupo de Acciones: Modo Claro/Oscuro, Red y Salir (se apilan debajo del usuario en móvil) -->
+        <div class="header-actions-group">
+          <!-- Indicador de Red (En línea / Sin conexión) -->
+          <div id="network-status-badge" class="network-badge online" title="Estado de conexión a Internet">
+            <span class="network-dot"></span>
+            <span id="network-status-text" class="network-text">En línea</span>
+          </div>
+
+          <!-- Botón de Sincronización Pendiente -->
+          <button id="btn-sync-pending" class="btn-sync-badge" style="display: none;" onclick="app.manualSync()" title="Haz clic para sincronizar registros locales pendientes con el servidor">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 2.5s linear infinite;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span id="sync-pending-count">0</span> pendientes
+          </button>
+
+          <!-- Botón Modo Claro / Oscuro -->
+          <button id="theme-toggle-btn" class="btn-icon" title="Cambiar modo claro / oscuro">
+            <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+
+          <!-- Botón Salir -->
+          <button id="btn-logout" class="btn btn-outline btn-sm" style="display: none;" onclick="app.logout()">
+            Salir
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navegación por Pestañas -->
+    <nav class="nav-tabs" id="app-nav" style="display: none;">
+      <button class="nav-tab active" data-tab="chequeo" onclick="app.navigate('chequeo')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+        Nuevo Chequeo
+      </button>
+      <button class="nav-tab" data-tab="historial" onclick="app.navigate('historial')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+        Historial
+      </button>
+      <button class="nav-tab" data-tab="equipos" onclick="app.navigate('equipos')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        Equipos (2.553)
+      </button>
+      <button class="nav-tab" data-tab="admin" id="nav-tab-admin" style="display: none;" onclick="app.navigate('admin')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
+        Administración
+      </button>
+      <button class="nav-tab" data-tab="inventario" onclick="app.navigate('inventario')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+        Bodega / Insumos
+      </button>
+    </nav>
+
+    <!-- Contenedor Principal -->
+    <main class="main-content">
+
+      <!-- ====================================================================
+           1. VISTA DE LOGIN MINIMALISTA (ACCESO POR RUT Y CONTRASEÑA)
+           ==================================================================== -->
+      <section id="view-login" class="panel login-panel">
+        <div style="text-align: center; margin-bottom: 1.75rem;">
+          <div class="brand-mark" style="width: 44px; height: 44px; font-size: 1.15rem; margin: 0 auto 0.75rem;">EM</div>
+          <h2 style="font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em;">Sistema EEMM</h2>
+          <p style="font-size: 0.8rem; color: var(--text-tertiary); margin-top: 2px;">Ingeniería Clínica & Control Preventivo</p>
+        </div>
+
+        <form id="form-login" onsubmit="app.handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="login-rut">RUT del Usuario:</label>
+            <input type="text" id="login-rut" class="form-control" placeholder="Ej: 12.345.678-9" required autofocus autocomplete="username" oninput="app.formatRutInput(this)">
+            <small style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 3px; display: block;">Ingresa tu RUT con o sin puntos y guion</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-pass">Contraseña:</label>
+            <input type="password" id="login-pass" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+          <button type="submit" id="btn-submit-login" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem; padding: 0.65rem;">
+            Ingresar al Sistema
+          </button>
+        </form>
+      </section>
+
+
+      <!-- ====================================================================
+           2. VISTA FORMULARIO DE CHEQUEO PREVENTIVO (Principal)
+           ==================================================================== -->
+      <section id="view-chequeo" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Chequeo Preventivo de Equipos
+              </h2>
+              <p class="panel-subtitle">Registro técnico de inspección y recepción de equipamiento</p>
+            </div>
+            <span class="badge badge-tecnico" id="chequeo-tecnico-badge">Técnico</span>
+          </div>
+
+          <form id="form-chequeo" onsubmit="app.submitChequeo(event)">
+            
+            <!-- Selector de Equipo con Autocompletado -->
+            <div class="form-group search-autocomplete-wrapper">
+              <label class="form-label" for="input-equipo-search">
+                Seleccionar Equipo Médico <span class="req">*</span>
+              </label>
+              <div style="position: relative;">
+                <input type="text" id="input-equipo-search" class="form-control" placeholder="Escribe para buscar entre los 2.553 equipos (ej: Cánula, Monitor, Edan, Serie...)" autocomplete="off" style="padding-left: 2.25rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none;">
+                  <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </div>
+              <div id="autocomplete-list" class="autocomplete-dropdown" style="display: none;"></div>
+
+              <!-- Strip informativo del equipo seleccionado -->
+              <div id="selected-equipment-card" class="equipment-strip" style="display: none;">
+                <div class="strip-item">
+                  <label>Equipo</label>
+                  <span id="preview-nombre">-</span>
+                </div>
+                <div class="strip-item">
+                  <label>Marca / Modelo</label>
+                  <span id="preview-marca-modelo">-</span>
+                </div>
+                <div class="strip-item">
+                  <label>Número de Serie</label>
+                  <span id="preview-serie" style="font-family: var(--font-mono); color: var(--primary);">-</span>
+                </div>
+                <div class="strip-item">
+                  <label>Categoría</label>
+                  <span id="preview-categoria">-</span>
+                </div>
+                <div class="strip-item">
+                  <label>Estado</label>
+                  <span><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--success); margin-right:4px;"></span><span id="preview-estado">Operativo</span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Selector de Unidad / Servicio -->
+            <div class="form-group">
+              <label class="form-label" for="select-unidad">
+                Unidad o Servicio Hospitalario <span class="req">*</span>
+              </label>
+              <select id="select-unidad" class="form-control" required>
+                <option value="">-- Seleccionar Unidad / Servicio --</option>
+              </select>
+            </div>
+
+            <!-- Pauta de Verificación Automática según Categoría del Equipo -->
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                <label class="form-label" style="margin-bottom: 0;">
+                  Puntos de Control Preventivo:
+                  <span id="checklist-category-badge" class="badge badge-tecnico" style="margin-left: 0.4rem; text-transform: uppercase; font-size: 0.72rem;">Sin equipo seleccionado</span>
+                </label>
+                <small id="checklist-count-hint" style="font-size: 0.725rem; color: var(--text-tertiary);"></small>
+              </div>
+              <div class="checklist-grid" id="checklist-container">
+                <!-- Generado automáticamente según el equipo seleccionado -->
+              </div>
+            </div>
+
+            <!-- Cuadro de Observaciones -->
+            <div class="form-group">
+              <label class="form-label" for="input-obs">
+                Observaciones y Hallazgos Técnicos:
+              </label>
+              <textarea id="input-obs" class="form-control" placeholder="Describe cualquier anomalía, piezas reemplazadas, limpieza o condiciones del equipo..."></textarea>
+            </div>
+
+            <!-- Espacio para 4 Fotos -->
+            <div class="form-group">
+              <label class="form-label">
+                Registro Fotográfico (Hasta 4 Fotografías):
+                <small style="font-weight: normal; color: var(--text-tertiary);">(Haz clic o arrastra para adjuntar fotos)</small>
+              </label>
+              <div class="photos-grid" id="photos-container">
+                <!-- 4 ranuras controladas por PhotoManager -->
+              </div>
+            </div>
+
+            <!-- Cuadro para Dibujar la Firma -->
+            <div class="form-group">
+              <label class="form-label">
+                Firma Digital de Recepción / Técnico <span class="req">*</span>:
+              </label>
+              
+              <div class="signature-container">
+                <div class="signature-canvas-wrapper">
+                  <canvas id="signature-canvas"></canvas>
+                </div>
+                <div class="signature-footer">
+                  <span class="signature-hint">Traza la firma con el mouse o dedo en el recuadro</span>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="app.clearSignature()">
+                    Borrar Trazo
+                  </button>
+                </div>
+              </div>
+
+              <div style="margin-top: 0.5rem;">
+                <input type="text" id="input-firma-nombre" class="form-control" placeholder="Nombre completo del responsable / recepcionista (opcional)">
+              </div>
+            </div>
+
+            <!-- Acciones de Envío -->
+            <div class="form-actions-bar">
+              <button type="reset" class="btn btn-subtle" onclick="app.resetChequeoForm()">
+                Restablecer
+              </button>
+              <button type="submit" id="btn-submit-chequeo" class="btn btn-primary btn-submit-action">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                Guardar Chequeo
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
+           3. VISTA HISTORIAL DE CHEQUEOS
+           ==================================================================== -->
+      <section id="view-historial" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Historial de Chequeos</h2>
+              <p class="panel-subtitle">Inspecciones preventivas realizadas y registradas</p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="app.loadHistorial()">
+              Actualizar
+            </button>
+          </div>
+
+          <!-- Filtros Rápidos -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
+            <input type="text" id="filtro-historial-query" class="form-control" placeholder="Filtrar por equipo, serie u observaciones..." oninput="app.filterHistorialDebounced()">
+            <select id="filtro-historial-unidad" class="form-control" onchange="app.loadHistorial()">
+              <option value="">Todas las Unidades Hospitalarias</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 55px;">ID</th>
+                  <th style="width: 105px;">Fecha</th>
+                  <th>Técnico</th>
+                  <th>Equipo Médico</th>
+                  <th style="width: 95px;">N° Serie</th>
+                  <th>Unidad</th>
+                  <th style="width: 110px; text-align: center;">Evidencia</th>
+                  <th class="col-actions" style="width: 190px; text-align: center;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="historial-tbody">
+                <!-- Rellenado por JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
+           4. VISTA EQUIPOS MÉDICOS (Catálogo 2.553)
+           ==================================================================== -->
+      <section id="view-equipos" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Catálogo Maestro de Equipos Médicos</h2>
+              <p class="panel-subtitle">2.553 equipos registrados en el inventario hospitalario</p>
+            </div>
+            <div class="catalog-search-wrapper">
+              <input type="text" id="equipos-catalog-search" class="form-control" placeholder="Buscar equipo, serie o marca..." oninput="app.searchCatalogDebounced()">
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px;">ID</th>
+                  <th>Equipo Médico</th>
+                  <th>Marca</th>
+                  <th>Modelo</th>
+                  <th>N° Serie</th>
+                  <th>Categoría</th>
+                  <th>Estado</th>
+                  <th class="col-actions" style="text-align: center;">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="equipos-catalog-tbody">
+                <!-- Rellenado por JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
+           5. VISTA PANEL ADMINISTRADOR (KPIs Bento)
+           ==================================================================== -->
+      <section id="view-admin" style="display: none;">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="kpi-total-equipos">2.553</div>
+              <div class="kpi-label">Equipos Registrados</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: var(--success-subtle); color: var(--success);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="kpi-total-chequeos">185</div>
+              <div class="kpi-label">Chequeos Ejecutados</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="kpi-con-multimedia">1</div>
+              <div class="kpi-label">Con Fotos y Firma</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: var(--warning-subtle); color: var(--warning);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="kpi-total-cajas">245</div>
+              <div class="kpi-label">Cajas en Bodega</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-stats-grid">
+          <!-- Top Unidades -->
+          <div class="panel" style="margin-bottom: 0;">
+            <div class="panel-header">
+              <h3 class="panel-title" style="font-size: 0.95rem;">Distribución por Servicio</h3>
+            </div>
+            <div id="stats-unidades-list"></div>
+          </div>
+
+          <!-- Actividad Técnicos -->
+          <div class="panel" style="margin-bottom: 0;">
+            <div class="panel-header">
+              <h3 class="panel-title" style="font-size: 0.95rem;">Actividad por Técnico EEMM</h3>
+            </div>
+            <div id="stats-tecnicos-list"></div>
+          </div>
+        </div>
+
+        <!-- Gestión de Usuarios del Sistema -->
+        <div class="panel" style="margin-top: 1.25rem; margin-bottom: 0;">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title" style="font-size: 0.95rem;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                Gestión de Usuarios del Sistema
+              </h3>
+              <p class="panel-subtitle">Administración de credenciales, asignación de RUTs y contraseñas</p>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="app.openUserModal()">
+              + Nuevo Usuario
+            </button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre Completo</th>
+                  <th>RUT</th>
+                  <th>Correo Electrónico</th>
+                  <th>Rol</th>
+                  <th class="col-actions" style="text-align: center;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-tbody">
+                <!-- Rellenado por JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mantenimiento y Respaldo de Base de Datos -->
+        <div class="panel" style="margin-top: 1.25rem; margin-bottom: 0;">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title" style="font-size: 0.95rem;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                </svg>
+                Copia de Seguridad y Base de Datos
+              </h3>
+              <p class="panel-subtitle">Exportación e importación de la base de datos completa del sistema (SQLite)</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 0.25rem;">
+            <!-- Tarjeta Exportar -->
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.15rem; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                  <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--primary-subtle); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  </div>
+                  <h4 style="font-size: 0.92rem; margin: 0; font-weight: 600;">Exportar Base de Datos</h4>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 1rem;">
+                  Descarga una copia completa e íntegra del archivo <code>eemm.db</code> con todos los usuarios, equipos, pautas, chequeos preventivos e inventario.
+                </p>
+              </div>
+              <button class="btn btn-primary" onclick="app.exportDatabase()" id="btn-export-db" style="width: 100%; justify-content: center; gap: 0.5rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Descargar Respaldo (.db)
+              </button>
+            </div>
+
+            <!-- Tarjeta Importar -->
+            <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.15rem; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                  <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); color: var(--danger); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  </div>
+                  <h4 style="font-size: 0.92rem; margin: 0; font-weight: 600;">Importar / Restaurar</h4>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.75rem;">
+                  Restaura el sistema a partir de un respaldo (<code>.db</code> o <code>.sql</code>). Se creará una copia preventiva automática antes de reemplazar los datos.
+                </p>
+                <div style="margin-bottom: 0.75rem;">
+                  <input type="file" id="db-file-input" accept=".db,.sqlite,.sqlite3,.sql" style="display: none;" onchange="app.onDatabaseFileSelected(event)">
+                  <div id="db-file-dropzone" onclick="document.getElementById('db-file-input').click()" style="border: 2px dashed var(--border-subtle); border-radius: var(--radius-sm); padding: 0.75rem; text-align: center; cursor: pointer; background: var(--bg-card); transition: border-color 0.2s;">
+                    <span id="db-file-label" style="font-size: 0.78rem; color: var(--text-secondary); word-break: break-all;">
+                      📁 Haz clic para seleccionar archivo (.db o .sql)
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-danger" onclick="app.importDatabase()" id="btn-import-db" disabled style="width: 100%; justify-content: center; gap: 0.5rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                Restaurar Base de Datos
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
+           6. VISTA BODEGA / INVENTARIO
+           ==================================================================== -->
+      <!-- ====================================================================
+           6. VISTA BODEGA / INVENTARIO (Racks Físicos, Repisas y Cajas)
+           ==================================================================== -->
+      <section id="view-inventario" style="display: none;">
+        <!-- Métricas Rápidas de Bodega -->
+        <div class="kpi-grid" style="margin-bottom: 1.25rem;">
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: var(--primary-subtle); color: var(--primary);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="inv-kpi-total-cajas">245</div>
+              <div class="kpi-label">Cajas de Insumos</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: var(--success-subtle); color: var(--success);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="inv-kpi-total-unidades">2.180</div>
+              <div class="kpi-label">Unidades en Stock</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: var(--warning-subtle); color: var(--warning);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="inv-kpi-stock-bajo" style="color: var(--warning);">0</div>
+              <div class="kpi-label">Stock Bajo / Crítico</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="inv-kpi-estantes">16</div>
+              <div class="kpi-label">Estantes Clínicos</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Bodega de Insumos y Repuestos Clínicos</h2>
+              <p class="panel-subtitle">Ubicación asignada en estantes y repisas físicas</p>
+            </div>
+          </div>
+
+          <!-- Barra de Control y Búsqueda -->
+          <div class="bodega-toolbar">
+            <div class="bodega-controls-left">
+              <div style="position: relative; flex: 1; min-width: 200px;">
+                <input type="text" id="inventario-search" class="form-control" placeholder="Buscar insumo, código de barras o caja..." oninput="app.filterInventarioDebounced()">
+              </div>
+
+              <select id="inventario-filtro-estado" class="form-control" style="max-width: 170px;" onchange="app.filterInventario()">
+                <option value="">Todos los Estados</option>
+                <option value="STOCK_BAJO">Solo Stock Bajo</option>
+                <option value="OK">Solo Stock Óptimo (OK)</option>
+              </select>
+            </div>
+
+            <div class="bodega-controls-right">
+              <!-- Botones de Acción de Bodega -->
+              <button type="button" class="btn btn-primary btn-sm" onclick="app.openNewInsumoModal()" title="Registrar nuevo producto o caja en bodega">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Crear Producto
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="app.openIngresoStockModal()" title="Ingresar o sumar stock a un producto existente">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Ingresar Stock
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="app.exportInventarioExcel()" title="Descargar planilla Excel (.xlsx) con todos los datos de bodega">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Exportar Excel
+              </button>
+
+              <!-- Selector de Modo de Vista -->
+              <div class="view-toggle-group">
+                <button type="button" class="view-toggle-btn active" id="btn-toggle-racks" onclick="app.setInventarioView('racks')" title="Ver como Estantes y Repisas Físicas">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                  Estantes y Repisas
+                </button>
+                <button type="button" class="view-toggle-btn" id="btn-toggle-table" onclick="app.setInventarioView('table')" title="Ver en Formato Tabla Tradicional">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                  Tabla
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Pills / Filtro Rápido de Estantes (16 Estantes) -->
+          <div class="estantes-pills-bar" id="inventario-estantes-pills">
+            <!-- Rellenado por JS -->
+          </div>
+
+          <!-- Vista 1: Racks Físicos con Repisas y Cuadros -->
+          <div id="inventario-racks-view" class="racks-container">
+            <!-- Rellenado dinámicamente por app.renderInventarioRacks() -->
+          </div>
+
+          <!-- Vista 2: Tabla Tradicional (oculta por defecto) -->
+          <div id="inventario-table-view" class="table-responsive" style="display: none;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Caja ID</th>
+                  <th>Descripción / Repuesto</th>
+                  <th>Stock</th>
+                  <th>Estante / Repisa</th>
+                  <th>Código Barra</th>
+                  <th>Estado</th>
+                  <th class="col-actions" style="text-align: center;">Detalle</th>
+                </tr>
+              </thead>
+              <tbody id="inventario-tbody">
+                <!-- Rellenado por JS -->
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ====================================================================
+         MODAL DETALLE DE CHEQUEO (Fotos y Firma)
+         ==================================================================== -->
+    <div id="modal-detalle" class="modal-overlay" onclick="if(event.target === this) app.closeModal();">
+      <div class="modal-card">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 class="panel-title" id="modal-title">Detalle de Inspección</h3>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a id="modal-btn-pdf" href="#" target="_blank" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 4px; text-decoration: none;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+              Exportar PDF
+            </a>
+            <button class="btn-icon" onclick="app.closeModal()">✕</button>
+          </div>
+        </div>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         MODAL GESTIÓN DE USUARIO (Crear / Editar)
+         ==================================================================== -->
+    <div id="modal-user" class="modal-overlay" onclick="if(event.target === this) app.closeUserModal();">
+      <div class="modal-card" style="max-width: 440px;">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 class="panel-title" id="modal-user-title">Nuevo Usuario</h3>
+          <button class="btn-icon" onclick="app.closeUserModal()">✕</button>
+        </div>
+        <form id="form-user" onsubmit="app.saveUser(event)">
+          <input type="hidden" id="user-edit-id">
+          <div class="form-group">
+            <label class="form-label" for="user-nombre">Nombre Completo <span class="req">*</span>:</label>
+            <input type="text" id="user-nombre" class="form-control" placeholder="Ej: Patricio Bustamante" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-rut">RUT <span class="req">*</span>:</label>
+            <input type="text" id="user-rut" class="form-control" placeholder="Ej: 12.345.678-9" required oninput="app.formatRutInput(this)">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-correo">Correo Electrónico <span class="req">*</span>:</label>
+            <input type="email" id="user-correo" class="form-control" placeholder="usuario@eemm.cl" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-password">Contraseña <span id="user-pwd-req" class="req">*</span>:</label>
+            <input type="password" id="user-password" class="form-control" placeholder="Asigna la contraseña de acceso">
+            <small id="user-pwd-hint" style="font-size:0.7rem; color:var(--text-tertiary); display:none; margin-top:2px;">(Déjala vacía para conservar la contraseña actual)</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-rol">Rol en el Sistema <span class="req">*</span>:</label>
+            <select id="user-rol" class="form-control" required>
+              <option value="tecnico">Técnico EEMM</option>
+              <option value="administrador">Administrador del Sistema</option>
+            </select>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn btn-subtle" onclick="app.closeUserModal()">Cancelar</button>
+            <button type="submit" id="btn-save-user" class="btn btn-primary">Guardar Usuario</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         MODAL DETALLE DE CAJA / INSUMO (Ubicación física en Estante y Repisa)
+         ==================================================================== -->
+    <div id="modal-caja" class="modal-overlay" onclick="if(event.target === this) app.closeCajaModal();">
+      <div class="modal-card" style="max-width: 480px;">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <div>
+            <h3 class="panel-title" id="modal-caja-title">Ficha de Insumo Clínico</h3>
+            <p class="panel-subtitle" id="modal-caja-subtitle">Ubicación asignada en bodega</p>
+          </div>
+          <button class="btn-icon" onclick="app.closeCajaModal()">✕</button>
+        </div>
+
+        <div id="modal-caja-body">
+          <!-- Rellenado dinámicamente por app.openBoxModal() -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         MODAL CREAR / EDITAR INSUMO O CAJA
+         ==================================================================== -->
+    <div id="modal-form-insumo" class="modal-overlay" onclick="if(event.target === this) app.closeInsumoModal();">
+      <div class="modal-card" style="max-width: 480px;">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <div>
+            <h3 class="panel-title" id="modal-form-insumo-title">Crear Nuevo Insumo / Caja</h3>
+            <p class="panel-subtitle">Asigna ubicación física en estante y repisa</p>
+          </div>
+          <button class="btn-icon" onclick="app.closeInsumoModal()">✕</button>
+        </div>
+
+        <form id="form-insumo" onsubmit="app.saveInsumo(event)">
+          <input type="hidden" id="insumo-edit-id">
+
+          <div class="form-group">
+            <label class="form-label" for="insumo-nombre">Descripción / Nombre del Insumo <span class="req">*</span>:</label>
+            <input type="text" id="insumo-nombre" class="form-control" placeholder="Ej: BATERIAS DESFIBRILADOR TEC-5631" required>
+          </div>
+
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label class="form-label" for="insumo-estanteria">Estantería <span class="req">*</span>:</label>
+              <select id="insumo-estanteria" class="form-control" required>
+                <!-- Opciones generadas dinámicamente -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="insumo-repisa">Repisa / Nivel <span class="req">*</span>:</label>
+              <select id="insumo-repisa" class="form-control" required>
+                <option value="1">Repisa 1 (Superior)</option>
+                <option value="2">Repisa 2 (Medio)</option>
+                <option value="3">Repisa 3 (Inferior)</option>
+                <option value="4">Repisa 4 (Base)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label class="form-label" for="insumo-cantidad">Cantidad en Stock <span class="req">*</span>:</label>
+              <input type="number" id="insumo-cantidad" class="form-control" min="0" value="1" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="insumo-estado">Estado del Stock:</label>
+              <select id="insumo-estado" class="form-control">
+                <option value="OK">Stock Óptimo (OK)</option>
+                <option value="STOCK_BAJO">Stock Bajo</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="insumo-barcode">Código de Barras (Opcional):</label>
+            <input type="text" id="insumo-barcode" class="form-control" placeholder="Escanear o escribir código EAN...">
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn btn-subtle" onclick="app.closeInsumoModal()">Cancelar</button>
+            <button type="submit" id="btn-save-insumo" class="btn btn-primary">Guardar Producto</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         MODAL INGRESAR STOCK A PRODUCTO EXISTENTE
+         ==================================================================== -->
+    <div id="modal-ingreso-stock" class="modal-overlay" onclick="if(event.target === this) app.closeIngresoStockModal();">
+      <div class="modal-card" style="max-width: 440px;">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <div>
+            <h3 class="panel-title">Ingresar Stock a Bodega</h3>
+            <p class="panel-subtitle">Suma unidades físicas a un producto existente</p>
+          </div>
+          <button class="btn-icon" onclick="app.closeIngresoStockModal()">✕</button>
+        </div>
+
+        <form id="form-ingreso-stock" onsubmit="app.submitIngresoStock(event)">
+          <div class="form-group">
+            <label class="form-label" for="ingreso-select-caja">Seleccionar Insumo / Caja <span class="req">*</span>:</label>
+            <select id="ingreso-select-caja" class="form-control" required style="width: 100%;">
+              <!-- Rellenado dinámicamente por JS -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="ingreso-cantidad">Cantidad a Sumar <span class="req">*</span>:</label>
+            <input type="number" id="ingreso-cantidad" class="form-control" min="1" value="1" required placeholder="Número de unidades a ingresar">
+            <small style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 3px; display: block;">Esta cantidad se sumará directamente al stock actual del producto.</small>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn btn-subtle" onclick="app.closeIngresoStockModal()">Cancelar</button>
+            <button type="submit" id="btn-submit-ingreso" class="btn btn-primary">Confirmar Ingreso</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+  </div>
+
+  <!-- Scripts de la Aplicación -->
+  <script src="/static/js/offline-manager.js?v=2.5"></script>
+  <script src="/static/js/signature.js?v=2.5"></script>
+  <script src="/static/js/photos.js?v=2.5"></script>
+  <script src="/static/js/app.js?v=2.5"></script>
+</body>
+</html>

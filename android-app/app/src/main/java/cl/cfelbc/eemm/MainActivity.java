@@ -22,12 +22,17 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -74,11 +79,7 @@ public class MainActivity extends AppCompatActivity {
         setupSwipeRefresh();
         setupBackNavigation();
 
-        if (isNetworkAvailable()) {
-            webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
-        } else {
-            webView.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-        }
+        hideErrorScreen();
         webView.loadUrl(APP_URL);
     }
 
@@ -90,12 +91,8 @@ public class MainActivity extends AppCompatActivity {
         btnRetry = findViewById(R.id.btnRetry);
 
         btnRetry.setOnClickListener(v -> {
-            if (isNetworkAvailable()) {
-                hideErrorScreen();
-                webView.loadUrl(APP_URL);
-            } else {
-                Toast.makeText(MainActivity.this, "Aún no hay conexión a Internet", Toast.LENGTH_SHORT).show();
-            }
+            hideErrorScreen();
+            webView.loadUrl(APP_URL);
         });
     }
 
@@ -154,8 +151,32 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // WebViewClient
+        // WebViewClient con interceptor para soporte 100% offline
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                String path = uri.getPath();
+
+                // Servir la aplicación web localmente desde los assets del APK
+                if (path == null || path.equals("/") || path.equals("/index.html")) {
+                    return getAssetResponse("index.html", "text/html");
+                } else if (path.startsWith("/static/")) {
+                    String assetPath = path.substring(1);
+                    int qIdx = assetPath.indexOf('?');
+                    if (qIdx != -1) {
+                        assetPath = assetPath.substring(0, qIdx);
+                    }
+                    String mime = getMimeType(assetPath);
+                    WebResourceResponse response = getAssetResponse(assetPath, mime);
+                    if (response != null) {
+                        return response;
+                    }
+                }
+
+                return super.shouldInterceptRequest(view, request);
+            }
+
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
@@ -174,7 +195,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
-                if (request.isForMainFrame()) {
+                if (request.isForMainFrame() && !request.getUrl().toString().contains("eemm.cfelbc.cl")) {
                     showErrorScreen();
                 }
             }
@@ -383,6 +404,29 @@ public class MainActivity extends AppCompatActivity {
     private void hideErrorScreen() {
         errorView.setVisibility(View.GONE);
         swipeRefreshLayout.setVisibility(View.VISIBLE);
+    }
+
+    private WebResourceResponse getAssetResponse(String assetPath, String mimeType) {
+        try {
+            InputStream is = getAssets().open(assetPath);
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Access-Control-Allow-Origin", "*");
+            headers.put("Cache-Control", "no-cache");
+            return new WebResourceResponse(mimeType, "UTF-8", 200, "OK", headers, is);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String getMimeType(String path) {
+        if (path.endsWith(".html")) return "text/html";
+        if (path.endsWith(".css")) return "text/css";
+        if (path.endsWith(".js")) return "application/javascript";
+        if (path.endsWith(".json")) return "application/json";
+        if (path.endsWith(".svg")) return "image/svg+xml";
+        if (path.endsWith(".png")) return "image/png";
+        if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+        return "application/octet-stream";
     }
 
     @Override
