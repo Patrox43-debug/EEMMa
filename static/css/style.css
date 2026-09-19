@@ -221,6 +221,18 @@ code, kbd, samp, pre {
   gap: 0.75rem;
 }
 
+.header-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* ==========================================================================
    MINIMALIST NAVIGATION TABS
    ========================================================================== */
@@ -1508,11 +1520,19 @@ select.form-control {
     font-size: 16px !important;
   }
 
-  /* Safe Area Support para muescas (notch) y barras de navegación */
+  /* Espacio superior para la bandeja de notificaciones del dispositivo y borde delimitador */
   .header {
     height: auto !important;
-    min-height: 54px !important;
-    padding: max(0.5rem, env(safe-area-inset-top, 0.5rem)) max(0.85rem, env(safe-area-inset-right, 0.85rem)) 0.5rem max(0.85rem, env(safe-area-inset-left, 0.85rem)) !important;
+    min-height: 68px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
+    padding-top: max(26px, env(safe-area-inset-top, 26px)) !important; /* Espacio para bandeja de notificaciones */
+    padding-bottom: 0.55rem !important;
+    padding-left: max(0.85rem, env(safe-area-inset-left, 0.85rem)) !important;
+    padding-right: max(0.85rem, env(safe-area-inset-right, 0.85rem)) !important;
+    border-top: 4px solid var(--primary) !important; /* Borde superior visible que enmarca la app */
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06) !important;
   }
 
   .brand-tag {
@@ -1523,21 +1543,62 @@ select.form-control {
     font-size: 0.9rem !important;
   }
 
-  #user-profile-badge {
+  /* Cabecera Derecha en Móvil: Usuario arriba, Acciones (Tema + Salir) debajo */
+  .header-right {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+  }
+
+  /* Fila Superior: Tipo de usuario, avatar y nombre */
+  .header-user-badge {
+    display: flex !important;
+    align-items: center !important;
     gap: 0.35rem !important;
   }
 
   #header-user-name {
-    display: none !important; /* Muestra solo avatar y rol para ahorrar espacio en cabecera */
+    display: inline-block !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    max-width: 115px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
 
-  .header-right {
+  #header-user-role {
+    font-size: 0.65rem !important;
+    padding: 1px 6px !important;
+  }
+
+  /* Fila Inferior (Debajo del usuario): Botón Modo Claro/Oscuro y Salir */
+  .header-actions-group {
+    display: flex !important;
+    align-items: center !important;
     gap: 0.45rem !important;
   }
 
-  .header-right .btn-sm {
-    padding: 0.3rem 0.55rem !important;
+  .header-actions-group .btn-icon {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: var(--radius-sm) !important;
+  }
+
+  .header-actions-group .btn-icon svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .header-actions-group #btn-logout {
+    padding: 0.2rem 0.55rem !important;
     font-size: 0.725rem !important;
+    height: 28px !important;
+    line-height: 1 !important;
+    border-radius: var(--radius-sm) !important;
   }
 
   /* Barra de Navegación por Pestañas con Desplazamiento Táctil */

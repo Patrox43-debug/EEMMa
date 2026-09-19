@@ -24,34 +24,37 @@
 
       <div class="header-right">
         <!-- Usuario Activo -->
-        <div id="user-profile-badge" style="display: none; align-items: center; gap: 0.5rem;">
+        <div id="user-profile-badge" class="header-user-badge" style="display: none; align-items: center; gap: 0.5rem;">
           <div style="width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--primary-subtle); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;" id="user-avatar-initials">U</div>
           <span id="header-user-name" style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);"></span>
           <span id="header-user-role" class="badge"></span>
         </div>
 
-        <!-- Botón Modo Claro / Oscuro -->
-        <button id="theme-toggle-btn" class="btn-icon" title="Cambiar modo claro / oscuro">
-          <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          </svg>
-          <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
+        <!-- Grupo de Acciones: Modo Claro/Oscuro y Salir (se apilan debajo del usuario en móvil) -->
+        <div class="header-actions-group">
+          <!-- Botón Modo Claro / Oscuro -->
+          <button id="theme-toggle-btn" class="btn-icon" title="Cambiar modo claro / oscuro">
+            <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
 
-        <!-- Botón Salir -->
-        <button id="btn-logout" class="btn btn-outline btn-sm" style="display: none;" onclick="app.logout()">
-          Salir
-        </button>
+          <!-- Botón Salir -->
+          <button id="btn-logout" class="btn btn-outline btn-sm" style="display: none;" onclick="app.logout()">
+            Salir
+          </button>
+        </div>
       </div>
     </header>
 
