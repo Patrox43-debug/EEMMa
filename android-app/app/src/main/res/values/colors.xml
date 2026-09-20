@@ -7,4 +7,5 @@
     <color name="text_primary">#090e17</color>
     <color name="text_secondary">#64748b</color>
     <color name="white">#ffffff</color>
+    <color name="ic_launcher_background">#1C2C3B</color>
 </resources>

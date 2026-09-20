@@ -167,8 +167,26 @@ const app = {
     }
 
     // Manejador del botón de tema
-    document.getElementById("theme-toggle-btn").addEventListener("click", () => {
-      this.toggleTheme();
+    const themeBtn = document.getElementById("theme-toggle-btn");
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        this.toggleTheme();
+      });
+    }
+
+    // Cerrar menú desplegable de usuario al hacer clic fuera o presionar Escape
+    document.addEventListener("click", (e) => {
+      const wrapper = document.getElementById("user-dropdown-container");
+      if (wrapper && wrapper.classList.contains("open") && !wrapper.contains(e.target)) {
+        this.closeUserDropdown();
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        this.closeUserDropdown();
+        this.closeChangePasswordModal();
+      }
     });
   },
 
@@ -288,11 +306,29 @@ const app = {
     const moonIcon = document.getElementById("theme-icon-moon");
 
     if (theme === "dark") {
-      sunIcon.style.display = "block";
-      moonIcon.style.display = "none";
+      if (sunIcon) sunIcon.style.display = "block";
+      if (moonIcon) moonIcon.style.display = "none";
     } else {
-      sunIcon.style.display = "none";
-      moonIcon.style.display = "block";
+      if (sunIcon) sunIcon.style.display = "none";
+      if (moonIcon) moonIcon.style.display = "block";
+    }
+
+    // Actualizar elementos dentro del menú desplegable
+    const ddSun = document.getElementById("dropdown-icon-sun");
+    const ddMoon = document.getElementById("dropdown-icon-moon");
+    const ddTitle = document.getElementById("dropdown-theme-title");
+    const ddDesc = document.getElementById("dropdown-theme-desc");
+
+    if (theme === "dark") {
+      if (ddSun) ddSun.style.display = "block";
+      if (ddMoon) ddMoon.style.display = "none";
+      if (ddTitle) ddTitle.textContent = "Cambiar a Modo Claro";
+      if (ddDesc) ddDesc.textContent = "Apariencia con fondo blanco";
+    } else {
+      if (ddSun) ddSun.style.display = "none";
+      if (ddMoon) ddMoon.style.display = "block";
+      if (ddTitle) ddTitle.textContent = "Cambiar a Modo Oscuro";
+      if (ddDesc) ddDesc.textContent = "Apariencia nocturna descansada";
     }
 
     if (this.signaturePad) {
@@ -443,30 +479,55 @@ const app = {
     this.currentUser = user;
     localStorage.setItem("eemm_user", JSON.stringify(user));
 
-    // Actualizar UI Header
-    document.getElementById("user-profile-badge").style.display = "flex";
-    document.getElementById("header-user-name").textContent = user.tecnico || user.nombre;
+    // Mostrar menú desplegable de usuario y ocultar botón de tema aislado
+    const ddContainer = document.getElementById("user-dropdown-container");
+    if (ddContainer) ddContainer.style.display = "inline-block";
+
+    const themeToggleBtn = document.getElementById("theme-toggle-btn");
+    if (themeToggleBtn) themeToggleBtn.style.display = "none";
+
+    // Actualizar datos del disparador (Trigger)
+    const initials = (user.nombre || user.tecnico || "U").charAt(0).toUpperCase();
     const initialsEl = document.getElementById("user-avatar-initials");
-    if (initialsEl) initialsEl.textContent = (user.nombre || "U").charAt(0).toUpperCase();
+    if (initialsEl) initialsEl.textContent = initials;
+
+    const nameEl = document.getElementById("header-user-name");
+    if (nameEl) nameEl.textContent = user.tecnico || user.nombre;
 
     const roleBadge = document.getElementById("header-user-role");
-    roleBadge.textContent = user.rol;
-    roleBadge.className = `badge ${user.rol === "administrador" ? "badge-admin" : "badge-tecnico"}`;
-    document.getElementById("btn-logout").style.display = "inline-flex";
+    if (roleBadge) {
+      roleBadge.textContent = user.rol === "administrador" ? "Admin" : "Técnico";
+      roleBadge.className = `badge ${user.rol === "administrador" ? "badge-admin" : "badge-tecnico"}`;
+    }
+
+    // Actualizar datos dentro del Menú Desplegable
+    const ddInitials = document.getElementById("dropdown-avatar-initials");
+    if (ddInitials) ddInitials.textContent = initials;
+
+    const ddFullname = document.getElementById("dropdown-user-fullname");
+    if (ddFullname) ddFullname.textContent = user.nombre || user.tecnico || "Usuario";
+
+    const ddRut = document.getElementById("dropdown-user-rut");
+    if (ddRut) ddRut.textContent = user.rut ? `RUT: ${user.rut}` : "RUT: No asignado";
+
+    const ddRoleBadge = document.getElementById("dropdown-user-role-badge");
+    if (ddRoleBadge) {
+      ddRoleBadge.textContent = user.rol === "administrador" ? "Administrador" : "Técnico EEMM";
+      ddRoleBadge.className = `badge ${user.rol === "administrador" ? "badge-admin" : "badge-tecnico"}`;
+    }
 
     // Mostrar barra de navegación
     document.getElementById("app-nav").style.display = "flex";
 
     // Pestaña Admin visible solo si rol === 'administrador'
     const adminTab = document.getElementById("nav-tab-admin");
-    if (user.rol === "administrador") {
-      adminTab.style.display = "flex";
-    } else {
-      adminTab.style.display = "none";
+    if (adminTab) {
+      adminTab.style.display = user.rol === "administrador" ? "flex" : "none";
     }
 
     // Badge técnico en formulario
-    document.getElementById("chequeo-tecnico-badge").textContent = user.tecnico || user.nombre;
+    const formTecnicoBadge = document.getElementById("chequeo-tecnico-badge");
+    if (formTecnicoBadge) formTecnicoBadge.textContent = user.tecnico || user.nombre;
 
     // Ir a pestaña por defecto
     if (user.rol === "administrador") {
@@ -477,13 +538,134 @@ const app = {
   },
 
   logout() {
+    this.closeUserDropdown();
     this.currentUser = null;
     localStorage.removeItem("eemm_user");
-    document.getElementById("user-profile-badge").style.display = "none";
-    document.getElementById("btn-logout").style.display = "none";
+
+    const ddContainer = document.getElementById("user-dropdown-container");
+    if (ddContainer) ddContainer.style.display = "none";
+
+    const themeToggleBtn = document.getElementById("theme-toggle-btn");
+    if (themeToggleBtn) themeToggleBtn.style.display = "inline-flex";
+
     document.getElementById("app-nav").style.display = "none";
     this.navigate("login");
     this.showToast("Has cerrado sesión.", "info");
+  },
+
+  /* ==========================================================================
+     MENÚ DESPLEGABLE DE USUARIO Y CAMBIO DE CONTRASEÑA
+     ========================================================================== */
+  toggleUserDropdown(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const wrapper = document.getElementById("user-dropdown-container");
+    if (!wrapper) return;
+    const isOpen = wrapper.classList.contains("open");
+    if (isOpen) {
+      this.closeUserDropdown();
+    } else {
+      wrapper.classList.add("open");
+      const btn = document.getElementById("user-dropdown-btn");
+      if (btn) btn.setAttribute("aria-expanded", "true");
+    }
+  },
+
+  closeUserDropdown() {
+    const wrapper = document.getElementById("user-dropdown-container");
+    if (wrapper) {
+      wrapper.classList.remove("open");
+      const btn = document.getElementById("user-dropdown-btn");
+      if (btn) btn.setAttribute("aria-expanded", "false");
+    }
+  },
+
+  openChangePasswordModal() {
+    this.closeUserDropdown();
+    const modal = document.getElementById("modal-change-password");
+    if (!modal) return;
+    const form = document.getElementById("form-change-password");
+    if (form) form.reset();
+    modal.classList.add("active");
+    setTimeout(() => {
+      const input = document.getElementById("cp-current-password");
+      if (input) input.focus();
+    }, 100);
+  },
+
+  closeChangePasswordModal() {
+    const modal = document.getElementById("modal-change-password");
+    if (modal) modal.classList.remove("active");
+  },
+
+  async submitChangePassword(e) {
+    e.preventDefault();
+    if (!this.currentUser) {
+      this.showToast("Debes iniciar sesión para realizar esta acción.", "error");
+      return;
+    }
+
+    const currentPwd = document.getElementById("cp-current-password").value;
+    const newPwd = document.getElementById("cp-new-password").value;
+    const confirmPwd = document.getElementById("cp-confirm-password").value;
+
+    if (!currentPwd || !newPwd || !confirmPwd) {
+      this.showToast("Por favor completa todos los campos requeridos.", "warning");
+      return;
+    }
+
+    if (newPwd.length < 4) {
+      this.showToast("La nueva contraseña debe tener al menos 4 caracteres.", "warning");
+      return;
+    }
+
+    if (newPwd !== confirmPwd) {
+      this.showToast("Las nuevas contraseñas no coinciden.", "warning");
+      return;
+    }
+
+    const submitBtn = document.getElementById("btn-submit-change-password");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Actualizando...";
+
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: this.currentUser.id,
+          current_password: currentPwd,
+          new_password: newPwd
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Error al actualizar la contraseña");
+      }
+
+      // Actualizar también la contraseña en memoria y en perfilesBase si existe
+      if (this.perfilesBase && Array.isArray(this.perfilesBase)) {
+        const pIndex = this.perfilesBase.findIndex(p => p.id === this.currentUser.id);
+        if (pIndex !== -1) {
+          this.perfilesBase[pIndex].password = newPwd;
+          if (window.OfflineManager) {
+            window.OfflineManager.cacheData("perfiles_base", this.perfilesBase);
+          }
+        }
+      }
+
+      this.closeChangePasswordModal();
+      this.showToast("¡Contraseña actualizada exitosamente!", "success");
+    } catch (err) {
+      console.error("Error al cambiar contraseña:", err);
+      this.showToast(err.message || "Error al actualizar la contraseña", "error");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Actualizar Contraseña";
+    }
   },
 
   /* ==========================================================================

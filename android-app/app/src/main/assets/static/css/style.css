@@ -218,25 +218,257 @@ code, kbd, samp, pre {
 
 .header-right {
   display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-end !important;
-  justify-content: center !important;
-  gap: 0.35rem !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.65rem !important;
   flex-shrink: 0 !important;
 }
 
-.header-user-badge {
-  display: flex !important;
-  align-items: center !important;
-  gap: 0.5rem !important;
-  justify-content: flex-end !important;
+/* ==========================================================================
+   MENÚ DESPLEGABLE DE USUARIO (Header Profile Dropdown)
+   ========================================================================== */
+.user-dropdown-wrapper {
+  position: relative;
+  display: inline-block;
 }
 
-.header-actions-group {
-  display: flex !important;
-  align-items: center !important;
-  gap: 0.5rem !important;
-  justify-content: flex-end !important;
+.user-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 3px 10px 3px 4px;
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+  font-family: inherit;
+  box-shadow: var(--shadow-xs);
+}
+
+.user-dropdown-trigger:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+}
+
+.user-dropdown-wrapper.open .user-dropdown-trigger {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-glow);
+  background: var(--bg-subtle);
+}
+
+.user-avatar-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--blue-700));
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.user-trigger-info {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: left;
+}
+
+.user-trigger-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-trigger-badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+}
+
+.dropdown-chevron {
+  color: var(--text-tertiary);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.user-dropdown-wrapper.open .dropdown-chevron {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.user-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 270px;
+  max-width: 320px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 0.5rem;
+  z-index: 1000;
+  display: none;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.user-dropdown-wrapper.open .user-dropdown-menu {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dropdown-account-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.dropdown-avatar-large {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--blue-700));
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.dropdown-account-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.dropdown-user-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.dropdown-user-rut {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.dropdown-user-badges {
+  margin-top: 4px;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 0.4rem 0;
+  border: none;
+}
+
+.dropdown-menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  font-family: inherit;
+  user-select: none;
+}
+
+.dropdown-item:hover {
+  background-color: var(--bg-subtle);
+  color: var(--primary);
+}
+
+.dropdown-item svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+
+.dropdown-item:hover svg {
+  color: var(--primary);
+}
+
+.dropdown-theme-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.dropdown-item-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.dropdown-item-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.dropdown-item-desc {
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.dropdown-item-danger {
+  color: var(--danger) !important;
+}
+
+.dropdown-item-danger:hover {
+  background-color: var(--danger-subtle) !important;
+  color: var(--danger) !important;
+}
+
+.dropdown-item-danger svg {
+  color: var(--danger) !important;
 }
 
 /* Indicador de Red y Botón de Sincronización */
@@ -1612,62 +1844,34 @@ select.form-control {
     font-size: 0.9rem !important;
   }
 
-  /* Cabecera Derecha en Móvil: Usuario arriba, Acciones (Tema + Salir) debajo */
+  /* Cabecera Derecha en Móvil: Alineación limpia horizontal con disparador desplegable */
   .header-right {
     display: flex !important;
-    flex-direction: column !important;
-    align-items: flex-end !important;
-    justify-content: center !important;
-    gap: 0.35rem !important;
-  }
-
-  /* Fila Superior: Tipo de usuario, avatar y nombre */
-  .header-user-badge {
-    display: flex !important;
+    flex-direction: row !important;
     align-items: center !important;
-    gap: 0.35rem !important;
+    justify-content: flex-end !important;
+    gap: 0.4rem !important;
   }
 
-  #header-user-name {
+  .user-trigger-name {
     display: inline-block !important;
     font-size: 0.75rem !important;
     font-weight: 600 !important;
     color: var(--text-primary) !important;
-    max-width: 115px !important;
+    max-width: 90px !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
   }
 
-  #header-user-role {
-    font-size: 0.65rem !important;
-    padding: 1px 6px !important;
+  .user-trigger-badge {
+    display: none !important; /* En móviles compactos se oculta para optimizar espacio; se visualiza dentro del menú */
   }
 
-  /* Fila Inferior (Debajo del usuario): Botón Modo Claro/Oscuro y Salir */
-  .header-actions-group {
-    display: flex !important;
-    align-items: center !important;
-    gap: 0.45rem !important;
-  }
-
-  .header-actions-group .btn-icon {
-    width: 28px !important;
-    height: 28px !important;
-    border-radius: var(--radius-sm) !important;
-  }
-
-  .header-actions-group .btn-icon svg {
-    width: 13px !important;
-    height: 13px !important;
-  }
-
-  .header-actions-group #btn-logout {
-    padding: 0.2rem 0.55rem !important;
-    font-size: 0.725rem !important;
-    height: 28px !important;
-    line-height: 1 !important;
-    border-radius: var(--radius-sm) !important;
+  .user-dropdown-menu {
+    right: 0 !important;
+    max-width: calc(100vw - 20px) !important;
+    min-width: 255px !important;
   }
 
   /* Barra de Navegación por Pestañas con Desplazamiento Táctil */

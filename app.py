@@ -353,6 +353,11 @@ class UserUpdate(BaseModel):
     rol: Optional[str] = "tecnico"
     funcion: Optional[str] = "Tecnico EEMM"
 
+class ChangePasswordRequest(BaseModel):
+    user_id: int
+    current_password: str
+    new_password: str
+
 class ChequeoCreate(BaseModel):
     usuario: str
     nombre_equipo: str
@@ -409,6 +414,31 @@ def login(creds: LoginRequest):
             "rol": matched_user["rol"]
         }
     }
+
+@app.post("/api/auth/change-password")
+def change_password(data: ChangePasswordRequest):
+    """Permite al usuario autenticado (especialmente técnicos) cambiar su contraseña."""
+    if not data.new_password or len(data.new_password.strip()) < 4:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 4 caracteres")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, password, rut, nombre, rol FROM perfiles WHERE id = ?", (data.user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if str(user["password"]).strip() != str(data.current_password).strip():
+        conn.close()
+        raise HTTPException(status_code=400, detail="La contraseña actual ingresada es incorrecta")
+
+    cursor.execute("UPDATE perfiles SET password = ? WHERE id = ?", (data.new_password.strip(), data.user_id))
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok", "message": "Contraseña actualizada exitosamente"}
 
 # ==============================================================================
 # Rutas de Administración de Usuarios (CRUD)
