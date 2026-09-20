@@ -908,12 +908,33 @@ const app = {
         const res = await fetch(url);
         if (res.ok) {
           serverData = await res.json();
+          if (!q && !unidad && window.OfflineManager && Array.isArray(serverData) && serverData.length > 0) {
+            window.OfflineManager.cacheData('last_historial', serverData);
+          }
         } else {
           fetchFailed = true;
         }
       } catch (netErr) {
         fetchFailed = true;
         console.warn("[Historial] Modo sin conexión: mostrando datos locales");
+        if (window.OfflineManager) {
+          const cached = await window.OfflineManager.getCachedData('last_historial');
+          if (Array.isArray(cached)) {
+            serverData = cached;
+            if (q || unidad) {
+              serverData = serverData.filter((item) => {
+                if (unidad && item.unidad !== unidad) return false;
+                if (q) {
+                  const matchEquipo = (item.nombre_equipo || "").toLowerCase().includes(q);
+                  const matchSerie = (item.serie || "").toLowerCase().includes(q);
+                  const matchUser = (item.usuario || "").toLowerCase().includes(q);
+                  if (!matchEquipo && !matchSerie && !matchUser) return false;
+                }
+                return true;
+              });
+            }
+          }
+        }
       }
 
       const tbody = document.getElementById("historial-tbody");
@@ -983,7 +1004,7 @@ const app = {
         tbody.appendChild(tr);
       });
 
-      data.forEach((item) => {
+      serverData.forEach((item) => {
         const tr = document.createElement("tr");
 
         // Contar fotos disponibles
