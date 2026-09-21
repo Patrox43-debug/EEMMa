@@ -8,7 +8,8 @@ const app = {
   selectedEquipment: null,
   signaturePad: null,
   photoManager: null,
-  activeTab: "chequeo",
+  activeTab: "modulo-selector",
+  currentModule: "chequeo",
   debounceTimers: {},
 
   currentCategory: "GENERAL",
@@ -186,6 +187,7 @@ const app = {
       if (e.key === "Escape") {
         this.closeUserDropdown();
         this.closeChangePasswordModal();
+        this.closeNewEquipmentModal();
       }
     });
   },
@@ -260,6 +262,17 @@ const app = {
       }
     } catch (e) {
       console.warn("Carga de equipos_base.json en segundo plano:", e);
+    }
+
+    // Incorporar equipos creados localmente/personalizados
+    try {
+      const customEq = JSON.parse(localStorage.getItem("eemm_custom_equipos") || "[]");
+      if (customEq && Array.isArray(customEq) && customEq.length > 0) {
+        if (!this.equiposBase) this.equiposBase = [];
+        this.equiposBase = [...customEq, ...this.equiposBase];
+      }
+    } catch (e) {
+      console.warn("Carga de eemm_custom_equipos:", e);
     }
 
     try {
@@ -353,11 +366,25 @@ const app = {
     this.activeTab = tabName;
 
     // Ocultar todas las vistas
-    const views = ["login", "chequeo", "historial", "equipos", "admin", "inventario"];
+    const views = ["login", "modulo-selector", "chequeo", "historial", "equipos", "admin", "inventario"];
     views.forEach((v) => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = v === tabName ? "block" : "none";
     });
+
+    const appNav = document.getElementById("app-nav");
+    if (tabName === "login" || tabName === "modulo-selector") {
+      if (appNav) appNav.style.display = "none";
+    } else if (this.currentUser) {
+      if (appNav) appNav.style.display = "flex";
+      // Mantener sincronizado el módulo activo según la pestaña navegada
+      if (tabName === "inventario") {
+        this.currentModule = "bodega";
+      } else if (tabName === "chequeo" || tabName === "historial" || tabName === "equipos") {
+        this.currentModule = "chequeo";
+      }
+      this.updateModuleSwitcherUI();
+    }
 
     // Actualizar tabs activas en la barra
     document.querySelectorAll(".nav-tab").forEach((tab) => {
@@ -516,8 +543,26 @@ const app = {
       ddRoleBadge.className = `badge ${user.rol === "administrador" ? "badge-admin" : "badge-tecnico"}`;
     }
 
-    // Mostrar barra de navegación
-    document.getElementById("app-nav").style.display = "flex";
+    // Cargar módulo preferido o por defecto
+    const savedModule = localStorage.getItem("eemm_current_module");
+    if (savedModule === "bodega" || savedModule === "chequeo") {
+      this.currentModule = savedModule;
+    } else {
+      this.currentModule = "chequeo";
+    }
+
+    // Personalizar saludo del selector de módulos
+    const greetingEl = document.getElementById("module-selector-greeting");
+    if (greetingEl) {
+      const name = user.tecnico || user.nombre || "Técnico";
+      greetingEl.textContent = `Bienvenido/a, ${name}`;
+    }
+
+    // Banner de administración en selector de módulos
+    const adminCard = document.getElementById("module-selector-admin-card");
+    if (adminCard) {
+      adminCard.style.display = user.rol === "administrador" ? "flex" : "none";
+    }
 
     // Pestaña Admin visible solo si rol === 'administrador'
     const adminTab = document.getElementById("nav-tab-admin");
@@ -525,16 +570,15 @@ const app = {
       adminTab.style.display = user.rol === "administrador" ? "flex" : "none";
     }
 
+    // Sincronizar botones de cambio de módulo
+    this.updateModuleSwitcherUI();
+
     // Badge técnico en formulario
     const formTecnicoBadge = document.getElementById("chequeo-tecnico-badge");
     if (formTecnicoBadge) formTecnicoBadge.textContent = user.tecnico || user.nombre;
 
-    // Ir a pestaña por defecto
-    if (user.rol === "administrador") {
-      this.navigate("admin");
-    } else {
-      this.navigate("chequeo");
-    }
+    // Ir siempre al Sub-Menú Selector de Módulos al iniciar sesión
+    this.navigate("modulo-selector");
   },
 
   logout() {
@@ -665,6 +709,82 @@ const app = {
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "Actualizar Contraseña";
+    }
+  },
+
+  /* ==========================================================================
+     GESTIÓN DE MÓDULOS (CHEQUEO & EQUIPOS vs BODEGA & INSUMOS)
+     ========================================================================== */
+  selectModule(moduleName, targetTab) {
+    this.currentModule = moduleName;
+    localStorage.setItem("eemm_current_module", moduleName);
+    this.updateModuleSwitcherUI();
+
+    // Mostrar barra de navegación adaptada
+    const appNav = document.getElementById("app-nav");
+    if (appNav) appNav.style.display = "flex";
+
+    // Navegar a la pestaña solicitada dentro del módulo
+    if (targetTab) {
+      this.navigate(targetTab);
+    } else {
+      if (moduleName === "bodega") {
+        this.navigate("inventario");
+      } else {
+        this.navigate("chequeo");
+      }
+    }
+  },
+
+  toggleModuleSwitch() {
+    this.closeUserDropdown();
+    if (this.currentModule === "bodega") {
+      this.selectModule("chequeo", "chequeo");
+      this.showToast("Cambiado a Módulo Chequeos y Equipos", "info");
+    } else {
+      this.selectModule("bodega", "inventario");
+      this.showToast("Cambiado a Módulo Bodega e Insumos", "info");
+    }
+  },
+
+  goToModuleSelector() {
+    this.closeUserDropdown();
+    const appNav = document.getElementById("app-nav");
+    if (appNav) appNav.style.display = "none";
+    this.navigate("modulo-selector");
+  },
+
+  updateModuleSwitcherUI() {
+    const isBodega = this.currentModule === "bodega";
+
+    // 1. Grupos de pestañas en la barra superior
+    const tabsChequeo = document.getElementById("nav-tabs-chequeo");
+    const tabsBodega = document.getElementById("nav-tabs-bodega");
+    if (tabsChequeo) tabsChequeo.style.display = isBodega ? "none" : "flex";
+    if (tabsBodega) tabsBodega.style.display = isBodega ? "flex" : "none";
+
+    // 2. Botón de conmutación rápida en la barra de navegación
+    const navSwitchLabel = document.getElementById("nav-switch-label");
+    if (navSwitchLabel) {
+      navSwitchLabel.textContent = isBodega ? "Ir a Chequeos 🩺" : "Ir a Bodega 📦";
+    }
+
+    // 3. Botón de conmutación dentro del Menú Desplegable de Usuario
+    const ddTitle = document.getElementById("dropdown-module-switch-title");
+    const ddDesc = document.getElementById("dropdown-module-switch-desc");
+    const iconToBodega = document.getElementById("dropdown-icon-to-bodega");
+    const iconToChequeo = document.getElementById("dropdown-icon-to-chequeo");
+
+    if (isBodega) {
+      if (ddTitle) ddTitle.textContent = "Cambiar a Módulo Chequeo";
+      if (ddDesc) ddDesc.textContent = "Nuevo Chequeo, Historial y Equipos";
+      if (iconToBodega) iconToBodega.style.display = "none";
+      if (iconToChequeo) iconToChequeo.style.display = "inline-block";
+    } else {
+      if (ddTitle) ddTitle.textContent = "Cambiar a Módulo Bodega";
+      if (ddDesc) ddDesc.textContent = "Equipos de Bodega, Insumos y Racks";
+      if (iconToBodega) iconToBodega.style.display = "inline-block";
+      if (iconToChequeo) iconToChequeo.style.display = "none";
     }
   },
 
@@ -1391,10 +1511,30 @@ const app = {
      ========================================================================== */
   async loadEquiposCatalog(q = "") {
     try {
-      const res = await fetch(`/api/equipos?limit=50&q=${encodeURIComponent(q)}`);
-      const data = await res.json();
+      let data = [];
+      try {
+        const res = await fetch(`/api/equipos?limit=50&q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          data = await res.json();
+        } else {
+          throw new Error("Error en respuesta de /api/equipos");
+        }
+      } catch (netErr) {
+        data = this.searchEquiposOffline(q);
+      }
+
+      const totalEl = document.getElementById("equipos-catalog-total");
+      if (totalEl && this.equiposBase && this.equiposBase.length > 0) {
+        totalEl.textContent = this.equiposBase.length.toLocaleString();
+      }
+
       const tbody = document.getElementById("equipos-catalog-tbody");
       tbody.innerHTML = "";
+
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-tertiary);">No se encontraron equipos médicos coincidentes.</td></tr>`;
+        return;
+      }
 
       data.forEach((eq) => {
         const tr = document.createElement("tr");
@@ -1404,10 +1544,10 @@ const app = {
           <td>${eq.marca || "-"}</td>
           <td>${eq.modelo || "-"}</td>
           <td><code>${eq.serie || "S/N"}</code></td>
-          <td><span class="badge badge-tecnico">${eq.categoria || "General"}</span></td>
+          <td><span class="badge badge-tecnico">${eq.categoria || "GENERAL"}</span></td>
           <td><span class="badge badge-success">${eq.estado || "Operativo"}</span></td>
           <td class="col-actions">
-            <button class="btn btn-primary btn-sm" onclick='app.jumpToChequeoWithEquipo(${JSON.stringify(eq)})'>
+            <button class="btn btn-primary btn-sm" onclick='app.jumpToChequeoWithEquipo(${JSON.stringify(eq)})' title="Iniciar chequeo técnico de este equipo">
               Hacer Chequeo
             </button>
           </td>
@@ -1415,7 +1555,7 @@ const app = {
         tbody.appendChild(tr);
       });
     } catch (e) {
-      console.error(e);
+      console.error("Error al cargar catálogo de equipos:", e);
     }
   },
 
@@ -1429,6 +1569,149 @@ const app = {
     this.navigate("chequeo");
     this.selectEquipment(eq);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  },
+
+  /* ==========================================================================
+     CREACIÓN DE NUEVOS EQUIPOS MÉDICOS
+     ========================================================================== */
+  openNewEquipmentModal() {
+    const modal = document.getElementById("modal-nuevo-equipo");
+    if (!modal) return;
+    const form = document.getElementById("form-nuevo-equipo");
+    if (form) form.reset();
+
+    // Rellenar selector de ubicación con las unidades hospitalarias
+    const selUbicacion = document.getElementById("ne-ubicacion");
+    if (selUbicacion && selUbicacion.options.length <= 1) {
+      selUbicacion.innerHTML = '<option value="">Seleccionar Unidad Hospitalaria...</option>';
+      const unidades = [
+        "Pabellón Central", "UCI Adulto", "UTI Adulto", "Urgencias / Reanimador", "Maternidad", 
+        "Pediatría", "Neonatología", "Laboratorio Clínico", "Imagenología / RX", 
+        "Diálisis", "Endoscopía", "Banco de Sangre", "Esterilización", "Farmacia",
+        "Kinesiterapia", "Policlínico / CAE", "Oftalmología", "Dental", "Bodega Equipos"
+      ];
+      unidades.forEach((u) => {
+        const opt = document.createElement("option");
+        opt.value = u;
+        opt.textContent = u;
+        selUbicacion.appendChild(opt);
+      });
+    }
+
+    modal.classList.add("active");
+    setTimeout(() => {
+      const input = document.getElementById("ne-nombre");
+      if (input) input.focus();
+    }, 100);
+  },
+
+  closeNewEquipmentModal() {
+    const modal = document.getElementById("modal-nuevo-equipo");
+    if (modal) modal.classList.remove("active");
+  },
+
+  async submitNewEquipment(e) {
+    e.preventDefault();
+    const btn = document.getElementById("btn-submit-nuevo-equipo");
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      Guardando...
+    `;
+
+    const nombre = document.getElementById("ne-nombre").value.trim();
+    const marca = document.getElementById("ne-marca").value.trim();
+    const modelo = document.getElementById("ne-modelo").value.trim();
+    const serie = document.getElementById("ne-serie").value.trim() || "S/N";
+    const categoria = document.getElementById("ne-categoria").value || "GENERAL";
+    const ubicacion = document.getElementById("ne-ubicacion").value || "";
+    const estado = document.getElementById("ne-estado").value || "Operativo";
+    const codigoRaw = document.getElementById("ne-codigo").value.trim();
+    const codigo_origen = codigoRaw ? parseInt(codigoRaw, 10) || null : null;
+    const detalles = document.getElementById("ne-detalles").value.trim();
+
+    if (!nombre) {
+      this.showToast("El nombre del equipo es obligatorio.", "warning");
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+      return;
+    }
+
+    const payload = {
+      nombre,
+      marca,
+      modelo,
+      serie,
+      categoria,
+      estado,
+      ubicacion,
+      codigo_origen,
+      detalles
+    };
+
+    let equipoCreado = null;
+    try {
+      try {
+        const res = await fetch("/api/equipos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          equipoCreado = await res.json();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Error del servidor al registrar equipo");
+        }
+      } catch (netErr) {
+        // Modo offline / fallo de conexión: crear localmente
+        console.warn("Registrando equipo en modo local:", netErr);
+        const tempId = Date.now();
+        equipoCreado = {
+          id_equipo: tempId,
+          ...payload
+        };
+        // Guardar en caché personalizada para persistir offline
+        const cachedCustom = JSON.parse(localStorage.getItem("eemm_custom_equipos") || "[]");
+        cachedCustom.unshift(equipoCreado);
+        localStorage.setItem("eemm_custom_equipos", JSON.stringify(cachedCustom));
+        this.showToast("Equipo guardado localmente (Modo sin conexión).", "info");
+      }
+
+      // Incorporar inmediatamente al catálogo en memoria para autocompletado y búsqueda
+      if (!this.equiposBase) this.equiposBase = [];
+      this.equiposBase.unshift(equipoCreado);
+
+      // Si estamos en la vista de catálogo, refrescar la tabla
+      if (this.activeTab === "equipos") {
+        this.loadEquiposCatalog();
+      }
+
+      // Actualizar contadores si están en pantalla
+      const totalEl = document.getElementById("equipos-catalog-total");
+      if (totalEl) {
+        totalEl.textContent = this.equiposBase.length.toLocaleString();
+      }
+
+      this.closeNewEquipmentModal();
+      this.showToast(`¡Equipo "${nombre}" registrado con éxito!`, "success");
+
+      // Preguntar o dar opción de realizar chequeo preventivo inmediato
+      setTimeout(() => {
+        if (confirm(`¿Deseas realizar un chequeo preventivo inmediato a "${nombre}" (Serie: ${serie})?`)) {
+          this.jumpToChequeoWithEquipo(equipoCreado);
+        }
+      }, 350);
+
+    } catch (err) {
+      console.error("Error al guardar equipo:", err);
+      this.showToast(err.message || "Error al registrar el equipo médico.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
   },
 
   /* ==========================================================================

@@ -358,6 +358,17 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
+class EquipoCreate(BaseModel):
+    nombre: str
+    marca: Optional[str] = ""
+    modelo: Optional[str] = ""
+    serie: Optional[str] = ""
+    categoria: Optional[str] = "GENERAL"
+    estado: Optional[str] = "Operativo"
+    ubicacion: Optional[str] = ""
+    codigo_origen: Optional[int] = None
+    detalles: Optional[str] = ""
+
 class ChequeoCreate(BaseModel):
     usuario: str
     nombre_equipo: str
@@ -767,6 +778,39 @@ def get_equipos(q: Optional[str] = Query(None, description="Término de búsqued
     equipos = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return equipos
+
+@app.post("/api/equipos")
+def create_equipo(eq: EquipoCreate):
+    if not eq.nombre or not eq.nombre.strip():
+        raise HTTPException(status_code=400, detail="El nombre del equipo médico es obligatorio.")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO equipos (codigo_origen, nombre, marca, modelo, serie, categoria, estado, ubicacion, detalles)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            eq.codigo_origen,
+            eq.nombre.strip(),
+            eq.marca.strip() if eq.marca else None,
+            eq.modelo.strip() if eq.modelo else None,
+            eq.serie.strip() if eq.serie else "S/N",
+            (eq.categoria or "GENERAL").strip().upper(),
+            eq.estado or "Operativo",
+            eq.ubicacion.strip() if eq.ubicacion else None,
+            eq.detalles.strip() if eq.detalles else None
+        ))
+        conn.commit()
+        id_creado = cursor.lastrowid
+        cursor.execute("SELECT * FROM equipos WHERE id_equipo = ?", (id_creado,))
+        nuevo = dict(cursor.fetchone())
+        return nuevo
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al registrar equipo: {str(e)}")
+    finally:
+        conn.close()
 
 @app.get("/api/unidades")
 def get_unidades():

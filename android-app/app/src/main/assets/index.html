@@ -8,14 +8,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>EEMM · Ingeniería Clínica & Control Preventivo</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.5">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.7">
 </head>
 <body>
   <div class="app-container">
     
     <!-- Barra Superior / Header Minimalista -->
     <header class="header">
-      <a href="#" class="brand" onclick="app.navigate('chequeo'); return false;">
+      <a href="#" class="brand" onclick="app.goToModuleSelector(); return false;" title="Ir al Menú Principal de Módulos">
         <div class="brand-mark">EM</div>
         <div class="brand-title">
           EEMM <span class="brand-tag">Equipos Médicos</span>
@@ -84,6 +84,42 @@
 
             <!-- Acciones -->
             <div class="dropdown-menu-items">
+              <!-- Conmutar entre Módulo Bodega y Módulo Chequeo -->
+              <button type="button" class="dropdown-item dropdown-item-module-switch" id="btn-dropdown-switch-module" onclick="app.toggleModuleSwitch()">
+                <span class="dropdown-module-icon-container">
+                  <svg id="dropdown-icon-to-bodega" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                  </svg>
+                  <svg id="dropdown-icon-to-chequeo" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title" id="dropdown-module-switch-title">Cambiar a Módulo Bodega</span>
+                  <span class="dropdown-item-desc" id="dropdown-module-switch-desc">Ir a Insumos y Estanterías</span>
+                </div>
+              </button>
+
+              <!-- Opción: Volver a Selección de Módulos (Sub Menú) -->
+              <button type="button" class="dropdown-item" id="btn-dropdown-select-modules" onclick="app.goToModuleSelector()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Menú Principal de Áreas</span>
+                  <span class="dropdown-item-desc">Ver opciones de Chequeos y Bodega</span>
+                </div>
+              </button>
+
               <!-- Opción: Editar Contraseña (para usuarios técnicos y administradores) -->
               <button type="button" class="dropdown-item" id="btn-dropdown-change-pwd" onclick="app.openChangePasswordModal()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -144,25 +180,44 @@
 
     <!-- Navegación por Pestañas -->
     <nav class="nav-tabs" id="app-nav" style="display: none;">
-      <button class="nav-tab active" data-tab="chequeo" onclick="app.navigate('chequeo')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-        Nuevo Chequeo
-      </button>
-      <button class="nav-tab" data-tab="historial" onclick="app.navigate('historial')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
-        Historial
-      </button>
-      <button class="nav-tab" data-tab="equipos" onclick="app.navigate('equipos')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-        Equipos (2.553)
-      </button>
+      <!-- Pestañas del Módulo Chequeos & Equipos -->
+      <div id="nav-tabs-chequeo" class="nav-tabs-group" style="display: flex; gap: 0.25rem; align-items: center;">
+        <button class="nav-tab active" data-tab="chequeo" onclick="app.navigate('chequeo')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          Nuevo Chequeo
+        </button>
+        <button class="nav-tab" data-tab="historial" onclick="app.navigate('historial')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+          Historial
+        </button>
+        <button class="nav-tab" data-tab="equipos" onclick="app.navigate('equipos')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+          Equipos (2.553)
+        </button>
+        <button class="nav-tab" data-tab="nuevo-equipo" onclick="app.openNewEquipmentModal()" title="Registrar un nuevo equipo médico en el catálogo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          + Agregar Equipo
+        </button>
+      </div>
+
+      <!-- Pestañas del Módulo Bodega & Insumos -->
+      <div id="nav-tabs-bodega" class="nav-tabs-group" style="display: none; gap: 0.25rem; align-items: center;">
+        <button class="nav-tab active" data-tab="inventario" onclick="app.navigate('inventario')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+          Bodega / Insumos
+        </button>
+      </div>
+
+      <!-- Pestaña Administración (solo visible para Administradores) -->
       <button class="nav-tab" data-tab="admin" id="nav-tab-admin" style="display: none;" onclick="app.navigate('admin')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
         Administración
       </button>
-      <button class="nav-tab" data-tab="inventario" onclick="app.navigate('inventario')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-        Bodega / Insumos
+
+      <!-- Botón de Salto Rápido entre Módulos en la Barra -->
+      <button type="button" class="nav-tab nav-tab-switcher" id="btn-nav-switch-module" onclick="app.toggleModuleSwitch()" title="Cambiar de módulo rápidamente">
+        <span id="nav-switch-label">Ir a Bodega</span>
+        <svg id="nav-switch-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
       </button>
     </nav>
 
@@ -193,6 +248,116 @@
             Ingresar al Sistema
           </button>
         </form>
+      </section>
+
+
+      <!-- ====================================================================
+           1.5 SUB-MENÚ POST-LOGIN: SELECTOR DE MÓDULOS (CHEQUEO vs BODEGA)
+           ==================================================================== -->
+      <section id="view-modulo-selector" style="display: none;">
+        <div class="module-selector-container">
+          <div class="module-selector-header">
+            <div class="module-selector-welcome">
+              <span class="module-selector-badge">Panel Principal</span>
+              <h1 class="module-selector-title" id="module-selector-greeting">Áreas de Trabajo EEMM</h1>
+              <p class="module-selector-subtitle">Selecciona el módulo en el que vas a operar. Podrás alternar entre ellos en todo momento desde el menú superior.</p>
+            </div>
+          </div>
+
+          <div class="module-cards-grid">
+            
+            <!-- TARJETA 1: MÓDULO CHEQUEOS Y EQUIPOS MÉDICOS -->
+            <div class="module-card module-card-chequeo">
+              <div class="module-card-header">
+                <div class="module-card-icon-box chequeo-icon-box">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </div>
+                <div class="module-card-status">
+                  <span class="badge badge-primary">Ingeniería Clínica</span>
+                </div>
+              </div>
+
+              <div class="module-card-body">
+                <h3 class="module-card-title">Equipos Médicos & Chequeos</h3>
+                <p class="module-card-desc">
+                  Inspección técnica preventiva, pautas específicas por categoría, registro fotográfico con cámara, firma digital y catálogo oficial de 2.553 equipos.
+                </p>
+              </div>
+
+              <div class="module-card-actions">
+                <button type="button" class="btn btn-primary module-btn-main" onclick="app.selectModule('chequeo', 'chequeo')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                  <span>Nuevo Chequeo</span>
+                </button>
+                <div class="module-btn-group" style="grid-template-columns: repeat(3, 1fr);">
+                  <button type="button" class="btn btn-outline module-btn-sub" onclick="app.selectModule('chequeo', 'historial')" title="Ver registros anteriores">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+                    <span>Historial</span>
+                  </button>
+                  <button type="button" class="btn btn-outline module-btn-sub" onclick="app.selectModule('chequeo', 'equipos')" title="Consultar catálogo de 2.553 equipos">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    <span>Equipos</span>
+                  </button>
+                  <button type="button" class="btn btn-outline module-btn-sub" onclick="app.openNewEquipmentModal()" title="Registrar nuevo equipo médico">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>+ Agregar</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- TARJETA 2: MÓDULO BODEGA & INSUMOS -->
+            <div class="module-card module-card-bodega">
+              <div class="module-card-header">
+                <div class="module-card-icon-box bodega-icon-box">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                  </svg>
+                </div>
+                <div class="module-card-status">
+                  <span class="badge badge-warning">Bodega & Stock</span>
+                </div>
+              </div>
+
+              <div class="module-card-body">
+                <h3 class="module-card-title">Equipos de Bodega / Insumos</h3>
+                <p class="module-card-desc">
+                  Control de existencias y distribución en Racks, repisas y cajas plásticas. Búsqueda rápida de insumos, accesorios y registro de ingresos de stock.
+                </p>
+              </div>
+
+              <div class="module-card-actions">
+                <button type="button" class="btn btn-warning-solid module-btn-main" onclick="app.selectModule('bodega', 'inventario')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                  <span>Ingresar a Bodega / Insumos</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Acceso para Administradores -->
+          <div id="module-selector-admin-card" class="module-admin-banner" style="display: none;">
+            <div class="module-admin-content">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
+              <div>
+                <strong>Panel de Administración</strong>
+                <span>Métricas globales de chequeos, exportación a Excel e informes institucionales.</span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="app.navigate('admin')">
+              Abrir Administración →
+            </button>
+          </div>
+        </div>
       </section>
 
 
@@ -385,13 +550,19 @@
            ==================================================================== -->
       <section id="view-equipos" style="display: none;">
         <div class="panel">
-          <div class="panel-header">
+          <div class="panel-header" style="flex-wrap: wrap; gap: 0.75rem;">
             <div>
               <h2 class="panel-title">Catálogo Maestro de Equipos Médicos</h2>
-              <p class="panel-subtitle">2.553 equipos registrados en el inventario hospitalario</p>
+              <p class="panel-subtitle"><span id="equipos-catalog-total">2.553</span> equipos registrados en el inventario hospitalario</p>
             </div>
-            <div class="catalog-search-wrapper">
-              <input type="text" id="equipos-catalog-search" class="form-control" placeholder="Buscar equipo, serie o marca..." oninput="app.searchCatalogDebounced()">
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <div class="catalog-search-wrapper">
+                <input type="text" id="equipos-catalog-search" class="form-control" placeholder="Buscar equipo, serie o marca..." oninput="app.searchCatalogDebounced()">
+              </div>
+              <button type="button" class="btn btn-primary" onclick="app.openNewEquipmentModal()" style="white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                + Agregar Equipo
+              </button>
             </div>
           </div>
 
@@ -947,15 +1118,135 @@
       </div>
     </div>
 
+    <!-- ====================================================================
+         MODAL AGREGAR EQUIPO MÉDICO AL CATÁLOGO
+         ==================================================================== -->
+    <div id="modal-nuevo-equipo" class="modal-overlay" onclick="if(event.target === this) app.closeNewEquipmentModal();">
+      <div class="modal-card" style="max-width: 580px;">
+        <div class="panel-header" style="margin-bottom: 1.15rem;">
+          <div>
+            <h3 class="panel-title" style="display: flex; align-items: center; gap: 7px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+                <line x1="12" y1="7" x2="12" y2="13"></line>
+                <line x1="9" y1="10" x2="15" y2="10"></line>
+              </svg>
+              Registrar Nuevo Equipo Médico
+            </h3>
+            <p class="panel-subtitle">Incorporar equipamiento clínico al inventario maestro hospitalario</p>
+          </div>
+          <button class="btn-icon" onclick="app.closeNewEquipmentModal()" title="Cerrar ventana">✕</button>
+        </div>
+
+        <form id="form-nuevo-equipo" onsubmit="app.submitNewEquipment(event)">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+            <!-- Nombre del Equipo -->
+            <div class="form-group" style="grid-column: span 2;">
+              <label class="form-label" for="ne-nombre">Nombre del Equipo Médico <span class="req">*</span>:</label>
+              <input type="text" id="ne-nombre" class="form-control" placeholder="Ej: Monitor Multiparámetro, Electrocardiógrafo, Ventilador..." required autocomplete="off">
+            </div>
+
+            <!-- Marca -->
+            <div class="form-group">
+              <label class="form-label" for="ne-marca">Marca <span class="req">*</span>:</label>
+              <input type="text" id="ne-marca" class="form-control" placeholder="Ej: Mindray, Edan, Philips, Dräger..." required autocomplete="off">
+            </div>
+
+            <!-- Modelo -->
+            <div class="form-group">
+              <label class="form-label" for="ne-modelo">Modelo <span class="req">*</span>:</label>
+              <input type="text" id="ne-modelo" class="form-control" placeholder="Ej: iM8, BeneVision N15, Primus..." required autocomplete="off">
+            </div>
+
+            <!-- Número de Serie -->
+            <div class="form-group">
+              <label class="form-label" for="ne-serie">Número de Serie <span class="req">*</span>:</label>
+              <input type="text" id="ne-serie" class="form-control" placeholder="Ej: SN-9843210 (o S/N)" required style="font-family: var(--font-mono);" autocomplete="off">
+            </div>
+
+            <!-- Categoría Técnica / Pauta -->
+            <div class="form-group">
+              <label class="form-label" for="ne-categoria">Categoría de Pauta <span class="req">*</span>:</label>
+              <select id="ne-categoria" class="form-control" required>
+                <option value="GENERAL">GENERAL</option>
+                <option value="VENTILACION">VENTILACIÓN</option>
+                <option value="MONITOREO">MONITOREO</option>
+                <option value="ASPIRACION">ASPIRACIÓN</option>
+                <option value="LABORATORIO">LABORATORIO</option>
+                <option value="CALEFACCION">CALEFACCIÓN</option>
+                <option value="CARPA">CARPA</option>
+                <option value="CARROS">CARROS</option>
+                <option value="CHATAS">CHATAS</option>
+                <option value="ECOGRAFO">ECÓGRAFO</option>
+                <option value="ELECTROVISTURI">ELECTROBISTURÍ</option>
+                <option value="ESTERILIZACION">ESTERILIZACIÓN</option>
+                <option value="GABINETE">GABINETE</option>
+                <option value="INCUBADORA">INCUBADORA</option>
+                <option value="MEDICIONES">MEDICIONES</option>
+                <option value="OPTICA">ÓPTICA</option>
+                <option value="PRESION">PRESIÓN</option>
+                <option value="REFRIGERACION">REFRIGERACIÓN</option>
+                <option value="RX">RAYOS X (RX)</option>
+                <option value="SELLADORA">SELLADORA</option>
+                <option value="TRASLADORAS">TRASLADORAS</option>
+              </select>
+            </div>
+
+            <!-- Ubicación / Unidad Hospitalaria -->
+            <div class="form-group">
+              <label class="form-label" for="ne-ubicacion">Ubicación / Servicio:</label>
+              <select id="ne-ubicacion" class="form-control">
+                <option value="">Seleccionar Unidad Hospitalaria...</option>
+              </select>
+            </div>
+
+            <!-- Estado Operativo Inicial -->
+            <div class="form-group">
+              <label class="form-label" for="ne-estado">Estado Operativo:</label>
+              <select id="ne-estado" class="form-control">
+                <option value="Operativo" selected>Operativo</option>
+                <option value="En Mantención">En Mantención</option>
+                <option value="En Espera de Repuestos">En Espera de Repuestos</option>
+                <option value="Fuera de Servicio">Fuera de Servicio</option>
+                <option value="De Baja">De Baja</option>
+              </select>
+            </div>
+
+            <!-- Código de Inventario / Origen -->
+            <div class="form-group" style="grid-column: span 2;">
+              <label class="form-label" for="ne-codigo">Código Patrimonial / Interno (Opcional):</label>
+              <input type="text" id="ne-codigo" class="form-control" placeholder="Ej: 104829, INV-2026-001..." autocomplete="off">
+            </div>
+
+            <!-- Detalles u Observaciones Técnicas -->
+            <div class="form-group" style="grid-column: span 2;">
+              <label class="form-label" for="ne-detalles">Detalles Técnicos u Observaciones:</label>
+              <textarea id="ne-detalles" class="form-control" rows="2" placeholder="Accesorios incluidos, voltaje, requerimientos de instalación o notas técnicas adicionales..."></textarea>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn btn-subtle" onclick="app.closeNewEquipmentModal()">Cancelar</button>
+            <button type="submit" id="btn-submit-nuevo-equipo" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Guardar Equipo en Catálogo
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container"></div>
 
   </div>
 
   <!-- Scripts de la Aplicación -->
-  <script src="/static/js/offline-manager.js?v=2.5"></script>
-  <script src="/static/js/signature.js?v=2.5"></script>
-  <script src="/static/js/photos.js?v=2.5"></script>
-  <script src="/static/js/app.js?v=2.5"></script>
+  <script src="/static/js/offline-manager.js?v=2.7"></script>
+  <script src="/static/js/signature.js?v=2.7"></script>
+  <script src="/static/js/photos.js?v=2.7"></script>
+  <script src="/static/js/app.js?v=2.7"></script>
 </body>
 </html>

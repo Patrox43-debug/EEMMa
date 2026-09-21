@@ -439,6 +439,25 @@ code, kbd, samp, pre {
   flex-shrink: 0;
 }
 
+.dropdown-module-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--primary-subtle);
+  color: var(--primary);
+  padding: 2px;
+  transition: all 0.15s ease;
+}
+
+.dropdown-item-module-switch:hover .dropdown-module-icon-container {
+  background: var(--primary);
+  color: #ffffff;
+}
+
 .dropdown-item-content {
   display: flex;
   flex-direction: column;
@@ -578,6 +597,45 @@ code, kbd, samp, pre {
 
 .nav-tab.active svg {
   color: var(--primary);
+}
+
+.nav-tabs-group {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.nav-tab-switcher {
+  margin-left: auto;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: center;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.nav-tab-switcher:hover {
+  background: var(--primary-subtle);
+  border-color: var(--primary-border);
+  color: var(--primary);
+  transform: translateY(-0.5px);
+}
+
+.nav-tab-switcher svg {
+  color: inherit;
+  transition: transform 0.2s ease;
+}
+
+.nav-tab-switcher:hover svg {
+  transform: translateX(2px);
 }
 
 /* ==========================================================================
@@ -1812,6 +1870,229 @@ select.form-control {
   }
 }
 
+/* Botón Alerta / Naranja Sólido para Bodega */
+.btn-warning-solid {
+  background-color: #d97706;
+  color: #ffffff;
+  border-color: #b45309;
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-warning-solid:hover {
+  background-color: #b45309;
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-0.5px);
+}
+
+/* ==========================================================================
+   SUB-MENÚ / SELECTOR DE MÓDULOS (POST-LOGIN)
+   ========================================================================== */
+.module-selector-container {
+  max-width: 900px;
+  margin: 1.5rem auto 3rem auto;
+  padding: 0 1rem;
+}
+
+.module-selector-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.module-selector-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+
+.module-selector-title {
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  margin-bottom: 0.45rem;
+}
+
+.module-selector-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.module-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.module-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.module-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.module-card-chequeo::before {
+  background: linear-gradient(90deg, var(--primary), #3b82f6);
+}
+
+.module-card-bodega::before {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.module-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+.module-card-chequeo:hover {
+  border-color: var(--primary);
+}
+
+.module-card-bodega:hover {
+  border-color: #f59e0b;
+}
+
+.module-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.module-card-icon-box {
+  width: 54px;
+  height: 54px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.module-card:hover .module-card-icon-box {
+  transform: scale(1.06);
+}
+
+.chequeo-icon-box {
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+}
+
+.bodega-icon-box {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.module-card-body {
+  flex: 1;
+  margin-bottom: 1.5rem;
+}
+
+.module-card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.module-card-desc {
+  font-size: 0.825rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.module-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.module-btn-main {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+
+.module-btn-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.module-btn-sub {
+  width: 100%;
+  padding: 0.55rem 0.5rem;
+  font-size: 0.775rem;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.module-admin-banner {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.module-admin-content {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  color: var(--text-secondary);
+  font-size: 0.825rem;
+}
+
+.module-admin-content strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.module-admin-content span {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
 /* --------------------------------------------------------------------------
    3. DISPOSITIVOS MÓVILES Y TELÉFONOS (<= 768px)
    -------------------------------------------------------------------------- */
@@ -1933,6 +2214,41 @@ select.form-control {
     padding: 1.5rem 1rem !important;
     max-width: 100% !important;
     border-radius: var(--radius-lg) !important;
+  }
+
+  /* Selector de Módulos en Móvil */
+  .module-selector-container {
+    margin: 0.75rem auto 2rem auto !important;
+    padding: 0 0.25rem !important;
+  }
+
+  .module-selector-header {
+    margin-bottom: 1.25rem !important;
+  }
+
+  .module-selector-title {
+    font-size: 1.25rem !important;
+  }
+
+  .module-selector-subtitle {
+    font-size: 0.8rem !important;
+  }
+
+  .module-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .module-card {
+    padding: 1.25rem 1rem !important;
+    border-radius: var(--radius-lg) !important;
+  }
+
+  .module-admin-banner {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    text-align: left !important;
+    gap: 0.75rem !important;
   }
 
   /* Tarjeta de Especificaciones del Equipo Seleccionado */
@@ -2229,6 +2545,9 @@ select.form-control {
   .admin-stats-grid {
     grid-template-columns: 1fr !important;
     gap: 1rem !important;
+  }
+  #form-nuevo-equipo > div {
+    grid-template-columns: 1fr !important;
   }
 }
 
