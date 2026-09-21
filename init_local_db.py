@@ -136,11 +136,11 @@ def init_database():
 
     # Insertar usuarios por defecto (Técnicos + Administrador)
     usuarios_iniciales = [
-        ("Administrador General", "20.967.660-5", "admin@eemm.cl", "4277", "Jefe de Servicio", "Administrador del Sistema", "administrador"),
-        ("Patricio Bustamante", "18.123.456-7", "patriciobustamante.ec@gmail.com", "1234", "Tecnico EEMM", "Patricio Bustamante", "tecnico"),
-        ("Martin Peralta", "17.234.567-8", "martin.peralta@gmail.com", "1234", "Tecnico EEMM", "Martin Peralta", "tecnico"),
+        ("Administrador General", "11.111.111-1", "admin@eemm.cl", "4277", "Jefe de Servicio", "Administrador del Sistema", "administrador"),
+        ("Patricio Bustamante", "20.967.660-5", "patriciobustamante.ec@gmail.com", "1234", "Tecnico EEMM", "Patricio Bustamante", "tecnico"),
+        ("Martin Peralta", "21.284.838-7", "martin.peralta@gmail.com", "1234", "Tecnico EEMM", "Martin Peralta", "tecnico"),
         ("Luis Vallejos", "16.345.678-9", "equiposmedicos1.@gmail.com", "1234", "Tecnico EEMM", "Luis Vallejos", "tecnico"),
-        ("Jorge Ambrosetti", "15.456.789-0", "jambrosettic@gmail.com", "1234", "Tecnico EEMM", "Jorge Ambrosetti", "tecnico")
+        ("Jorge Ambrosetti", "15.088.541-8", "jambrosettic@gmail.com", "1234", "Tecnico EEMM", "Jorge Ambrosetti", "tecnico")
     ]
     cursor.executemany("""
         INSERT OR IGNORE INTO perfiles (nombre, rut, correo, password, funcion, tecnico, rol)

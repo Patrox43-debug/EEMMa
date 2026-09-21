@@ -27,7 +27,7 @@ if "rut" not in cols:
 cursor.execute("""
     UPDATE perfiles
     SET nombre = 'Administrador General',
-        rut = '20.967.660-5',
+        rut = '11.111.111-1',
         password = '4277',
         rol = 'administrador',
         correo = 'admin@eemm.cl',
@@ -38,10 +38,10 @@ cursor.execute("""
 
 # Asignar RUTs a los técnicos existentes
 tecnicos_data = [
-    ("Patricio Bustamante", "18.123.456-7", "patriciobustamante.ec@gmail.com", "1234", "tecnico"),
-    ("Martin Peralta", "17.234.567-8", "martin.peralta@gmail.com", "1234", "tecnico"),
+    ("Patricio Bustamante", "20.967.660-5", "patriciobustamante.ec@gmail.com", "1234", "tecnico"),
+    ("Martin Peralta", "21.284.838-7", "martin.peralta@gmail.com", "1234", "tecnico"),
     ("Luis Vallejos", "16.345.678-9", "equiposmedicos1.@gmail.com", "1234", "tecnico"),
-    ("Jorge Ambrosetti", "15.456.789-0", "jambrosettic@gmail.com", "1234", "tecnico")
+    ("Jorge Ambrosetti", "15.088.541-8", "jambrosettic@gmail.com", "1234", "tecnico")
 ]
 
 for nom, rut, cor, pwd, rol in tecnicos_data:

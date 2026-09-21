@@ -1,1 +1,52 @@
-[{"id": 1, "nombre": "Administrador General", "rut": "11.111.111-1", "correo": "admin@eemm.cl", "password": "4277", "funcion": "Tecnico EEMM", "tecnico": "Administrador General", "rol": "administrador"}, {"id": 2, "nombre": "Patricio", "rut": "20.967.660-5", "correo": "patriciobustamante.ec@gmail.com", "password": "4277", "funcion": "Tecnico EEMM", "tecnico": "Patricio", "rol": "tecnico"}, {"id": 3, "nombre": "Martin", "rut": "17.234.567-8", "correo": "martin.peralta@gmail.com", "password": "1234", "funcion": "Tecnico EEMM", "tecnico": "Martin Peralta", "rol": "tecnico"}, {"id": 4, "nombre": "Luis", "rut": "16.345.678-9", "correo": "equiposmedicos1.@gmail.com", "password": "1234", "funcion": "Tecnico EEMM", "tecnico": "Luis Vallejos", "rol": "tecnico"}, {"id": 5, "nombre": "Jorge", "rut": "15.456.789-0", "correo": "jambrosettic@gmail.com", "password": "1234", "funcion": "Tecnico EEMM", "tecnico": "Jorge Ambrosetti", "rol": "tecnico"}]
+[
+  {
+    "id": 1,
+    "nombre": "Administrador General",
+    "rut": "11.111.111-1",
+    "correo": "admin@eemm.cl",
+    "password": "4277",
+    "funcion": "Tecnico EEMM",
+    "tecnico": "Administrador General",
+    "rol": "administrador"
+  },
+  {
+    "id": 2,
+    "nombre": "Patricio",
+    "rut": "20.967.660-5",
+    "correo": "patriciobustamante.ec@gmail.com",
+    "password": "1234",
+    "funcion": "Tecnico EEMM",
+    "tecnico": "Patricio",
+    "rol": "tecnico"
+  },
+  {
+    "id": 3,
+    "nombre": "Martin",
+    "rut": "21.284.838-7",
+    "correo": "martin.peralta@gmail.com",
+    "password": "1234",
+    "funcion": "Tecnico EEMM",
+    "tecnico": "Martin Peralta",
+    "rol": "tecnico"
+  },
+  {
+    "id": 4,
+    "nombre": "Luis",
+    "rut": "16.345.678-9",
+    "correo": "equiposmedicos1.@gmail.com",
+    "password": "1234",
+    "funcion": "Tecnico EEMM",
+    "tecnico": "Luis Vallejos",
+    "rol": "tecnico"
+  },
+  {
+    "id": 5,
+    "nombre": "Jorge",
+    "rut": "15.088.541-8",
+    "correo": "jambrosettic@gmail.com",
+    "password": "1234",
+    "funcion": "Tecnico EEMM",
+    "tecnico": "Jorge Ambrosetti",
+    "rol": "tecnico"
+  }
+]
