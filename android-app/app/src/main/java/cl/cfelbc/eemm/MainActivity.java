@@ -203,6 +203,18 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
+                String path = uri.getPath();
+
+                // Interceptar peticiones de PDF para abrirlas con visor nativo o navegador
+                if (path != null && (path.endsWith("/pdf") || path.endsWith(".pdf") || path.contains("/pdf/"))) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                        startActivity(intent);
+                        return true;
+                    } catch (Exception ignored) {
+                    }
+                }
+
                 String host = uri.getHost();
 
                 // Open internal domain inside WebView

@@ -749,7 +749,7 @@ def generate_servicio_pdf(record: dict) -> bytes:
     eq_table = Table(eq_table_data, colWidths=col_widths, repeatRows=1)
     
     t_styles = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e40af')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#18181b')),
         ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),

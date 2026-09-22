@@ -960,36 +960,64 @@ def get_chequeos(
     conn.close()
     return chequeos
 
-@app.get("/api/chequeos/{id_reg}")
-def get_chequeo_detail(id_reg: int):
+@app.get("/api/chequeos/{id_or_folio}")
+def get_chequeo_detail(id_or_folio: str):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id_registro, fecha, usuario, nombre_equipo, marca, modelo, serie,
-               unidad, categoria, respuestas, obs, idpdf, foto_1, foto_2, foto_3, foto_4,
-               firma_data, firma_nombre, created_at
-        FROM registros
-        WHERE id_registro = ?
-    """, (id_reg,))
-    row = cursor.fetchone()
+    id_str = str(id_or_folio).strip()
+    row = None
+    if id_str.isdigit() and len(id_str) <= 8:
+        cursor.execute("""
+            SELECT id_registro, fecha, usuario, nombre_equipo, marca, modelo, serie,
+                   unidad, categoria, respuestas, obs, idpdf, foto_1, foto_2, foto_3, foto_4,
+                   firma_data, firma_nombre, created_at
+            FROM registros
+            WHERE id_registro = ?
+        """, (int(id_str),))
+        row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            SELECT id_registro, fecha, usuario, nombre_equipo, marca, modelo, serie,
+                   unidad, categoria, respuestas, obs, idpdf, foto_1, foto_2, foto_3, foto_4,
+                   firma_data, firma_nombre, created_at
+            FROM registros
+            WHERE idpdf = ? OR id_registro = ?
+        """, (id_str, id_str))
+        row = cursor.fetchone()
+
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Registro no encontrado")
     return dict(row)
 
-@app.get("/api/chequeos/{id_reg}/pdf")
-def get_chequeo_pdf(id_reg: int):
+@app.get("/api/chequeos/{id_or_folio}/pdf")
+def get_chequeo_pdf(id_or_folio: str, download: bool = False):
     """Genera y descarga el reporte oficial en PDF del chequeo preventivo bajo demanda."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id_registro, fecha, usuario, nombre_equipo, marca, modelo, serie,
-               unidad, categoria, respuestas, obs, idpdf, foto_1, foto_2, foto_3, foto_4,
-               firma_data, firma_nombre, created_at
-        FROM registros
-        WHERE id_registro = ?
-    """, (id_reg,))
-    row = cursor.fetchone()
+    id_str = str(id_or_folio).strip()
+    row = None
+    if id_str.isdigit() and len(id_str) <= 8:
+        cursor.execute("""
+            SELECT id_registro, fecha, usuario, nombre_equipo, marca, modelo, serie,
+                   unidad, categoria, respuestas, obs, idpdf, foto_1, foto_2, foto_3, foto_4,
+                   firma_data, firma_nombre, created_at
+            FROM registros
+            WHERE id_registro = ?
+        """, (int(id_str),))
+        row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            SELECT id_registro, fecha, usuario, nombre_equipo, marca, modelo, serie,
+                   unidad, categoria, respuestas, obs, idpdf, foto_1, foto_2, foto_3, foto_4,
+                   firma_data, firma_nombre, created_at
+            FROM registros
+            WHERE idpdf = ? OR id_registro = ?
+        """, (id_str, id_str))
+        row = cursor.fetchone()
+
     conn.close()
 
     if not row:
@@ -998,17 +1026,18 @@ def get_chequeo_pdf(id_reg: int):
     try:
         record = dict(row)
         pdf_bytes = generate_chequeo_pdf(record)
+        disposition = "attachment" if download else "inline"
         filename = f"Chequeo_EEMM_{record.get('id_registro')}_{record.get('serie') or 'SN'}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"inline; filename=\"{filename}\"",
+                "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
                 "Cache-Control": "no-cache"
             }
         )
     except Exception as e:
-        print(f"Error generando PDF para chequeo #{id_reg}: {e}")
+        print(f"Error generando PDF para chequeo #{id_or_folio}: {e}")
         raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
 
 # ============================================================================
@@ -1133,26 +1162,50 @@ def get_revisiones_servicio(
 
     return results
 
-@app.get("/api/revisiones-servicio/{id_or_folio}")
-def get_revision_servicio_detail(id_or_folio: str):
-    """Obtiene el detalle completo de una revisión de servicio por ID o por Folio."""
-    conn = get_db()
-    cursor = conn.cursor()
-    if id_or_folio.isdigit():
+def _fetch_revision_servicio(cursor, id_or_folio: str):
+    """Busca una revisión de servicio de forma flexible por ID primario o por Folio."""
+    id_or_folio = str(id_or_folio).strip()
+    row = None
+    # 1. Si es numérico corto (<= 8 dígitos), intentar primero por id_revision
+    if id_or_folio.isdigit() and len(id_or_folio) <= 8:
         cursor.execute("""
             SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
                    total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
             FROM revisiones_servicio
             WHERE id_revision = ?
         """, (int(id_or_folio),))
-    else:
+        row = cursor.fetchone()
+
+    # 2. Buscar por folio exacto
+    if not row:
         cursor.execute("""
             SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
                    total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
             FROM revisiones_servicio
             WHERE folio = ?
         """, (id_or_folio,))
-    row = cursor.fetchone()
+        row = cursor.fetchone()
+
+    # 3. Buscar extrayendo solo dígitos del folio o búsqueda flexible
+    if not row:
+        clean_folio = re.sub(r'[^0-9]', '', id_or_folio)
+        if clean_folio:
+            cursor.execute("""
+                SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
+                       total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
+                FROM revisiones_servicio
+                WHERE folio = ? OR folio LIKE ?
+            """, (clean_folio, f"%{clean_folio}%"))
+            row = cursor.fetchone()
+
+    return row
+
+@app.get("/api/revisiones-servicio/{id_or_folio}")
+def get_revision_servicio_detail(id_or_folio: str):
+    """Obtiene el detalle completo de una revisión de servicio por ID o por Folio."""
+    conn = get_db()
+    cursor = conn.cursor()
+    row = _fetch_revision_servicio(cursor, id_or_folio)
     conn.close()
 
     if not row:
@@ -1169,25 +1222,11 @@ def get_revision_servicio_detail(id_or_folio: str):
     return d
 
 @app.get("/api/revisiones-servicio/{id_or_folio}/pdf")
-def get_revision_servicio_pdf(id_or_folio: str):
+def get_revision_servicio_pdf(id_or_folio: str, download: bool = False):
     """Genera y descarga el reporte oficial en PDF de la revisión de servicio bajo demanda."""
     conn = get_db()
     cursor = conn.cursor()
-    if id_or_folio.isdigit():
-        cursor.execute("""
-            SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
-                   total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
-            FROM revisiones_servicio
-            WHERE id_revision = ?
-        """, (int(id_or_folio),))
-    else:
-        cursor.execute("""
-            SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
-                   total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
-            FROM revisiones_servicio
-            WHERE folio = ?
-        """, (id_or_folio,))
-    row = cursor.fetchone()
+    row = _fetch_revision_servicio(cursor, id_or_folio)
     conn.close()
 
     if not row:
@@ -1205,17 +1244,39 @@ def get_revision_servicio_pdf(id_or_folio: str):
 
         pdf_bytes = generate_servicio_pdf(record)
         folio_clean = str(record.get("folio", "REV")).replace(" ", "_").replace("/", "-")
+        disposition = "attachment" if download else "inline"
         filename = f"Reporte_Servicio_{folio_clean}_{record.get('unidad', 'GENERAL')}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"inline; filename=\"{filename}\"",
+                "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
                 "Cache-Control": "no-cache"
             }
         )
     except Exception as e:
         print(f"Error generando PDF para revisión de servicio {id_or_folio}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
+
+@app.post("/api/revisiones-servicio/pdf-preview")
+def preview_revision_servicio_pdf(data: dict = Body(...), download: bool = False):
+    """Genera un PDF oficial de servicio directamente a partir del cuerpo JSON."""
+    try:
+        pdf_bytes = generate_servicio_pdf(data)
+        raw_folio = str(data.get("folio") or data.get("batch_id") or "REV")
+        folio_clean = re.sub(r'[^0-9]', '', raw_folio) or "REPORTE"
+        disposition = "attachment" if download else "inline"
+        filename = f"Reporte_Servicio_{folio_clean}_{data.get('unidad', 'GENERAL')}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
+                "Cache-Control": "no-cache"
+            }
+        )
+    except Exception as e:
+        print(f"Error generando PDF preview: {e}")
         raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
 
 # Métricas para Panel de Administrador

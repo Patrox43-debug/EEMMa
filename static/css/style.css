@@ -2916,10 +2916,13 @@ select.form-control {
     visibility: hidden;
   }
   #modal-reporte-servicio,
-  #modal-reporte-servicio * {
+  #modal-reporte-servicio *,
+  #modal-detalle,
+  #modal-detalle * {
     visibility: visible;
   }
-  #modal-reporte-servicio {
+  #modal-reporte-servicio,
+  #modal-detalle {
     position: absolute;
     left: 0;
     top: 0;
@@ -2928,15 +2931,22 @@ select.form-control {
     padding: 0;
     background: #ffffff !important;
     display: block !important;
+    opacity: 1 !important;
   }
-  .reporte-modal-content {
+  .reporte-modal-content,
+  #modal-detalle .modal-card {
     box-shadow: none !important;
     border: none !important;
     width: 100% !important;
     max-width: 100% !important;
     padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
   }
-  .reporte-no-print {
+  .reporte-no-print,
+  #modal-detalle .btn-icon,
+  #modal-detalle .btn,
+  #modal-detalle .panel-header a {
     display: none !important;
   }
 }

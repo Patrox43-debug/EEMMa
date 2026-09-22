@@ -1896,22 +1896,96 @@ const app = {
       fechaLabel.textContent = `Validación Digital Oficial EEMM · ${new Date(reporte.fecha).toLocaleDateString("es-CL")}`;
     }
 
-    const btnPdf = document.getElementById("reporte-btn-download-pdf");
-    if (btnPdf) {
-      const idOrFolio = reporte.id_revision || reporte.folio || reporte.batch_id;
-      btnPdf.href = `/api/revisiones-servicio/${idOrFolio}/pdf`;
-    }
-
+    this.currentActiveServicioReporte = reporte;
     modal.style.display = "flex";
+    modal.classList.add("active");
   },
 
   closeServicioReporteModal() {
     const modal = document.getElementById("modal-reporte-servicio");
-    if (modal) modal.style.display = "none";
+    if (modal) {
+      modal.style.display = "none";
+      modal.classList.remove("active");
+    }
   },
 
   printServicioReporte() {
     window.print();
+  },
+
+  async downloadCurrentServicioPdf() {
+    if (!this.currentActiveServicioReporte) {
+      this.showToast("No hay reporte de servicio seleccionado", "warning");
+      return;
+    }
+    const r = this.currentActiveServicioReporte;
+    const idOrFolio = r.id_revision || r.folio || r.batch_id;
+    const rawFolio = String(r.folio || r.batch_id || r.id_revision || "");
+    const numFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
+    const uniClean = (r.unidad || "GENERAL").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const filename = `Reporte_Servicio_${numFolio}_${uniClean}.pdf`;
+    await this.downloadPdf(`/api/revisiones-servicio/${idOrFolio}/pdf`, filename);
+  },
+
+  async downloadServicioPdf(idOrFolio, filename) {
+    const fn = filename || `Reporte_Servicio_${idOrFolio}.pdf`;
+    await this.downloadPdf(`/api/revisiones-servicio/${idOrFolio}/pdf`, fn);
+  },
+
+  async downloadCurrentChequeoPdf() {
+    if (!this.currentActiveChequeo) {
+      this.showToast("No hay chequeo seleccionado", "warning");
+      return;
+    }
+    const item = this.currentActiveChequeo;
+    const numFolio = String(item.id_registro || "1").replace(/\D/g, "").padStart(6, "0");
+    const serieClean = (item.serie || "SN").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const filename = `Chequeo_EEMM_${numFolio}_${serieClean}.pdf`;
+    await this.downloadPdf(`/api/chequeos/${item.id_registro}/pdf`, filename);
+  },
+
+  async downloadChequeoPdf(id, filename) {
+    const fn = filename || `Chequeo_EEMM_${id}.pdf`;
+    await this.downloadPdf(`/api/chequeos/${id}/pdf`, fn);
+  },
+
+  async downloadPdf(url, filename) {
+    try {
+      this.showToast("Generando documento PDF oficial...", "info");
+      
+      const res = await fetch(url);
+      if (!res.ok) {
+        let errDetail = "No se pudo obtener el PDF del servidor";
+        try {
+          const j = await res.json();
+          if (j && j.detail) errDetail = j.detail;
+        } catch (_) {}
+        throw new Error(errDetail);
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
+      a.download = filename || "Reporte_EEMM.pdf";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 3000);
+      this.showToast("PDF descargado correctamente", "success");
+    } catch (err) {
+      console.warn("Descarga por blob falló o dispositivo móvil, abriendo URL directa:", err);
+      try {
+        const win = window.open(url, "_blank");
+        if (!win) {
+          window.location.href = url;
+        }
+      } catch (openErr) {
+        this.showToast("Error al abrir PDF: " + (err.message || "Servidor no disponible"), "error");
+      }
+    }
   },
 
   /* ==========================================================================
@@ -2087,10 +2161,10 @@ const app = {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               Ver Detalle
             </button>
-            <a href="/api/revisiones-servicio/${idOrFolio}/pdf" target="_blank" class="btn btn-primary btn-sm" title="Descargar reporte oficial en PDF" style="text-decoration: none;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="app.downloadServicioPdf('${idOrFolio}', 'Reporte_Servicio_${numericFolio}.pdf')" title="Descargar reporte oficial en PDF">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
               PDF
-            </a>
+            </button>
           </div>
         </td>
       `;
@@ -2319,10 +2393,10 @@ const app = {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 Ver Ficha
               </button>
-              <a href="/api/chequeos/${item.id_registro}/pdf" target="_blank" class="btn btn-outline btn-sm" title="Descargar o imprimir informe en PDF" style="text-decoration: none;">
+              <button type="button" class="btn btn-outline btn-sm" onclick="app.downloadChequeoPdf(${item.id_registro}, 'Chequeo_EEMM_${numericFolio}.pdf')" title="Descargar o imprimir informe en PDF">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
                 PDF
-              </a>
+              </button>
             </div>
           </td>
         `;
@@ -2342,13 +2416,10 @@ const app = {
     try {
       const res = await fetch(`/api/chequeos/${id}`);
       const item = await res.json();
+      this.currentActiveChequeo = item;
 
       const folioNum = String(item.id_registro).replace(/\D/g, '').padStart(6, '0');
       document.getElementById("modal-title").textContent = `FOLIO Nº ${folioNum}`;
-      const pdfBtn = document.getElementById("modal-btn-pdf");
-      if (pdfBtn) {
-        pdfBtn.href = `/api/chequeos/${item.id_registro}/pdf`;
-      }
 
       const body = document.getElementById("modal-body");
 
@@ -2449,10 +2520,10 @@ const app = {
         ${firmaHtml}
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.25rem; padding-top:0.85rem; border-top:1px solid var(--border-color); flex-wrap:wrap; gap:0.5rem;">
-          <a href="/api/chequeos/${item.id_registro}/pdf" target="_blank" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; flex:1 1 auto; justify-content:center;">
+          <button type="button" onclick="app.downloadCurrentChequeoPdf()" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px; flex:1 1 auto; justify-content:center;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
             Descargar Informe PDF Oficial
-          </a>
+          </button>
           <button type="button" class="btn btn-outline" onclick="app.closeModal()" style="flex:0 0 auto;">Cerrar</button>
         </div>
       `;
