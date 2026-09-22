@@ -411,6 +411,7 @@ class ServicioRevisionCreate(BaseModel):
     unidad: str
     fecha: Optional[str] = None
     usuario: Optional[str] = None
+    tecnico: Optional[str] = None
     supervisor: Optional[str] = None
     obs_general: Optional[str] = ""
     total_equipos: Optional[int] = 0
@@ -1083,25 +1084,57 @@ def create_revision_servicio(data: ServicioRevisionCreate):
 
     equipos_json = json.dumps(processed_equipos, ensure_ascii=False)
 
-    cursor.execute("""
-        INSERT INTO revisiones_servicio (
-            folio, unidad, fecha, usuario, supervisor, obs_general,
-            total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    """, (
-        folio,
-        data.unidad,
-        fecha_efectiva,
-        data.usuario or "Técnico EEMM",
-        data.supervisor or "Responsable del Servicio",
-        data.obs_general or "",
-        total_equipos,
-        resumen,
-        equipos_json,
-        firma_ruta,
-        data.firma_nombre or data.supervisor or data.usuario or ""
-    ))
-    new_id = cursor.lastrowid
+    fecha_efectiva = data.fecha if (data.fecha and str(data.fecha).strip()) else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    tecnico_nombre = data.usuario or data.tecnico or "Técnico EEMM"
+    total_equipos = len(processed_equipos) or (data.total_equipos or 0)
+
+    # Si ya existe un registro con este folio (reintento o sincronización offline), actualizarlo
+    cursor.execute("SELECT id_revision, firma_data FROM revisiones_servicio WHERE folio = ?", (folio,))
+    existing = cursor.fetchone()
+
+    if existing:
+        existing_id, existing_firma = existing[0], existing[1]
+        final_firma = firma_ruta or existing_firma or ""
+        cursor.execute("""
+            UPDATE revisiones_servicio SET
+                unidad = ?, fecha = ?, usuario = ?, supervisor = ?, obs_general = ?,
+                total_equipos = ?, resumen_estados = ?, equipos_json = ?, firma_data = ?, firma_nombre = ?
+            WHERE id_revision = ?
+        """, (
+            data.unidad,
+            fecha_efectiva,
+            tecnico_nombre,
+            data.supervisor or "Responsable del Servicio",
+            data.obs_general or "",
+            total_equipos,
+            resumen,
+            equipos_json,
+            final_firma,
+            data.firma_nombre or data.supervisor or tecnico_nombre or "",
+            existing_id
+        ))
+        new_id = existing_id
+    else:
+        cursor.execute("""
+            INSERT INTO revisiones_servicio (
+                folio, unidad, fecha, usuario, supervisor, obs_general,
+                total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, (
+            folio,
+            data.unidad,
+            fecha_efectiva,
+            tecnico_nombre,
+            data.supervisor or "Responsable del Servicio",
+            data.obs_general or "",
+            total_equipos,
+            resumen,
+            equipos_json,
+            firma_ruta,
+            data.firma_nombre or data.supervisor or tecnico_nombre or ""
+        ))
+        new_id = cursor.lastrowid
+
     conn.commit()
     conn.close()
 

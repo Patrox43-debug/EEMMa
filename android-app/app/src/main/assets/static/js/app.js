@@ -212,6 +212,8 @@ const app = {
         this.closeNewEquipmentModal();
       }
     });
+
+    this.syncLocalRevisionesServicio();
   },
 
   /* ==========================================================================
@@ -231,6 +233,7 @@ const app = {
           badge.className = "network-badge online";
           text.textContent = "En línea";
           badge.title = "Conexión a Internet activa";
+          this.syncLocalRevisionesServicio();
         } else {
           badge.className = "network-badge offline";
           text.textContent = "Sin conexión";
@@ -261,6 +264,47 @@ const app = {
     });
   },
 
+  /* ==========================================================================
+     SINCRONIZACIÓN DE REVISIONES GENERALES DE SERVICIO OFFLINE -> ONLINE
+     ========================================================================== */
+  async syncLocalRevisionesServicio() {
+    try {
+      const localRevs = JSON.parse(localStorage.getItem("local_revisiones_servicio") || "[]");
+      if (!Array.isArray(localRevs) || localRevs.length === 0) return;
+
+      let changed = false;
+      for (const rev of localRevs) {
+        if (!rev.id_revision) {
+          try {
+            const res = await fetch("/api/revisiones-servicio", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(rev)
+            });
+            if (res.ok) {
+              const resJson = await res.json();
+              if (resJson && resJson.id_revision) {
+                rev.id_revision = resJson.id_revision;
+                if (resJson.folio) rev.folio = resJson.folio;
+                changed = true;
+              }
+            }
+          } catch (e) {
+            // Servidor posiblemente desconectado
+            break;
+          }
+        }
+      }
+
+      if (changed) {
+        localStorage.setItem("local_revisiones_servicio", JSON.stringify(localRevs));
+        console.log("Revisiones de servicio locales sincronizadas con el servidor");
+      }
+    } catch (err) {
+      console.warn("Error sincronizando revisiones de servicio offline:", err);
+    }
+  },
+
   async manualSync() {
     if (!window.OfflineManager) return;
     if (!window.OfflineManager.isOnline) {
@@ -270,10 +314,12 @@ const app = {
     const count = await window.OfflineManager.getPendingCount();
     if (count === 0) {
       this.showToast("No hay registros pendientes de sincronización.", "info");
+      await this.syncLocalRevisionesServicio();
       return;
     }
     this.showToast(`Sincronizando ${count} registro(s) con el servidor...`, "info");
     await window.OfflineManager.syncAll();
+    await this.syncLocalRevisionesServicio();
   },
 
   async loadBaseDataOffline() {
@@ -1701,6 +1747,7 @@ const app = {
         batch_id: folioGen,
         unidad: unidad,
         fecha: fechaNow,
+        usuario: tecnicoNombre,
         tecnico: tecnicoNombre,
         supervisor: firmaNombre || "Responsable de Servicio",
         obs_general: obsGeneral,
@@ -1719,8 +1766,12 @@ const app = {
         });
         if (revRes.ok) {
           const revJson = await revRes.json();
-          reporteConsolidado.id_revision = revJson.id_revision;
-          reporteConsolidado.folio = revJson.folio || folioGen;
+          if (revJson && revJson.id_revision) {
+            reporteConsolidado.id_revision = revJson.id_revision;
+            reporteConsolidado.folio = revJson.folio || folioGen;
+          }
+        } else {
+          console.warn("Respuesta no exitosa al registrar revisión de servicio:", revRes.status);
         }
       } catch (revErr) {
         console.warn("Modo sin conexión: guardando revisión consolidada en caché local", revErr);
@@ -1919,17 +1970,115 @@ const app = {
       return;
     }
     const r = this.currentActiveServicioReporte;
-    const idOrFolio = r.id_revision || r.folio || r.batch_id;
     const rawFolio = String(r.folio || r.batch_id || r.id_revision || "");
     const numFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
     const uniClean = (r.unidad || "GENERAL").replace(/[^a-zA-Z0-9_-]/g, "_");
     const filename = `Reporte_Servicio_${numFolio}_${uniClean}.pdf`;
-    await this.downloadPdf(`/api/revisiones-servicio/${idOrFolio}/pdf`, filename);
+    const idOrFolio = r.id_revision || r.folio || r.batch_id || numFolio;
+    await this.downloadServicioPdf(idOrFolio, filename);
   },
 
   async downloadServicioPdf(idOrFolio, filename) {
-    const fn = filename || `Reporte_Servicio_${idOrFolio}.pdf`;
-    await this.downloadPdf(`/api/revisiones-servicio/${idOrFolio}/pdf`, fn);
+    const rawId = String(idOrFolio || "").trim();
+    const cleanNum = rawId.replace(/\D/g, "");
+    const fn = filename || `Reporte_Servicio_${cleanNum || rawId}.pdf`;
+
+    // 1. Localizar los datos de la revisión si están disponibles en memoria o caché
+    let localItem = null;
+    if (this.currentActiveServicioReporte) {
+      const cur = this.currentActiveServicioReporte;
+      const curId = String(cur.id_revision || "");
+      const curFolio = String(cur.folio || cur.batch_id || "");
+      if (curId === rawId || curFolio === rawId || curFolio.replace(/\D/g, "") === cleanNum) {
+        localItem = cur;
+      }
+    }
+    if (!localItem && Array.isArray(this.historialServiciosData)) {
+      localItem = this.historialServiciosData.find(d => {
+        const dId = String(d.id_revision || "");
+        const dFolio = String(d.folio || d.batch_id || "");
+        return dId === rawId || dFolio === rawId || dFolio.replace(/\D/g, "") === cleanNum;
+      });
+    }
+    if (!localItem) {
+      try {
+        const localRevs = JSON.parse(localStorage.getItem("local_revisiones_servicio") || "[]");
+        localItem = localRevs.find(d => {
+          const dId = String(d.id_revision || "");
+          const dFolio = String(d.folio || d.batch_id || "");
+          return dId === rawId || dFolio === rawId || dFolio.replace(/\D/g, "") === cleanNum;
+        });
+      } catch (_) {}
+    }
+
+    // 2. Si no tiene id_revision en la base de datos pero tenemos el objeto completo, sincronizarlo al servidor
+    if (localItem && !localItem.id_revision) {
+      try {
+        const syncRes = await fetch("/api/revisiones-servicio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(localItem)
+        });
+        if (syncRes.ok) {
+          const syncJson = await syncRes.json();
+          if (syncJson && syncJson.id_revision) {
+            localItem.id_revision = syncJson.id_revision;
+            if (syncJson.folio) localItem.folio = syncJson.folio;
+            try {
+              const lrs = JSON.parse(localStorage.getItem("local_revisiones_servicio") || "[]");
+              const idx = lrs.findIndex(x => (x.folio || x.batch_id) === (localItem.folio || localItem.batch_id));
+              if (idx !== -1) {
+                lrs[idx] = localItem;
+                localStorage.setItem("local_revisiones_servicio", JSON.stringify(lrs));
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    }
+
+    this.showToast("Generando reporte PDF oficial...", "info");
+
+    // 3. Probar descarga estándar por GET
+    const targetKey = (localItem && localItem.id_revision) ? localItem.id_revision : (cleanNum || rawId);
+    let success = false;
+    try {
+      const res = await fetch(`/api/revisiones-servicio/${targetKey}/pdf?download=true`);
+      if (res.ok) {
+        const blob = await res.blob();
+        this._saveBlobPdf(blob, fn);
+        success = true;
+        this.showToast("PDF descargado correctamente", "success");
+        return;
+      }
+    } catch (e) {
+      console.warn("Fallo GET de PDF en backend:", e);
+    }
+
+    // 4. Si el GET falló o no existe en SQLite pero tenemos el objeto local:
+    // Compilarlo al vuelo con /api/revisiones-servicio/pdf-preview
+    if (!success && localItem) {
+      try {
+        this.showToast("Compilando PDF oficial desde datos de revisión...", "info");
+        const resPreview = await fetch("/api/revisiones-servicio/pdf-preview?download=true", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(localItem)
+        });
+        if (resPreview.ok) {
+          const blob = await resPreview.blob();
+          this._saveBlobPdf(blob, fn);
+          this.showToast("PDF generado y descargado exitosamente", "success");
+          return;
+        }
+      } catch (previewErr) {
+        console.error("Error al generar PDF preview:", previewErr);
+      }
+    }
+
+    if (!success) {
+      this.showToast("No se pudo obtener el PDF de la revisión de servicio", "error");
+    }
   },
 
   async downloadCurrentChequeoPdf() {
@@ -1941,18 +2090,60 @@ const app = {
     const numFolio = String(item.id_registro || "1").replace(/\D/g, "").padStart(6, "0");
     const serieClean = (item.serie || "SN").replace(/[^a-zA-Z0-9_-]/g, "_");
     const filename = `Chequeo_EEMM_${numFolio}_${serieClean}.pdf`;
-    await this.downloadPdf(`/api/chequeos/${item.id_registro}/pdf`, filename);
+    await this.downloadChequeoPdf(item.id_registro, filename);
   },
 
   async downloadChequeoPdf(id, filename) {
-    const fn = filename || `Chequeo_EEMM_${id}.pdf`;
-    await this.downloadPdf(`/api/chequeos/${id}/pdf`, fn);
+    const rawId = String(id || "").trim();
+    const cleanNum = rawId.replace(/\D/g, "");
+    const fn = filename || `Chequeo_EEMM_${cleanNum || rawId}.pdf`;
+    const targetKey = cleanNum || rawId;
+
+    try {
+      this.showToast("Generando reporte PDF oficial...", "info");
+      const res = await fetch(`/api/chequeos/${targetKey}/pdf?download=true`);
+      if (res.ok) {
+        const blob = await res.blob();
+        this._saveBlobPdf(blob, fn);
+        this.showToast("PDF descargado correctamente", "success");
+        return;
+      }
+      let errDetail = "No se pudo obtener el PDF del servidor";
+      try {
+        const j = await res.json();
+        if (j && j.detail) errDetail = j.detail;
+      } catch (_) {}
+      this.showToast(`Error al generar PDF: ${errDetail}`, "error");
+    } catch (err) {
+      console.error("Error al descargar chequeo PDF:", err);
+      this.showToast("Error de conexión al obtener PDF", "error");
+    }
+  },
+
+  _saveBlobPdf(blob, filename) {
+    try {
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
+      a.download = filename || "Reporte_EEMM.pdf";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(blobUrl);
+        } catch (_) {}
+      }, 4000);
+    } catch (err) {
+      console.error("Error al disparar descarga de blob:", err);
+      this.showToast("Error al guardar archivo en el dispositivo", "error");
+    }
   },
 
   async downloadPdf(url, filename) {
     try {
       this.showToast("Generando documento PDF oficial...", "info");
-      
       const res = await fetch(url);
       if (!res.ok) {
         let errDetail = "No se pudo obtener el PDF del servidor";
@@ -1963,28 +2154,11 @@ const app = {
         throw new Error(errDetail);
       }
       const blob = await res.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = blobUrl;
-      a.download = filename || "Reporte_EEMM.pdf";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(blobUrl);
-      }, 3000);
+      this._saveBlobPdf(blob, filename);
       this.showToast("PDF descargado correctamente", "success");
     } catch (err) {
-      console.warn("Descarga por blob falló o dispositivo móvil, abriendo URL directa:", err);
-      try {
-        const win = window.open(url, "_blank");
-        if (!win) {
-          window.location.href = url;
-        }
-      } catch (openErr) {
-        this.showToast("Error al abrir PDF: " + (err.message || "Servidor no disponible"), "error");
-      }
+      console.error("Error al descargar PDF:", err);
+      this.showToast("Error al obtener PDF: " + (err.message || "Servidor no disponible"), "error");
     }
   },
 
@@ -2076,6 +2250,7 @@ const app = {
       const res = await fetch(url);
       if (res.ok) {
         data = await res.json();
+        this.syncLocalRevisionesServicio();
       }
     } catch (err) {
       console.warn("Modo offline: buscando revisiones locales en localStorage", err);
