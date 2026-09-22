@@ -1323,7 +1323,7 @@ def preview_revision_servicio_pdf(data: dict = Body(...), download: bool = False
         print(f"Error generando PDF preview: {e}")
         raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
 
-# Métricas para Panel de Administrador
+# Métricas para Dashboard del Proyecto y Panel de Administrador
 @app.get("/api/stats")
 def get_stats():
     conn = get_db()
@@ -1333,9 +1333,37 @@ def get_stats():
     cursor.execute("SELECT COUNT(*) FROM equipos")
     total_equipos = cursor.fetchone()[0]
 
-    # Total chequeos
+    # Equipos por estado
+    cursor.execute("""
+        SELECT estado, COUNT(*) as cant
+        FROM equipos
+        WHERE estado IS NOT NULL
+        GROUP BY estado
+    """)
+    equipos_por_estado = {row["estado"]: row["cant"] for row in cursor.fetchall()}
+
+    # Equipos por categoría (Top 8)
+    cursor.execute("""
+        SELECT categoria, COUNT(*) as cant
+        FROM equipos
+        WHERE categoria IS NOT NULL AND TRIM(categoria) != ''
+        GROUP BY categoria
+        ORDER BY cant DESC
+        LIMIT 8
+    """)
+    equipos_por_categoria = [dict(row) for row in cursor.fetchall()]
+
+    # Total chequeos individuales
     cursor.execute("SELECT COUNT(*) FROM registros")
     total_chequeos = cursor.fetchone()[0]
+
+    # Total revisiones consolidadas por servicio
+    total_revisiones_servicio = 0
+    try:
+        cursor.execute("SELECT COUNT(*) FROM revisiones_servicio")
+        total_revisiones_servicio = cursor.fetchone()[0]
+    except Exception:
+        pass
 
     # Chequeos con fotos o firmas
     cursor.execute("SELECT COUNT(*) FROM registros WHERE foto_1 IS NOT NULL OR firma_data IS NOT NULL")
@@ -1344,10 +1372,14 @@ def get_stats():
     # Total inventario
     cursor.execute("SELECT COUNT(*), SUM(cantidad) FROM inventario")
     inv_row = cursor.fetchone()
-    total_cajas = inv_row[0]
+    total_cajas = inv_row[0] or 0
     total_unidades_stock = inv_row[1] or 0
 
-    # Top unidades con más chequeos
+    # Cajas con stock bajo / crítico
+    cursor.execute("SELECT COUNT(*) FROM inventario WHERE estado = 'Stock Bajo' OR cantidad < 5")
+    cajas_stock_bajo = cursor.fetchone()[0] or 0
+
+    # Top unidades con más chequeos individuales
     cursor.execute("""
         SELECT unidad, COUNT(*) as cant
         FROM registros
@@ -1367,16 +1399,60 @@ def get_stats():
     """)
     por_tecnico = [dict(row) for row in cursor.fetchall()]
 
+    # Revisiones por servicio agrupadas
+    top_servicios_rev = []
+    try:
+        cursor.execute("""
+            SELECT unidad, COUNT(*) as cant, SUM(total_equipos) as total_equipos
+            FROM revisiones_servicio
+            WHERE unidad IS NOT NULL AND TRIM(unidad) != ''
+            GROUP BY unidad
+            ORDER BY cant DESC
+            LIMIT 6
+        """)
+        top_servicios_rev = [dict(row) for row in cursor.fetchall()]
+    except Exception:
+        pass
+
+    # Últimos chequeos individuales registrados
+    cursor.execute("""
+        SELECT id_registro, fecha, usuario, nombre_equipo, marca, modelo, serie, unidad
+        FROM registros
+        ORDER BY id_registro DESC
+        LIMIT 6
+    """)
+    ultimos_chequeos = [dict(row) for row in cursor.fetchall()]
+
+    # Últimas revisiones por servicio registradas
+    ultimas_revisiones = []
+    try:
+        cursor.execute("""
+            SELECT id_revision, folio, fecha, unidad, tecnico, supervisor, total_equipos
+            FROM revisiones_servicio
+            ORDER BY id_revision DESC
+            LIMIT 6
+        """)
+        ultimas_revisiones = [dict(row) for row in cursor.fetchall()]
+    except Exception:
+        pass
+
     conn.close()
 
     return {
         "total_equipos": total_equipos,
+        "equipos_por_estado": equipos_por_estado,
+        "equipos_por_categoria": equipos_por_categoria,
         "total_chequeos": total_chequeos,
+        "total_revisiones_servicio": total_revisiones_servicio,
         "chequeos_con_multimedia": chequeos_con_multimedia,
         "total_cajas_inventario": total_cajas,
         "total_unidades_stock": total_unidades_stock,
+        "cajas_stock_bajo": cajas_stock_bajo,
         "top_unidades": top_unidades,
-        "por_tecnico": por_tecnico
+        "por_tecnico": por_tecnico,
+        "top_servicios_rev": top_servicios_rev,
+        "ultimos_chequeos": ultimos_chequeos,
+        "ultimas_revisiones": ultimas_revisiones
     }
 
 @app.get("/api/inventario")

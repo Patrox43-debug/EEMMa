@@ -140,7 +140,8 @@ def init_database():
         ("Patricio Bustamante", "20.967.660-5", "patriciobustamante.ec@gmail.com", "1234", "Tecnico EEMM", "Patricio Bustamante", "tecnico"),
         ("Martin Peralta", "21.284.838-7", "martin.peralta@gmail.com", "1234", "Tecnico EEMM", "Martin Peralta", "tecnico"),
         ("Luis Vallejos", "16.345.678-9", "equiposmedicos1.@gmail.com", "1234", "Tecnico EEMM", "Luis Vallejos", "tecnico"),
-        ("Jorge Ambrosetti", "15.088.541-8", "jambrosettic@gmail.com", "1234", "Tecnico EEMM", "Jorge Ambrosetti", "tecnico")
+        ("Jorge Ambrosetti", "15.088.541-8", "jambrosettic@gmail.com", "1234", "Tecnico EEMM", "Jorge Ambrosetti", "tecnico"),
+        ("Esteban", "22.222.222-2", "esteban@eemm.cl", "1234", "Ingeniero Clinico", "Esteban", "ingeniero")
     ]
     cursor.executemany("""
         INSERT OR IGNORE INTO perfiles (nombre, rut, correo, password, funcion, tecnico, rol)

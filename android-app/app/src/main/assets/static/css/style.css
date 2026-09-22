@@ -766,6 +766,12 @@ code, kbd, samp, pre {
   border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
+.badge-ingeniero {
+  background-color: rgba(14, 165, 233, 0.12);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.28);
+}
+
 .badge-tecnico {
   background-color: var(--primary-subtle);
   color: var(--primary);

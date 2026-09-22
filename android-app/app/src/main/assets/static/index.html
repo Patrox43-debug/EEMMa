@@ -213,6 +213,12 @@
         </button>
       </div>
 
+      <!-- Pestaña Dashboard del Proyecto (Visible para Administradores e Ingenieros) -->
+      <button class="nav-tab" data-tab="dashboard" id="nav-tab-dashboard" style="display: none;" onclick="app.navigate('dashboard')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+        Dashboard
+      </button>
+
       <!-- Pestaña Administración (solo visible para Administradores) -->
       <button class="nav-tab" data-tab="admin" id="nav-tab-admin" style="display: none;" onclick="app.navigate('admin')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
@@ -299,12 +305,12 @@
               </div>
 
               <div class="module-card-actions">
-                <button type="button" class="btn btn-primary module-btn-main" onclick="app.selectModule('chequeo', 'chequeo')">
+                <button type="button" id="module-btn-chequeo-main" class="btn btn-primary module-btn-main" onclick="app.selectModule('chequeo', 'chequeo')">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                   <span>Nuevo Chequeo</span>
                 </button>
                 <div class="module-btn-group" style="grid-template-columns: repeat(auto-fit, minmax(75px, 1fr));">
-                  <button type="button" class="btn btn-outline module-btn-sub" onclick="app.selectModule('chequeo', 'chequeo-servicio')" title="Chequeo preventivo organizado por servicio clínico">
+                  <button type="button" id="module-btn-servicio" class="btn btn-outline module-btn-sub" onclick="app.selectModule('chequeo', 'chequeo-servicio')" title="Chequeo preventivo organizado por servicio clínico">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-3"></path></svg>
                     <span>Por Servicio</span>
                   </button>
@@ -350,6 +356,22 @@
               </div>
             </div>
 
+          </div>
+
+          <!-- Acceso a Dashboard para Ingenieros y Administradores -->
+          <div id="module-selector-dashboard-card" class="module-admin-banner" style="display: none; border-color: rgba(14, 165, 233, 0.35); background: var(--bg-card);">
+            <div class="module-admin-content">
+              <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(14, 165, 233, 0.12); color: #0284c7; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+              </div>
+              <div>
+                <strong>Dashboard de Datos del Proyecto</strong>
+                <span>Métricas globales de equipamiento, operatividad, chequeos preventivos e insumos hospitalarios.</span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="app.navigate('dashboard')">
+              Ver Dashboard →
+            </button>
           </div>
 
           <!-- Acceso para Administradores -->
@@ -894,6 +916,154 @@
 
 
       <!-- ====================================================================
+           4.5 VISTA DASHBOARD DE DATOS DEL PROYECTO (Ingeniero & Administrador)
+           ==================================================================== -->
+      <section id="view-dashboard" style="display: none;">
+        <!-- Cabecera del Dashboard con título y botón de actualización -->
+        <div class="panel" style="margin-bottom: 1.25rem;">
+          <div class="panel-header" style="flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(14, 165, 233, 0.12); color: #0284c7; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+              </div>
+              <div>
+                <h2 class="panel-title" style="margin: 0; font-size: 1.15rem; font-weight: 700;">Dashboard del Proyecto EEMM</h2>
+                <p class="panel-subtitle" style="margin: 2px 0 0 0;">Métricas consolidadas de equipos clínicos, inspecciones preventivas y bodega hospitalaria</p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span id="dashboard-last-update" style="font-size: 0.75rem; color: var(--text-tertiary);">Actualizado hace instantes</span>
+              <button type="button" class="btn btn-outline btn-sm" onclick="app.loadProjectDashboard()" title="Refrescar métricas en tiempo real">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento Grid de KPIs Principales -->
+        <div class="kpi-grid" style="margin-bottom: 1.25rem;">
+          <!-- KPI 1: Equipos Médicos Registrados -->
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: rgba(14, 165, 233, 0.12); color: #0284c7;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="dash-kpi-total-equipos">0</div>
+              <div class="kpi-label">Equipos en Catálogo</div>
+            </div>
+          </div>
+
+          <!-- KPI 2: Chequeos Individuales -->
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: var(--success-subtle); color: var(--success);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="dash-kpi-total-chequeos">0</div>
+              <div class="kpi-label">Chequeos Individuales</div>
+            </div>
+          </div>
+
+          <!-- KPI 3: Revisiones por Servicio -->
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-3"></path></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="dash-kpi-total-revisiones">0</div>
+              <div class="kpi-label">Revisiones por Servicio</div>
+            </div>
+          </div>
+
+          <!-- KPI 4: Insumos y Bodega -->
+          <div class="kpi-card">
+            <div class="kpi-icon-box" style="background: var(--warning-subtle); color: var(--warning);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            </div>
+            <div>
+              <div class="kpi-num" id="dash-kpi-total-cajas">0</div>
+              <div class="kpi-label">Cajas en Bodega</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel de Estado Operativo de Equipos -->
+        <div class="panel" style="margin-bottom: 1.25rem;">
+          <div class="panel-header" style="flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h3 class="panel-title" style="font-size: 0.95rem;">Estado Operativo del Parque Tecnológico</h3>
+              <p class="panel-subtitle">Proporción técnica sobre el total de equipos clínicos registrados</p>
+            </div>
+            <div id="dash-estado-pills" style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+          </div>
+          <!-- Barra de progreso segmentada -->
+          <div style="height: 12px; border-radius: 6px; overflow: hidden; display: flex; background: var(--bg-card-subtle); margin-top: 0.5rem; margin-bottom: 0.75rem;" id="dash-estado-segmented-bar">
+            <!-- Rellenado dinámico por JS -->
+          </div>
+          <div id="dash-estado-legend" style="display: flex; gap: 1.25rem; flex-wrap: wrap; font-size: 0.8rem;"></div>
+        </div>
+
+        <!-- Grilla de Estadísticas: Unidades vs Categorías vs Técnicos -->
+        <div class="admin-stats-grid" style="margin-bottom: 1.25rem;">
+          <!-- Distribución por Servicio Clínico -->
+          <div class="panel" style="margin-bottom: 0;">
+            <div class="panel-header">
+              <h3 class="panel-title" style="font-size: 0.95rem;">Inspecciones por Servicio Clínico</h3>
+            </div>
+            <div id="dash-servicios-list"></div>
+          </div>
+
+          <!-- Especialidades / Categorías Técnicas -->
+          <div class="panel" style="margin-bottom: 0;">
+            <div class="panel-header">
+              <h3 class="panel-title" style="font-size: 0.95rem;">Equipos por Categoría Técnica</h3>
+            </div>
+            <div id="dash-categorias-list"></div>
+          </div>
+
+          <!-- Actividad por Técnico -->
+          <div class="panel" style="margin-bottom: 0;">
+            <div class="panel-header">
+              <h3 class="panel-title" style="font-size: 0.95rem;">Actividad por Técnico EEMM</h3>
+            </div>
+            <div id="dash-tecnicos-list"></div>
+          </div>
+        </div>
+
+        <!-- Últimos Chequeos e Inspecciones Registradas -->
+        <div class="panel" style="margin-bottom: 0;">
+          <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h3 class="panel-title" style="font-size: 0.95rem;">Actividad Reciente del Proyecto</h3>
+              <p class="panel-subtitle">Últimas inspecciones y chequeos preventivos registrados en el sistema</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="app.navigate('historial')">
+              Ver Historial Completo →
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Folio</th>
+                  <th>Fecha</th>
+                  <th>Equipo Médico</th>
+                  <th>Serie</th>
+                  <th>Unidad</th>
+                  <th>Técnico</th>
+                </tr>
+              </thead>
+              <tbody id="dash-recent-tbody">
+                <!-- Rellenado dinámico por JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ====================================================================
            5. VISTA PANEL ADMINISTRADOR (KPIs Bento)
            ==================================================================== -->
       <section id="view-admin" style="display: none;">
@@ -1255,6 +1425,7 @@
             <label class="form-label" for="user-rol">Rol en el Sistema <span class="req">*</span>:</label>
             <select id="user-rol" class="form-control" required>
               <option value="tecnico">Técnico EEMM</option>
+              <option value="ingeniero">Ingeniero Clínico / Biomédico</option>
               <option value="administrador">Administrador del Sistema</option>
             </select>
           </div>

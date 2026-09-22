@@ -431,10 +431,23 @@ const app = {
       tabName = "login";
     }
 
+    // Protección de rutas según perfil
+    if (this.currentUser) {
+      if (this.currentUser.rol === "ingeniero") {
+        if (tabName === "chequeo" || tabName === "chequeo-servicio" || tabName === "admin") {
+          tabName = "dashboard";
+        }
+      } else if (this.currentUser.rol !== "administrador") {
+        if (tabName === "dashboard" || tabName === "admin") {
+          tabName = "chequeo";
+        }
+      }
+    }
+
     this.activeTab = tabName;
 
     // Ocultar todas las vistas
-    const views = ["login", "modulo-selector", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario"];
+    const views = ["login", "modulo-selector", "dashboard", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario"];
     views.forEach((v) => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = v === tabName ? "block" : "none";
@@ -448,7 +461,7 @@ const app = {
       // Mantener sincronizado el módulo activo según la pestaña navegada
       if (tabName === "inventario") {
         this.currentModule = "bodega";
-      } else if (tabName === "chequeo" || tabName === "chequeo-servicio" || tabName === "historial" || tabName === "equipos") {
+      } else if (tabName === "chequeo" || tabName === "chequeo-servicio" || tabName === "historial" || tabName === "equipos" || tabName === "dashboard") {
         this.currentModule = "chequeo";
       }
       this.updateModuleSwitcherUI();
@@ -464,7 +477,9 @@ const app = {
     });
 
     // Cargar datos según la vista
-    if (tabName === "historial") {
+    if (tabName === "dashboard") {
+      this.loadProjectDashboard();
+    } else if (tabName === "historial") {
       this.refreshCurrentHistorialTab();
     } else if (tabName === "equipos") {
       this.loadEquiposCatalog();
@@ -540,7 +555,8 @@ const app = {
           { nombre: "Patricio Bustamante", rut: "18.123.456-7", correo: "patriciobustamante.ec@gmail.com", password: "1234", funcion: "Tecnico EEMM", tecnico: "Patricio Bustamante", rol: "tecnico" },
           { nombre: "Martin Peralta", rut: "17.234.567-8", correo: "martin.peralta@gmail.com", password: "1234", funcion: "Tecnico EEMM", tecnico: "Martin Peralta", rol: "tecnico" },
           { nombre: "Luis Vallejos", rut: "16.345.678-9", correo: "equiposmedicos1.@gmail.com", password: "1234", funcion: "Tecnico EEMM", tecnico: "Luis Vallejos", rol: "tecnico" },
-          { nombre: "Jorge Ambrosetti", rut: "15.456.789-0", correo: "jambrosettic@gmail.com", password: "1234", funcion: "Tecnico EEMM", tecnico: "Jorge Ambrosetti", rol: "tecnico" }
+          { nombre: "Jorge Ambrosetti", rut: "15.456.789-0", correo: "jambrosettic@gmail.com", password: "1234", funcion: "Tecnico EEMM", tecnico: "Jorge Ambrosetti", rol: "tecnico" },
+          { nombre: "Esteban", rut: "22.222.222-2", correo: "esteban@eemm.cl", password: "1234", funcion: "Ingeniero Clinico", tecnico: "Esteban", rol: "ingeniero" }
         ];
 
         const match = localProfiles.find(p => 
@@ -596,8 +612,10 @@ const app = {
 
     const roleBadge = document.getElementById("header-user-role");
     if (roleBadge) {
-      roleBadge.textContent = user.rol === "administrador" ? "Admin" : "Técnico";
-      roleBadge.className = `badge ${user.rol === "administrador" ? "badge-admin" : "badge-tecnico"}`;
+      const roleText = user.rol === "administrador" ? "Admin" : (user.rol === "ingeniero" ? "Ingeniero" : "Técnico");
+      const roleClass = user.rol === "administrador" ? "badge-admin" : (user.rol === "ingeniero" ? "badge-ingeniero" : "badge-tecnico");
+      roleBadge.textContent = roleText;
+      roleBadge.className = `badge ${roleClass}`;
     }
 
     // Actualizar datos dentro del Menú Desplegable
@@ -612,8 +630,10 @@ const app = {
 
     const ddRoleBadge = document.getElementById("dropdown-user-role-badge");
     if (ddRoleBadge) {
-      ddRoleBadge.textContent = user.rol === "administrador" ? "Administrador" : "Técnico EEMM";
-      ddRoleBadge.className = `badge ${user.rol === "administrador" ? "badge-admin" : "badge-tecnico"}`;
+      const ddRoleText = user.rol === "administrador" ? "Administrador" : (user.rol === "ingeniero" ? "Ingeniero Clínico" : "Técnico EEMM");
+      const ddRoleClass = user.rol === "administrador" ? "badge-admin" : (user.rol === "ingeniero" ? "badge-ingeniero" : "badge-tecnico");
+      ddRoleBadge.textContent = ddRoleText;
+      ddRoleBadge.className = `badge ${ddRoleClass}`;
     }
 
     // Cargar módulo preferido o por defecto
@@ -637,14 +657,44 @@ const app = {
       adminCard.style.display = user.rol === "administrador" ? "flex" : "none";
     }
 
+    // Banner de dashboard en selector de módulos (para Admin e Ingeniero)
+    const dashCard = document.getElementById("module-selector-dashboard-card");
+    if (dashCard) {
+      dashCard.style.display = (user.rol === "administrador" || user.rol === "ingeniero") ? "flex" : "none";
+    }
+
     // Pestaña Admin visible solo si rol === 'administrador'
     const adminTab = document.getElementById("nav-tab-admin");
     if (adminTab) {
       adminTab.style.display = user.rol === "administrador" ? "flex" : "none";
     }
 
+    // Pestaña Dashboard visible para 'administrador' e 'ingeniero'
+    const dashTab = document.getElementById("nav-tab-dashboard");
+    if (dashTab) {
+      dashTab.style.display = (user.rol === "administrador" || user.rol === "ingeniero") ? "flex" : "none";
+    }
+
     // Sincronizar botones de cambio de módulo
     this.updateModuleSwitcherUI();
+
+    // Adaptar tarjeta de módulo chequeos en selector para perfil Ingeniero
+    const btnChequeoMain = document.getElementById("module-btn-chequeo-main");
+    if (btnChequeoMain) {
+      if (user.rol === "ingeniero") {
+        btnChequeoMain.setAttribute("onclick", "app.selectModule('chequeo', 'historial')");
+        const spanText = btnChequeoMain.querySelector("span");
+        if (spanText) spanText.textContent = "Ver Historial & Equipos";
+      } else {
+        btnChequeoMain.setAttribute("onclick", "app.selectModule('chequeo', 'chequeo')");
+        const spanText = btnChequeoMain.querySelector("span");
+        if (spanText) spanText.textContent = "Nuevo Chequeo";
+      }
+    }
+    const btnServicioSub = document.getElementById("module-btn-servicio");
+    if (btnServicioSub) {
+      btnServicioSub.style.display = user.rol === "ingeniero" ? "none" : "inline-flex";
+    }
 
     // Badge técnico en formulario
     const formTecnicoBadge = document.getElementById("chequeo-tecnico-badge");
@@ -804,7 +854,11 @@ const app = {
       if (moduleName === "bodega") {
         this.navigate("inventario");
       } else {
-        this.navigate("chequeo");
+        if (this.currentUser && this.currentUser.rol === "ingeniero") {
+          this.navigate("dashboard");
+        } else {
+          this.navigate("chequeo");
+        }
       }
     }
   },
@@ -812,8 +866,9 @@ const app = {
   toggleModuleSwitch() {
     this.closeUserDropdown();
     if (this.currentModule === "bodega") {
-      this.selectModule("chequeo", "chequeo");
-      this.showToast("Cambiado a Módulo Chequeos y Equipos", "info");
+      const target = (this.currentUser && this.currentUser.rol === "ingeniero") ? "dashboard" : "chequeo";
+      this.selectModule("chequeo", target);
+      this.showToast(this.currentUser && this.currentUser.rol === "ingeniero" ? "Cambiado a Módulo de Supervisión" : "Cambiado a Módulo Chequeos y Equipos", "info");
     } else {
       this.selectModule("bodega", "inventario");
       this.showToast("Cambiado a Módulo Bodega e Insumos", "info");
@@ -829,17 +884,35 @@ const app = {
 
   updateModuleSwitcherUI() {
     const isBodega = this.currentModule === "bodega";
+    const isIngeniero = this.currentUser && this.currentUser.rol === "ingeniero";
+    const isAdmin = this.currentUser && this.currentUser.rol === "administrador";
 
     // 1. Grupos de pestañas en la barra superior
     const tabsChequeo = document.getElementById("nav-tabs-chequeo");
     const tabsBodega = document.getElementById("nav-tabs-bodega");
-    if (tabsChequeo) tabsChequeo.style.display = isBodega ? "none" : "flex";
+    if (tabsChequeo) {
+      tabsChequeo.style.display = isBodega ? "none" : "flex";
+      const btnChequeo = tabsChequeo.querySelector('[data-tab="chequeo"]');
+      const btnServicio = tabsChequeo.querySelector('[data-tab="chequeo-servicio"]');
+      if (btnChequeo) btnChequeo.style.display = isIngeniero ? "none" : "inline-flex";
+      if (btnServicio) btnServicio.style.display = isIngeniero ? "none" : "inline-flex";
+    }
     if (tabsBodega) tabsBodega.style.display = isBodega ? "flex" : "none";
+
+    // Pestañas globales en la barra superior
+    const dashTab = document.getElementById("nav-tab-dashboard");
+    if (dashTab) {
+      dashTab.style.display = (isAdmin || isIngeniero) ? "inline-flex" : "none";
+    }
+    const adminTab = document.getElementById("nav-tab-admin");
+    if (adminTab) {
+      adminTab.style.display = isAdmin ? "inline-flex" : "none";
+    }
 
     // 2. Botón de conmutación rápida en la barra de navegación
     const navSwitchLabel = document.getElementById("nav-switch-label");
     if (navSwitchLabel) {
-      navSwitchLabel.textContent = isBodega ? "Ir a Chequeos 🩺" : "Ir a Bodega 📦";
+      navSwitchLabel.textContent = isBodega ? (isIngeniero ? "Ir a Dashboard 📊" : "Ir a Chequeos 🩺") : "Ir a Bodega 📦";
     }
 
     // 3. Botón de conmutación dentro del Menú Desplegable de Usuario
@@ -849,8 +922,8 @@ const app = {
     const iconToChequeo = document.getElementById("dropdown-icon-to-chequeo");
 
     if (isBodega) {
-      if (ddTitle) ddTitle.textContent = "Cambiar a Módulo Chequeo";
-      if (ddDesc) ddDesc.textContent = "Nuevo Chequeo, Historial y Equipos";
+      if (ddTitle) ddTitle.textContent = isIngeniero ? "Cambiar a Panel Principal" : "Cambiar a Módulo Chequeo";
+      if (ddDesc) ddDesc.textContent = isIngeniero ? "Dashboard, Historial y Equipos" : "Nuevo Chequeo, Historial y Equipos";
       if (iconToBodega) iconToBodega.style.display = "none";
       if (iconToChequeo) iconToChequeo.style.display = "inline-block";
     } else {
@@ -3042,6 +3115,222 @@ const app = {
   },
 
   /* ==========================================================================
+     DASHBOARD DEL PROYECTO (Métricas de Equipos, Chequeos y Bodega)
+     ========================================================================== */
+  async loadProjectDashboard() {
+    try {
+      const res = await fetch("/api/stats");
+      if (!res.ok) throw new Error("Error en servidor al obtener estadísticas");
+      const stats = await res.json();
+
+      // 1. KPIs Bento
+      const elEquipos = document.getElementById("dash-kpi-total-equipos");
+      if (elEquipos) elEquipos.textContent = (stats.total_equipos || 0).toLocaleString();
+
+      const elChequeos = document.getElementById("dash-kpi-total-chequeos");
+      if (elChequeos) elChequeos.textContent = (stats.total_chequeos || 0).toLocaleString();
+
+      const elRevisiones = document.getElementById("dash-kpi-total-revisiones");
+      if (elRevisiones) elRevisiones.textContent = (stats.total_revisiones_servicio || 0).toLocaleString();
+
+      const elCajas = document.getElementById("dash-kpi-total-cajas");
+      if (elCajas) elCajas.textContent = (stats.total_cajas_inventario || 0).toLocaleString();
+
+      const elUpdate = document.getElementById("dashboard-last-update");
+      if (elUpdate) {
+        const now = new Date();
+        elUpdate.textContent = "Actualizado: " + now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+
+      // 2. Estado Operativo del Parque Tecnológico
+      const totalEquipos = stats.total_equipos || 1;
+      const estadoMap = stats.equipos_por_estado || {};
+      const estadoColors = {
+        "Operativo": { color: "#16a34a", bg: "rgba(22, 163, 74, 0.12)", border: "rgba(22, 163, 74, 0.3)" },
+        "En Mantención": { color: "#d97706", bg: "rgba(217, 119, 6, 0.12)", border: "rgba(217, 119, 6, 0.3)" },
+        "En Reparación": { color: "#ea580c", bg: "rgba(234, 88, 12, 0.12)", border: "rgba(234, 88, 12, 0.3)" },
+        "Fuera de Servicio": { color: "#dc2626", bg: "rgba(220, 38, 38, 0.12)", border: "rgba(220, 38, 38, 0.3)" },
+        "De Baja": { color: "#64748b", bg: "rgba(100, 116, 139, 0.12)", border: "rgba(100, 116, 139, 0.3)" },
+        "Baja": { color: "#64748b", bg: "rgba(100, 116, 139, 0.12)", border: "rgba(100, 116, 139, 0.3)" }
+      };
+      const defaultColor = { color: "#0284c7", bg: "rgba(2, 132, 199, 0.12)", border: "rgba(2, 132, 199, 0.3)" };
+
+      // Pills en cabecera
+      const pillsContainer = document.getElementById("dash-estado-pills");
+      if (pillsContainer) {
+        pillsContainer.innerHTML = "";
+        Object.entries(estadoMap).forEach(([estado, cant]) => {
+          const cfg = estadoColors[estado] || defaultColor;
+          const span = document.createElement("span");
+          span.style.cssText = `font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; background: ${cfg.bg}; color: ${cfg.color}; border: 1px solid ${cfg.border}; display: inline-flex; align-items: center; gap: 4px;`;
+          span.innerHTML = `<span style="width: 6px; height: 6px; border-radius: 50%; background: ${cfg.color};"></span>${estado}: ${cant.toLocaleString()}`;
+          pillsContainer.appendChild(span);
+        });
+      }
+
+      // Barra de progreso segmentada
+      const barContainer = document.getElementById("dash-estado-segmented-bar");
+      if (barContainer) {
+        barContainer.innerHTML = "";
+        Object.entries(estadoMap).forEach(([estado, cant]) => {
+          const cfg = estadoColors[estado] || defaultColor;
+          const pct = Math.max(0.5, ((cant / totalEquipos) * 100)).toFixed(1);
+          const seg = document.createElement("div");
+          seg.style.cssText = `height: 100%; width: ${pct}%; background: ${cfg.color}; transition: width 0.3s;`;
+          seg.title = `${estado}: ${cant} (${pct}%)`;
+          barContainer.appendChild(seg);
+        });
+      }
+
+      // Leyenda
+      const legendContainer = document.getElementById("dash-estado-legend");
+      if (legendContainer) {
+        legendContainer.innerHTML = "";
+        Object.entries(estadoMap).forEach(([estado, cant]) => {
+          const cfg = estadoColors[estado] || defaultColor;
+          const pct = ((cant / totalEquipos) * 100).toFixed(1);
+          const item = document.createElement("div");
+          item.style.cssText = "display: flex; align-items: center; gap: 6px; color: var(--text-secondary);";
+          item.innerHTML = `
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: ${cfg.color}; flex-shrink: 0;"></span>
+            <span><strong>${estado}</strong>: ${cant.toLocaleString()} <span style="color: var(--text-tertiary); font-size: 0.72rem;">(${pct}%)</span></span>
+          `;
+          legendContainer.appendChild(item);
+        });
+      }
+
+      // 3. Distribución por Servicio Clínico
+      const servContainer = document.getElementById("dash-servicios-list");
+      if (servContainer) {
+        servContainer.innerHTML = "";
+        const listServ = (stats.top_unidades && stats.top_unidades.length > 0)
+          ? stats.top_unidades
+          : (stats.top_servicios_rev || []);
+
+        if (listServ.length === 0) {
+          servContainer.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-tertiary); padding: 0.5rem 0;">Sin inspecciones registradas aún.</div>`;
+        } else {
+          const maxVal = Math.max(...listServ.map(s => s.cant || 1), 1);
+          listServ.forEach((s) => {
+            const div = document.createElement("div");
+            div.style.marginBottom = "0.75rem";
+            div.innerHTML = `
+              <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:2px;">
+                <span><strong>${s.unidad || "Sin Servicio"}</strong></span>
+                <span>${s.cant} inspecciones</span>
+              </div>
+              <div style="height:6px; background:var(--bg-card-subtle); border-radius:3px; overflow:hidden;">
+                <div style="height:100%; width:${Math.min(100, Math.round((s.cant / maxVal) * 100))}%; background:#0284c7; border-radius:3px;"></div>
+              </div>
+            `;
+            servContainer.appendChild(div);
+          });
+        }
+      }
+
+      // 4. Equipos por Categoría Técnica
+      const catContainer = document.getElementById("dash-categorias-list");
+      if (catContainer) {
+        catContainer.innerHTML = "";
+        const listCat = stats.equipos_por_categoria || [];
+        if (listCat.length === 0) {
+          catContainer.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-tertiary); padding: 0.5rem 0;">Sin categorías registradas.</div>`;
+        } else {
+          const maxCat = Math.max(...listCat.map(c => c.cant || 1), 1);
+          listCat.forEach((c) => {
+            const div = document.createElement("div");
+            div.style.marginBottom = "0.75rem";
+            div.innerHTML = `
+              <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:2px;">
+                <span><strong>${c.categoria}</strong></span>
+                <span>${c.cant.toLocaleString()} equipos</span>
+              </div>
+              <div style="height:6px; background:var(--bg-card-subtle); border-radius:3px; overflow:hidden;">
+                <div style="height:100%; width:${Math.min(100, Math.round((c.cant / maxCat) * 100))}%; background:#8b5cf6; border-radius:3px;"></div>
+              </div>
+            `;
+            catContainer.appendChild(div);
+          });
+        }
+      }
+
+      // 5. Actividad por Técnico EEMM
+      const tecContainer = document.getElementById("dash-tecnicos-list");
+      if (tecContainer) {
+        tecContainer.innerHTML = "";
+        const listTec = stats.por_tecnico || [];
+        if (listTec.length === 0) {
+          tecContainer.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-tertiary); padding: 0.5rem 0;">Sin actividad técnica registrada aún.</div>`;
+        } else {
+          const maxTec = Math.max(...listTec.map(t => t.cant || 1), 1);
+          listTec.forEach((t) => {
+            const div = document.createElement("div");
+            div.style.marginBottom = "0.75rem";
+            div.innerHTML = `
+              <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:2px;">
+                <span><strong>${t.usuario || "Técnico"}</strong></span>
+                <span>${t.cant} chequeos</span>
+              </div>
+              <div style="height:6px; background:var(--bg-card-subtle); border-radius:3px; overflow:hidden;">
+                <div style="height:100%; width:${Math.min(100, Math.round((t.cant / maxTec) * 100))}%; background:#10b981; border-radius:3px;"></div>
+              </div>
+            `;
+            tecContainer.appendChild(div);
+          });
+        }
+      }
+
+      // 6. Actividad Reciente (Últimos Chequeos)
+      const tbody = document.getElementById("dash-recent-tbody");
+      if (tbody) {
+        tbody.innerHTML = "";
+        const ultimos = stats.ultimos_chequeos || [];
+        if (ultimos.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-tertiary); padding: 1.5rem;">No hay chequeos recientes registrados</td></tr>`;
+        } else {
+          ultimos.forEach((c) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><strong>#${c.id_registro}</strong></td>
+              <td style="white-space: nowrap; font-size: 0.8rem; color: var(--text-secondary);">${c.fecha || "-"}</td>
+              <td>
+                <div style="font-weight: 600;">${c.nombre_equipo || "Equipo Clínico"}</div>
+                ${c.marca || c.modelo ? `<div style="font-size: 0.72rem; color: var(--text-tertiary);">${c.marca || ""} ${c.modelo || ""}</div>` : ""}
+              </td>
+              <td><code>${c.serie || "-"}</code></td>
+              <td><span style="font-size: 0.8rem;">${c.unidad || "-"}</span></td>
+              <td><span class="badge badge-tecnico">${c.usuario || "-"}</span></td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      }
+
+    } catch (e) {
+      console.warn("Fallo cargando dashboard desde /api/stats:", e);
+      if (window.OfflineManager) {
+        const equipos = (await window.OfflineManager.getCachedData("equipos")) || [];
+        const registros = (await window.OfflineManager.getCachedData("last_historial")) || [];
+        const inventario = (await window.OfflineManager.getCachedData("inventario")) || [];
+
+        if (equipos.length > 0 || registros.length > 0) {
+          const elEquipos = document.getElementById("dash-kpi-total-equipos");
+          if (elEquipos) elEquipos.textContent = equipos.length.toLocaleString();
+
+          const elChequeos = document.getElementById("dash-kpi-total-chequeos");
+          if (elChequeos) elChequeos.textContent = registros.length.toLocaleString();
+
+          const elCajas = document.getElementById("dash-kpi-total-cajas");
+          if (elCajas) elCajas.textContent = inventario.length.toLocaleString();
+
+          const elUpdate = document.getElementById("dashboard-last-update");
+          if (elUpdate) elUpdate.textContent = "Modo Local (Offline)";
+        }
+      }
+    }
+  },
+
+  /* ==========================================================================
      PANEL ADMINISTRADOR
      ========================================================================== */
   async loadAdminDashboard() {
@@ -3111,9 +3400,12 @@ const app = {
 
       users.forEach((u) => {
         const tr = document.createElement("tr");
-        const roleBadge = u.rol === "administrador"
-          ? `<span class="badge badge-admin">Administrador</span>`
-          : `<span class="badge badge-tecnico">Técnico</span>`;
+        let roleBadge = `<span class="badge badge-tecnico">Técnico</span>`;
+        if (u.rol === "administrador") {
+          roleBadge = `<span class="badge badge-admin">Administrador</span>`;
+        } else if (u.rol === "ingeniero") {
+          roleBadge = `<span class="badge badge-ingeniero">Ingeniero</span>`;
+        }
 
         const isMe = this.currentUser && this.currentUser.id === u.id;
 

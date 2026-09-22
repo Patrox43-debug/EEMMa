@@ -48,5 +48,15 @@
     "funcion": "Tecnico EEMM",
     "tecnico": "Jorge Ambrosetti",
     "rol": "tecnico"
+  },
+  {
+    "id": 6,
+    "nombre": "Esteban",
+    "rut": "22.222.222-2",
+    "correo": "esteban@eemm.cl",
+    "password": "1234",
+    "funcion": "Ingeniero Clinico",
+    "tecnico": "Esteban",
+    "rol": "ingeniero"
   }
 ]
