@@ -24,6 +24,13 @@ COPY . .
 # Crear directorios para datos y archivos subidos
 RUN mkdir -p /app/uploads /app/static /app/data
 
+# Variables de entorno por defecto para persistencia fuera del contenedor efímero
+ENV DB_PATH=/app/data/eemm.db
+ENV UPLOADS_DIR=/app/uploads
+
+# Declarar volúmenes persistentes para la base de datos y archivos subidos
+VOLUME ["/app/data", "/app/uploads"]
+
 # Puerto oficial de la aplicación en el contenedor
 EXPOSE 8000
 
