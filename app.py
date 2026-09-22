@@ -1028,12 +1028,16 @@ def get_chequeo_pdf(id_or_folio: str, download: bool = False):
         record = dict(row)
         pdf_bytes = generate_chequeo_pdf(record)
         disposition = "attachment" if download else "inline"
-        filename = f"Chequeo_EEMM_{record.get('id_registro')}_{record.get('serie') or 'SN'}.pdf"
+        id_clean = re.sub(r'[^0-9]', '', str(record.get('id_registro') or '1'))
+        raw_serie = str(record.get('serie') or 'SN').strip()
+        serie_clean = re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_serie).strip('_') or 'SN'
+        filename = f"Chequeo_EEMM_{id_clean}_{serie_clean}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
+                "Content-Type": "application/pdf",
                 "Cache-Control": "no-cache"
             }
         )
@@ -1276,14 +1280,18 @@ def get_revision_servicio_pdf(id_or_folio: str, download: bool = False):
             record["equipos"] = []
 
         pdf_bytes = generate_servicio_pdf(record)
-        folio_clean = str(record.get("folio", "REV")).replace(" ", "_").replace("/", "-")
+        raw_folio = str(record.get("folio") or record.get("id_revision") or "REV").strip()
+        folio_clean = re.sub(r'[^0-9]', '', raw_folio) or re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_folio).strip('_')
+        raw_unidad = str(record.get('unidad') or 'GENERAL').strip()
+        unidad_clean = re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_unidad).strip('_') or 'GENERAL'
         disposition = "attachment" if download else "inline"
-        filename = f"Reporte_Servicio_{folio_clean}_{record.get('unidad', 'GENERAL')}.pdf"
+        filename = f"Reporte_Servicio_{folio_clean}_{unidad_clean}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
+                "Content-Type": "application/pdf",
                 "Cache-Control": "no-cache"
             }
         )
@@ -1296,15 +1304,18 @@ def preview_revision_servicio_pdf(data: dict = Body(...), download: bool = False
     """Genera un PDF oficial de servicio directamente a partir del cuerpo JSON."""
     try:
         pdf_bytes = generate_servicio_pdf(data)
-        raw_folio = str(data.get("folio") or data.get("batch_id") or "REV")
-        folio_clean = re.sub(r'[^0-9]', '', raw_folio) or "REPORTE"
+        raw_folio = str(data.get("folio") or data.get("batch_id") or "REV").strip()
+        folio_clean = re.sub(r'[^0-9]', '', raw_folio) or re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_folio).strip('_')
+        raw_unidad = str(data.get('unidad') or 'GENERAL').strip()
+        unidad_clean = re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_unidad).strip('_') or 'GENERAL'
         disposition = "attachment" if download else "inline"
-        filename = f"Reporte_Servicio_{folio_clean}_{data.get('unidad', 'GENERAL')}.pdf"
+        filename = f"Reporte_Servicio_{folio_clean}_{unidad_clean}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
+                "Content-Type": "application/pdf",
                 "Cache-Control": "no-cache"
             }
         )

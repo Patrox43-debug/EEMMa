@@ -1978,12 +1978,135 @@ const app = {
     await this.downloadServicioPdf(idOrFolio, filename);
   },
 
+  /* ==========================================================================
+     MOTOR UNIVERSAL DE DESCARGA Y VISUALIZACIÓN DE PDF (MÓVIL, NATIVO Y WEB)
+     ========================================================================== */
+
+  async handlePdfDownloadOrView(url, filename, fallbackData = null) {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const hasAndroidBridge = !!(window.AndroidBridge && (typeof window.AndroidBridge.downloadPdf === "function" || typeof window.AndroidBridge.openPdfBase64 === "function"));
+
+    this.showToast("Generando reporte oficial PDF...", "info");
+
+    let fullDownloadUrl = url;
+    if (!fullDownloadUrl.includes("download=")) {
+      fullDownloadUrl += (fullDownloadUrl.includes("?") ? "&" : "?") + "download=true";
+    }
+
+    // 1. SI ESTAMOS EN LA APLICACIÓN NATIVA ANDROID (APK):
+    if (hasAndroidBridge) {
+      try {
+        const absoluteUrl = new URL(fullDownloadUrl, window.location.origin).href;
+        if (typeof window.AndroidBridge.downloadPdf === "function") {
+          window.AndroidBridge.downloadPdf(absoluteUrl, filename);
+          this.showToast("Descargando PDF en tu teléfono...", "success");
+          return;
+        }
+      } catch (bridgeErr) {
+        console.warn("AndroidBridge falló, intentando método estándar:", bridgeErr);
+      }
+    }
+
+    // 2. EN NAVEGADORES MÓVILES (Chrome Android, Safari iOS, etc.):
+    if (isMobile) {
+      try {
+        window.location.href = fullDownloadUrl;
+        this.showToast("Descargando archivo PDF en tu teléfono...", "success");
+        return;
+      } catch (mobErr) {
+        console.warn("Fallo redirección móvil directa, intentando fetch:", mobErr);
+      }
+    }
+
+    // 3. EN ESCRITORIO O FALLBACK DE CONTINGENCIA:
+    try {
+      let res = await fetch(fullDownloadUrl);
+      if (!res.ok && fallbackData) {
+        res = await fetch("/api/revisiones-servicio/pdf-preview?download=true", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fallbackData)
+        });
+      }
+
+      if (!res.ok) {
+        let errDetail = "No se pudo obtener el PDF del servidor";
+        try {
+          const j = await res.json();
+          if (j && j.detail) errDetail = j.detail;
+        } catch (_) {}
+        throw new Error(errDetail);
+      }
+
+      const blob = await res.blob();
+
+      // Si estamos en la app y tenemos openPdfBase64
+      if (hasAndroidBridge && typeof window.AndroidBridge.openPdfBase64 === "function") {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          window.AndroidBridge.openPdfBase64(reader.result, filename);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+
+      // En móviles si llegó aquí:
+      if (isMobile) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const win = window.open(blobUrl, "_blank");
+        if (!win) {
+          window.location.href = blobUrl;
+        }
+        this.showToast("Abriendo reporte PDF...", "success");
+        return;
+      }
+
+      // En computadores de escritorio:
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
+      a.download = filename || "Reporte_EEMM.pdf";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(blobUrl);
+        } catch (_) {}
+      }, 4000);
+      this.showToast("PDF descargado correctamente", "success");
+
+    } catch (err) {
+      console.error("Error al procesar PDF:", err);
+      if (isMobile) {
+        window.location.href = fullDownloadUrl;
+      } else {
+        this.showToast("Error al obtener PDF: " + (err.message || "Servidor no disponible"), "error");
+      }
+    }
+  },
+
+  async downloadCurrentServicioPdf() {
+    if (!this.currentActiveServicioReporte) {
+      this.showToast("No hay reporte de servicio seleccionado", "warning");
+      return;
+    }
+    const r = this.currentActiveServicioReporte;
+    const rawFolio = String(r.folio || r.batch_id || r.id_revision || "");
+    const numFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
+    const uniClean = (r.unidad || "GENERAL").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const filename = `Reporte_Servicio_${numFolio}_${uniClean}.pdf`;
+    const idOrFolio = r.id_revision || r.folio || r.batch_id || numFolio;
+    await this.downloadServicioPdf(idOrFolio, filename);
+  },
+
   async downloadServicioPdf(idOrFolio, filename) {
     const rawId = String(idOrFolio || "").trim();
     const cleanNum = rawId.replace(/\D/g, "");
     const fn = filename || `Reporte_Servicio_${cleanNum || rawId}.pdf`;
 
-    // 1. Localizar los datos de la revisión si están disponibles en memoria o caché
+    // Localizar posible objeto local
     let localItem = null;
     if (this.currentActiveServicioReporte) {
       const cur = this.currentActiveServicioReporte;
@@ -2011,7 +2134,7 @@ const app = {
       } catch (_) {}
     }
 
-    // 2. Si no tiene id_revision en la base de datos pero tenemos el objeto completo, sincronizarlo al servidor
+    // Si tiene datos locales pero no id_revision, sincronizar con el servidor en segundo plano
     if (localItem && !localItem.id_revision) {
       try {
         const syncRes = await fetch("/api/revisiones-servicio", {
@@ -2037,48 +2160,8 @@ const app = {
       } catch (_) {}
     }
 
-    this.showToast("Generando reporte PDF oficial...", "info");
-
-    // 3. Probar descarga estándar por GET
     const targetKey = (localItem && localItem.id_revision) ? localItem.id_revision : (cleanNum || rawId);
-    let success = false;
-    try {
-      const res = await fetch(`/api/revisiones-servicio/${targetKey}/pdf?download=true`);
-      if (res.ok) {
-        const blob = await res.blob();
-        this._saveBlobPdf(blob, fn);
-        success = true;
-        this.showToast("PDF descargado correctamente", "success");
-        return;
-      }
-    } catch (e) {
-      console.warn("Fallo GET de PDF en backend:", e);
-    }
-
-    // 4. Si el GET falló o no existe en SQLite pero tenemos el objeto local:
-    // Compilarlo al vuelo con /api/revisiones-servicio/pdf-preview
-    if (!success && localItem) {
-      try {
-        this.showToast("Compilando PDF oficial desde datos de revisión...", "info");
-        const resPreview = await fetch("/api/revisiones-servicio/pdf-preview?download=true", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(localItem)
-        });
-        if (resPreview.ok) {
-          const blob = await resPreview.blob();
-          this._saveBlobPdf(blob, fn);
-          this.showToast("PDF generado y descargado exitosamente", "success");
-          return;
-        }
-      } catch (previewErr) {
-        console.error("Error al generar PDF preview:", previewErr);
-      }
-    }
-
-    if (!success) {
-      this.showToast("No se pudo obtener el PDF de la revisión de servicio", "error");
-    }
+    await this.handlePdfDownloadOrView(`/api/revisiones-servicio/${targetKey}/pdf`, fn, localItem);
   },
 
   async downloadCurrentChequeoPdf() {
@@ -2098,68 +2181,11 @@ const app = {
     const cleanNum = rawId.replace(/\D/g, "");
     const fn = filename || `Chequeo_EEMM_${cleanNum || rawId}.pdf`;
     const targetKey = cleanNum || rawId;
-
-    try {
-      this.showToast("Generando reporte PDF oficial...", "info");
-      const res = await fetch(`/api/chequeos/${targetKey}/pdf?download=true`);
-      if (res.ok) {
-        const blob = await res.blob();
-        this._saveBlobPdf(blob, fn);
-        this.showToast("PDF descargado correctamente", "success");
-        return;
-      }
-      let errDetail = "No se pudo obtener el PDF del servidor";
-      try {
-        const j = await res.json();
-        if (j && j.detail) errDetail = j.detail;
-      } catch (_) {}
-      this.showToast(`Error al generar PDF: ${errDetail}`, "error");
-    } catch (err) {
-      console.error("Error al descargar chequeo PDF:", err);
-      this.showToast("Error de conexión al obtener PDF", "error");
-    }
-  },
-
-  _saveBlobPdf(blob, filename) {
-    try {
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = blobUrl;
-      a.download = filename || "Reporte_EEMM.pdf";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        try {
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(blobUrl);
-        } catch (_) {}
-      }, 4000);
-    } catch (err) {
-      console.error("Error al disparar descarga de blob:", err);
-      this.showToast("Error al guardar archivo en el dispositivo", "error");
-    }
+    await this.handlePdfDownloadOrView(`/api/chequeos/${targetKey}/pdf`, fn);
   },
 
   async downloadPdf(url, filename) {
-    try {
-      this.showToast("Generando documento PDF oficial...", "info");
-      const res = await fetch(url);
-      if (!res.ok) {
-        let errDetail = "No se pudo obtener el PDF del servidor";
-        try {
-          const j = await res.json();
-          if (j && j.detail) errDetail = j.detail;
-        } catch (_) {}
-        throw new Error(errDetail);
-      }
-      const blob = await res.blob();
-      this._saveBlobPdf(blob, filename);
-      this.showToast("PDF descargado correctamente", "success");
-    } catch (err) {
-      console.error("Error al descargar PDF:", err);
-      this.showToast("Error al obtener PDF: " + (err.message || "Servidor no disponible"), "error");
-    }
+    await this.handlePdfDownloadOrView(url, filename);
   },
 
   /* ==========================================================================

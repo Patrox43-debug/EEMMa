@@ -14,9 +14,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Base64;
+import android.media.MediaScannerConnection;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -46,6 +49,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.button.MaterialButton;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -151,6 +155,9 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
+        // Puente Javascript para descargas y visualización nativa de PDF
+        webView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
+
         // WebViewClient con interceptor para soporte 100% offline
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -205,13 +212,49 @@ public class MainActivity extends AppCompatActivity {
                 Uri uri = request.getUrl();
                 String path = uri.getPath();
 
-                // Interceptar peticiones de PDF para abrirlas con visor nativo o navegador
+                // Interceptar peticiones de PDF para descargarlas de forma nativa con DownloadManager
                 if (path != null && (path.endsWith("/pdf") || path.endsWith(".pdf") || path.contains("/pdf/"))) {
                     try {
-                        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-                        startActivity(intent);
-                        return true;
-                    } catch (Exception ignored) {
+                        String downloadUrl = uri.toString();
+                        if (!downloadUrl.contains("download=")) {
+                            downloadUrl += (downloadUrl.contains("?") ? "&" : "?") + "download=true";
+                        }
+                        DownloadManager.Request dmReq = new DownloadManager.Request(Uri.parse(downloadUrl));
+                        String fileName = "Reporte_EEMM_" + System.currentTimeMillis() + ".pdf";
+                        if (path.contains("revisiones-servicio")) {
+                            fileName = "Reporte_Servicio_" + System.currentTimeMillis() + ".pdf";
+                        } else if (path.contains("chequeo")) {
+                            fileName = "Chequeo_EEMM_" + System.currentTimeMillis() + ".pdf";
+                        }
+
+                        dmReq.setDescription("Descargando reporte oficial EEMM...");
+                        dmReq.setTitle(fileName);
+                        dmReq.setMimeType("application/pdf");
+                        dmReq.allowScanningByMediaScanner();
+                        dmReq.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                        dmReq.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+
+                        String cookies = CookieManager.getInstance().getCookie(uri.toString());
+                        if (cookies != null) {
+                            dmReq.addRequestHeader("Cookie", cookies);
+                        }
+                        dmReq.addRequestHeader("User-Agent", settings.getUserAgentString());
+
+                        DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                        if (dm != null) {
+                            dm.enqueue(dmReq);
+                            Toast.makeText(MainActivity.this, "Descargando reporte PDF...", Toast.LENGTH_SHORT).show();
+                            return true;
+                        }
+                    } catch (Exception e) {
+                        try {
+                            Intent intent = new Intent(Intent.ACTION_VIEW);
+                            intent.setDataAndType(uri, "application/pdf");
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(intent);
+                            return true;
+                        } catch (Exception ignored) {
+                        }
                     }
                 }
 
@@ -459,5 +502,93 @@ public class MainActivity extends AppCompatActivity {
             webView.destroy();
         }
         super.onDestroy();
+    }
+
+    public class AndroidBridge {
+        @JavascriptInterface
+        public void downloadPdf(String url, String filename) {
+            runOnUiThread(() -> {
+                try {
+                    String downloadUrl = url;
+                    if (!downloadUrl.contains("download=")) {
+                        downloadUrl += (downloadUrl.contains("?") ? "&" : "?") + "download=true";
+                    }
+                    DownloadManager.Request request = new DownloadManager.Request(Uri.parse(downloadUrl));
+                    String safeName = (filename != null && filename.endsWith(".pdf")) ? filename : "Reporte_EEMM_" + System.currentTimeMillis() + ".pdf";
+                    request.setDescription("Descargando reporte oficial EEMM...");
+                    request.setTitle(safeName);
+                    request.setMimeType("application/pdf");
+                    request.allowScanningByMediaScanner();
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, safeName);
+
+                    String cookies = CookieManager.getInstance().getCookie(downloadUrl);
+                    if (cookies != null) {
+                        request.addRequestHeader("Cookie", cookies);
+                    }
+                    request.addRequestHeader("User-Agent", webView.getSettings().getUserAgentString());
+
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm != null) {
+                        dm.enqueue(request);
+                        Toast.makeText(MainActivity.this, "Descargando: " + safeName, Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Error al iniciar descarga: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void openPdfBase64(String base64Data, String filename) {
+            runOnUiThread(() -> {
+                try {
+                    String cleanBase64 = base64Data;
+                    if (cleanBase64.contains(",")) {
+                        cleanBase64 = cleanBase64.substring(cleanBase64.indexOf(",") + 1);
+                    }
+                    byte[] pdfBytes = Base64.decode(cleanBase64, Base64.DEFAULT);
+
+                    File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    if (!dir.exists()) {
+                        dir.mkdirs();
+                    }
+                    String safeName = (filename != null && filename.endsWith(".pdf")) ? filename : "Reporte_EEMM_" + System.currentTimeMillis() + ".pdf";
+                    File file = new File(dir, safeName);
+                    try (FileOutputStream fos = new FileOutputStream(file)) {
+                        fos.write(pdfBytes);
+                        fos.flush();
+                    }
+
+                    MediaScannerConnection.scanFile(
+                            MainActivity.this,
+                            new String[]{file.getAbsolutePath()},
+                            new String[]{"application/pdf"},
+                            null
+                    );
+
+                    Uri fileUri = FileProvider.getUriForFile(
+                            MainActivity.this,
+                            getApplicationContext().getPackageName() + ".fileprovider",
+                            file
+                    );
+
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setDataAndType(fileUri, "application/pdf");
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                    Toast.makeText(MainActivity.this, "Abriendo reporte PDF...", Toast.LENGTH_SHORT).show();
+                    startActivity(Intent.createChooser(intent, "Abrir reporte PDF con"));
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Error al procesar PDF: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public boolean isNativeApp() {
+            return true;
+        }
     }
 }
