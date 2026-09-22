@@ -21,9 +21,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.background import BackgroundTask
 import csv
+import json
 from pydantic import BaseModel
 
-from pdf_generator import generate_chequeo_pdf
+from pdf_generator import generate_chequeo_pdf, generate_servicio_pdf
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.getenv("DB_PATH", os.path.join(BASE_DIR, "eemm.db"))
@@ -174,6 +175,27 @@ def ensure_db_initialized():
             nombre TEXT NOT NULL UNIQUE
         );
         """)
+
+        # 7. Tabla revisiones_servicio (Chequeos consolidados por servicio clínico)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS revisiones_servicio (
+            id_revision INTEGER PRIMARY KEY AUTOINCREMENT,
+            folio TEXT UNIQUE NOT NULL,
+            unidad TEXT NOT NULL,
+            fecha DATETIME NOT NULL,
+            usuario TEXT NOT NULL,
+            supervisor TEXT,
+            obs_general TEXT,
+            total_equipos INTEGER DEFAULT 0,
+            resumen_estados TEXT,
+            equipos_json TEXT,
+            firma_data TEXT,
+            firma_nombre TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rev_servicio_unidad ON revisiones_servicio(unidad);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rev_servicio_fecha ON revisiones_servicio(fecha);")
 
         # Sembrar usuarios por defecto si está vacía
         cursor.execute("SELECT COUNT(*) FROM perfiles")
@@ -383,6 +405,19 @@ class ChequeoCreate(BaseModel):
     firma: Optional[str] = None      # Data URI del canvas
     firma_nombre: Optional[str] = ""
     fecha: Optional[str] = None      # Fecha original en caso de guardado offline
+
+class ServicioRevisionCreate(BaseModel):
+    folio: Optional[str] = None
+    unidad: str
+    fecha: Optional[str] = None
+    usuario: Optional[str] = None
+    supervisor: Optional[str] = None
+    obs_general: Optional[str] = ""
+    total_equipos: Optional[int] = 0
+    resumen_estados: Optional[str] = ""
+    equipos: Optional[List[dict]] = []
+    firma: Optional[str] = None
+    firma_nombre: Optional[str] = ""
 
 # Rutas de Autenticación con RUT
 @app.post("/api/auth/login")
@@ -974,6 +1009,213 @@ def get_chequeo_pdf(id_reg: int):
         )
     except Exception as e:
         print(f"Error generando PDF para chequeo #{id_reg}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
+
+# ============================================================================
+# ENDPOINTS: REVISIONES CONSOLIDADAS POR SERVICIO CLÍNICO
+# ============================================================================
+
+@app.post("/api/revisiones-servicio")
+def create_revision_servicio(data: ServicioRevisionCreate):
+    """Guarda una revisión general consolidada por servicio clínico y sus equipos asociados."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    raw_folio = str(data.folio).strip() if data.folio else ""
+    numeric_folio = re.sub(r'[^0-9]', '', raw_folio)
+    folio = numeric_folio if numeric_folio else datetime.now().strftime("%Y%m%d%H%M%S")
+
+    firma_ruta = ""
+    if data.firma:
+        firma_ruta = save_base64_image(data.firma, "firma_servicio")
+
+    equipos_list = data.equipos or []
+    total_equipos = len(equipos_list)
+
+    # Procesar y normalizar fotos de equipos si vienen en base64
+    processed_equipos = []
+    for eq_idx, eq in enumerate(equipos_list):
+        eq_copy = dict(eq)
+        raw_fotos = eq.get("fotos") or []
+        saved_fotos = []
+        for f_idx, f_item in enumerate(raw_fotos):
+            if f_item and isinstance(f_item, str) and f_item.startswith("data:image"):
+                foto_path = save_base64_image(f_item, f"servicio_{folio}_eq_{eq_idx+1}_{f_idx+1}")
+                saved_fotos.append(foto_path or f_item)
+            elif f_item:
+                saved_fotos.append(f_item)
+        eq_copy["fotos"] = saved_fotos
+        processed_equipos.append(eq_copy)
+
+    # Resumen de estados
+    op_count = sum(1 for e in processed_equipos if "operativ" in str(e.get("estado", "")).lower() and "no" not in str(e.get("estado", "")).lower() and "fuera" not in str(e.get("estado", "")).lower())
+    maint_count = sum(1 for e in processed_equipos if "manten" in str(e.get("estado", "")).lower() or "espera" in str(e.get("estado", "")).lower())
+    resumen = data.resumen_estados or f"{op_count} Operativos" + (f", {maint_count} En Mantención" if maint_count else "")
+
+    equipos_json = json.dumps(processed_equipos, ensure_ascii=False)
+
+    cursor.execute("""
+        INSERT INTO revisiones_servicio (
+            folio, unidad, fecha, usuario, supervisor, obs_general,
+            total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """, (
+        folio,
+        data.unidad,
+        fecha_efectiva,
+        data.usuario or "Técnico EEMM",
+        data.supervisor or "Responsable del Servicio",
+        data.obs_general or "",
+        total_equipos,
+        resumen,
+        equipos_json,
+        firma_ruta,
+        data.firma_nombre or data.supervisor or data.usuario or ""
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "ok",
+        "id_revision": new_id,
+        "folio": folio,
+        "message": f"Revisión general de {data.unidad} registrada exitosamente",
+        "total_equipos": total_equipos
+    }
+
+@app.get("/api/revisiones-servicio")
+def get_revisiones_servicio(
+    unidad: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 50
+):
+    """Consulta el historial de revisiones generales consolidadas por servicio clínico."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    conditions = []
+    params = []
+
+    if unidad and unidad.strip():
+        conditions.append("LOWER(unidad) = LOWER(?)")
+        params.append(unidad.strip())
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        conditions.append("(folio LIKE ? OR usuario LIKE ? OR supervisor LIKE ? OR obs_general LIKE ?)")
+        params.extend([term, term, term, term])
+
+    where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+    query = f"""
+        SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
+               total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
+        FROM revisiones_servicio
+        {where_clause}
+        ORDER BY id_revision DESC
+        LIMIT ?
+    """
+    params.append(limit)
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    results = []
+    for r in rows:
+        d = dict(r)
+        if d.get("equipos_json"):
+            try:
+                d["equipos"] = json.loads(d["equipos_json"])
+            except Exception:
+                d["equipos"] = []
+        else:
+            d["equipos"] = []
+        results.append(d)
+
+    return results
+
+@app.get("/api/revisiones-servicio/{id_or_folio}")
+def get_revision_servicio_detail(id_or_folio: str):
+    """Obtiene el detalle completo de una revisión de servicio por ID o por Folio."""
+    conn = get_db()
+    cursor = conn.cursor()
+    if id_or_folio.isdigit():
+        cursor.execute("""
+            SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
+                   total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
+            FROM revisiones_servicio
+            WHERE id_revision = ?
+        """, (int(id_or_folio),))
+    else:
+        cursor.execute("""
+            SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
+                   total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
+            FROM revisiones_servicio
+            WHERE folio = ?
+        """, (id_or_folio,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Revisión de servicio no encontrada")
+
+    d = dict(row)
+    if d.get("equipos_json"):
+        try:
+            d["equipos"] = json.loads(d["equipos_json"])
+        except Exception:
+            d["equipos"] = []
+    else:
+        d["equipos"] = []
+    return d
+
+@app.get("/api/revisiones-servicio/{id_or_folio}/pdf")
+def get_revision_servicio_pdf(id_or_folio: str):
+    """Genera y descarga el reporte oficial en PDF de la revisión de servicio bajo demanda."""
+    conn = get_db()
+    cursor = conn.cursor()
+    if id_or_folio.isdigit():
+        cursor.execute("""
+            SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
+                   total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
+            FROM revisiones_servicio
+            WHERE id_revision = ?
+        """, (int(id_or_folio),))
+    else:
+        cursor.execute("""
+            SELECT id_revision, folio, unidad, fecha, usuario, supervisor, obs_general,
+                   total_equipos, resumen_estados, equipos_json, firma_data, firma_nombre, created_at
+            FROM revisiones_servicio
+            WHERE folio = ?
+        """, (id_or_folio,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Revisión de servicio no encontrada")
+
+    try:
+        record = dict(row)
+        if record.get("equipos_json"):
+            try:
+                record["equipos"] = json.loads(record["equipos_json"])
+            except Exception:
+                record["equipos"] = []
+        else:
+            record["equipos"] = []
+
+        pdf_bytes = generate_servicio_pdf(record)
+        folio_clean = str(record.get("folio", "REV")).replace(" ", "_").replace("/", "-")
+        filename = f"Reporte_Servicio_{folio_clean}_{record.get('unidad', 'GENERAL')}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename=\"{filename}\"",
+                "Cache-Control": "no-cache"
+            }
+        )
+    except Exception as e:
+        print(f"Error generando PDF para revisión de servicio {id_or_folio}: {e}")
         raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
 
 # Métricas para Panel de Administrador

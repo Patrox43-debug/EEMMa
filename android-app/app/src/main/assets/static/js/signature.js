@@ -1,6 +1,6 @@
 /**
  * EEMM - Módulo de Firma Digital en Canvas
- * Soporta mouse, lápiz stylus y pantallas táctiles con alta resolución.
+ * Soporta mouse, lápiz stylus y pantallas táctiles con alta resolución (Pointer Events).
  */
 
 class SignaturePad {
@@ -8,66 +8,93 @@ class SignaturePad {
     this.canvas = document.getElementById(canvasId);
     if (!this.canvas) return;
 
-    this.ctx = this.canvas.getContext("2d");
+    this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
     this.isDrawing = false;
     this.hasDrawn = false;
-    this.points = [];
+    this.dpr = window.devicePixelRatio || 1;
 
     this.initCanvas();
     this.bindEvents();
   }
 
   initCanvas() {
-    // Configurar resolución adecuada para pantallas Retina / High-DPI
+    if (!this.canvas) return;
     const rect = this.canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      // Si el elemento está oculto en el DOM, diferir hasta que se muestre
+      return;
+    }
+
     const dpr = window.devicePixelRatio || 1;
+    this.dpr = dpr;
 
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
-    this.ctx.scale(dpr, dpr);
+    // Preservar trazo si ya existía antes de redimensionar
+    let previousData = null;
+    if (this.hasDrawn && this.canvas.width > 0 && this.canvas.height > 0) {
+      try {
+        previousData = this.canvas.toDataURL("image/png");
+      } catch (e) {}
+    }
 
+    this.canvas.width = Math.round(rect.width * dpr);
+    this.canvas.height = Math.round(rect.height * dpr);
+
+    // Resetear y fijar transformación sin multiplicar escalas acumuladas
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.updateStrokeStyle();
+
+    if (previousData) {
+      const img = new Image();
+      img.onload = () => {
+        this.ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      };
+      img.src = previousData;
+    }
   }
 
   updateStrokeStyle() {
+    if (!this.ctx) return;
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    this.ctx.strokeStyle = isDark ? "#60a5fa" : "#1e3a8a"; // Tono azul según el tema
+    this.ctx.strokeStyle = isDark ? "#60a5fa" : "#1e3a8a"; // Azul visible según tema
     this.ctx.lineWidth = 2.5;
     this.ctx.lineCap = "round";
     this.ctx.lineJoin = "round";
   }
 
   bindEvents() {
-    // Eventos Mouse
-    this.canvas.addEventListener("mousedown", (e) => this.startDrawing(e));
-    window.addEventListener("mousemove", (e) => this.draw(e));
-    window.addEventListener("mouseup", () => this.stopDrawing());
+    if (!this.canvas) return;
+    this.canvas.style.touchAction = "none";
 
-    // Eventos Touch (Móviles y Tablets)
-    this.canvas.addEventListener("touchstart", (e) => {
+    // Pointer Events (Mouse, Touch y Stylus unificados nativamente)
+    this.canvas.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      this.startDrawing(e.touches[0]);
-    }, { passive: false });
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch (err) {}
+      this.startDrawing(e);
+    });
 
-    window.addEventListener("touchmove", (e) => {
-      if (this.isDrawing && e.touches.length > 0) {
-        e.preventDefault();
-        this.draw(e.touches[0]);
+    this.canvas.addEventListener("pointermove", (e) => {
+      if (!this.isDrawing) return;
+      e.preventDefault();
+      this.draw(e);
+    });
+
+    const handlePointerEnd = (e) => {
+      if (this.isDrawing) {
+        try {
+          this.canvas.releasePointerCapture(e.pointerId);
+        } catch (err) {}
+        this.stopDrawing();
       }
-    }, { passive: false });
+    };
 
-    window.addEventListener("touchend", () => this.stopDrawing());
+    this.canvas.addEventListener("pointerup", handlePointerEnd);
+    this.canvas.addEventListener("pointercancel", handlePointerEnd);
 
     // Redimensionar si cambia el tamaño de la ventana
     window.addEventListener("resize", () => {
-      // Guardar trazo actual antes de redimensionar
-      const data = this.toDataURL();
       this.initCanvas();
-      if (this.hasDrawn && data) {
-        const img = new Image();
-        img.onload = () => this.ctx.drawImage(img, 0, 0, this.canvas.clientWidth, this.canvas.clientHeight);
-        img.src = data;
-      }
     });
   }
 
@@ -80,9 +107,8 @@ class SignaturePad {
   }
 
   startDrawing(e) {
-    const rect = this.canvas.getBoundingClientRect();
-    if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
-      return;
+    if (this.canvas.width === 0 || this.canvas.height === 0) {
+      this.initCanvas();
     }
     this.isDrawing = true;
     this.hasDrawn = true;
@@ -107,8 +133,13 @@ class SignaturePad {
   }
 
   clear() {
-    const dpr = window.devicePixelRatio || 1;
-    this.ctx.clearRect(0, 0, this.canvas.width / dpr, this.canvas.height / dpr);
+    if (!this.canvas || !this.ctx) return;
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.restore();
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.updateStrokeStyle();
     this.hasDrawn = false;
   }
 
@@ -119,5 +150,9 @@ class SignaturePad {
   toDataURL() {
     if (this.isEmpty()) return null;
     return this.canvas.toDataURL("image/png");
+  }
+
+  getSignatureData() {
+    return this.toDataURL();
   }
 }

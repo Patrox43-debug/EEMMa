@@ -4,39 +4,48 @@
  */
 
 class PhotoManager {
-  constructor(containerId) {
+  constructor(containerId, maxPhotos = 4, customLabels = null) {
     this.container = document.getElementById(containerId);
-    this.photos = [null, null, null, null];
+    this.maxPhotos = maxPhotos;
+    this.customLabels = customLabels;
+    this.photos = new Array(maxPhotos).fill(null);
     this.initSlots();
   }
 
   initSlots() {
     if (!this.container) return;
     this.container.innerHTML = "";
+    this.photos = new Array(this.maxPhotos).fill(null);
 
-    for (let i = 0; i < 4; i++) {
+    const prefix = this.container.id || "pm";
+
+    for (let i = 0; i < this.maxPhotos; i++) {
       const slot = document.createElement("div");
       slot.className = "photo-slot";
       slot.dataset.index = i;
 
+      const labelText = (this.customLabels && this.customLabels[i]) 
+        ? this.customLabels[i] 
+        : `Foto #${i + 1}`;
+
       slot.innerHTML = `
-        <input type="file" accept="image/*" style="display:none;" id="file-slot-${i}">
-        <div class="photo-placeholder" id="placeholder-${i}">
+        <input type="file" accept="image/*" style="display:none;" id="${prefix}-file-slot-${i}">
+        <div class="photo-placeholder" id="${prefix}-placeholder-${i}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
             <circle cx="12" cy="13" r="4"></circle>
           </svg>
-          <p>Foto #${i + 1}</p>
+          <p>${labelText}</p>
         </div>
-        <img id="img-preview-${i}" style="display:none;" alt="Foto ${i + 1}">
-        <button type="button" class="photo-remove-btn" id="btn-remove-${i}" style="display:none;" title="Eliminar foto">✕</button>
+        <img id="${prefix}-img-preview-${i}" style="display:none;" alt="${labelText}">
+        <button type="button" class="photo-remove-btn" id="${prefix}-btn-remove-${i}" style="display:none;" title="Eliminar foto">✕</button>
         <span class="photo-badge">#${i + 1}</span>
       `;
 
-      const fileInput = slot.querySelector(`#file-slot-${i}`);
-      const previewImg = slot.querySelector(`#img-preview-${i}`);
-      const placeholder = slot.querySelector(`#placeholder-${i}`);
-      const removeBtn = slot.querySelector(`#btn-remove-${i}`);
+      const fileInput = slot.querySelector(`#${prefix}-file-slot-${i}`);
+      const previewImg = slot.querySelector(`#${prefix}-img-preview-${i}`);
+      const placeholder = slot.querySelector(`#${prefix}-placeholder-${i}`);
+      const removeBtn = slot.querySelector(`#${prefix}-btn-remove-${i}`);
 
       // Click para cargar foto
       slot.addEventListener("click", (e) => {

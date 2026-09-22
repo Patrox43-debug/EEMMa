@@ -12,6 +12,19 @@ const app = {
   currentModule: "chequeo",
   debounceTimers: {},
 
+  // Estado para Chequeo por Servicio
+  servicioSelectedEquipment: null,
+  servicioPhotoManager: null,
+  servicioSignaturePad: null,
+  selectedServicioClinico: "",
+  servicioBatchEquipos: [],
+  servicioSessionList: [],
+  servicioChecklistValues: {},
+  servicioCurrentCategory: null,
+
+  currentHistorialTab: "equipos",
+  historialServiciosData: [],
+
   currentCategory: "GENERAL",
   currentChecklistItems: [],
   checklistValues: {},
@@ -147,12 +160,21 @@ const app = {
     this.renderPlaceholderChecklist();
     this.loadUnidades();
 
-    // Inicializar manejador de fotos y firma
+    // Inicializar manejador de fotos y firma (Chequeo General)
     this.photoManager = new PhotoManager("photos-container");
     this.signaturePad = new SignaturePad("signature-canvas");
 
-    // Configurar buscador con autocompletado
+    // Inicializar manejador de fotos y firma para Chequeo por Servicio (2 fotos por equipo)
+    this.servicioPhotoManager = new PhotoManager("servicio-photos-container", 2, [
+      "Foto 1: Frontal / General",
+      "Foto 2: Placa / Detalle"
+    ]);
+    this.servicioSignaturePad = new SignaturePad("servicio-signature-canvas");
+
+    // Configurar buscadores con autocompletado
     this.initAutocomplete();
+    this.initServicioAutocomplete();
+    this.renderPlaceholderServicioChecklist();
 
     // Verificar sesión previa guardada
     const savedUser = localStorage.getItem("eemm_user");
@@ -366,7 +388,7 @@ const app = {
     this.activeTab = tabName;
 
     // Ocultar todas las vistas
-    const views = ["login", "modulo-selector", "chequeo", "historial", "equipos", "admin", "inventario"];
+    const views = ["login", "modulo-selector", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario"];
     views.forEach((v) => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = v === tabName ? "block" : "none";
@@ -380,7 +402,7 @@ const app = {
       // Mantener sincronizado el módulo activo según la pestaña navegada
       if (tabName === "inventario") {
         this.currentModule = "bodega";
-      } else if (tabName === "chequeo" || tabName === "historial" || tabName === "equipos") {
+      } else if (tabName === "chequeo" || tabName === "chequeo-servicio" || tabName === "historial" || tabName === "equipos") {
         this.currentModule = "chequeo";
       }
       this.updateModuleSwitcherUI();
@@ -397,7 +419,7 @@ const app = {
 
     // Cargar datos según la vista
     if (tabName === "historial") {
-      this.loadHistorial();
+      this.refreshCurrentHistorialTab();
     } else if (tabName === "equipos") {
       this.loadEquiposCatalog();
     } else if (tabName === "admin") {
@@ -407,6 +429,11 @@ const app = {
     } else if (tabName === "chequeo" && this.signaturePad) {
       // Reajustar canvas para tamaño correcto
       setTimeout(() => this.signaturePad.initCanvas(), 100);
+    } else if (tabName === "chequeo-servicio") {
+      this.loadChequeoServicio();
+      if (this.servicioSignaturePad) {
+        setTimeout(() => this.servicioSignaturePad.initCanvas(), 100);
+      }
     }
   },
 
@@ -822,8 +849,10 @@ const app = {
       
       const select = document.getElementById("select-unidad");
       const filtro = document.getElementById("filtro-historial-unidad");
+      const selectServicio = document.getElementById("select-servicio-clinico");
       if (select) select.innerHTML = '<option value="">-- Seleccionar Servicio / Unidad --</option>';
       if (filtro) filtro.innerHTML = '<option value="">Todas las Unidades</option>';
+      if (selectServicio) selectServicio.innerHTML = '<option value="">-- Selecciona el Servicio Clínico --</option>';
       
       unidades.forEach((u) => {
         if (select) {
@@ -838,7 +867,17 @@ const app = {
           opt2.textContent = u;
           filtro.appendChild(opt2);
         }
+        if (selectServicio) {
+          const opt3 = document.createElement("option");
+          opt3.value = u;
+          opt3.textContent = u;
+          selectServicio.appendChild(opt3);
+        }
       });
+
+      if (selectServicio && this.selectedServicioClinico) {
+        selectServicio.value = this.selectedServicioClinico;
+      }
     } catch (e) {
       console.error("Error cargando unidades:", e);
     }
@@ -1173,6 +1212,927 @@ const app = {
   },
 
   /* ==========================================================================
+     CHEQUEO POR SERVICIO CLÍNICO (Por Lote y Reporte Consolidado)
+     ========================================================================== */
+  loadChequeoServicio() {
+    const badge = document.getElementById("servicio-tecnico-badge");
+    if (badge && this.currentUser) {
+      badge.textContent = this.currentUser.nombre;
+    }
+    this.renderServicioBatchUI();
+    if (this.servicioSignaturePad) {
+      setTimeout(() => this.servicioSignaturePad.initCanvas(), 100);
+    }
+  },
+
+  onServicioClinicoChange() {
+    const select = document.getElementById("select-servicio-clinico");
+    const newService = select ? select.value.trim() : "";
+
+    if (this.servicioBatchEquipos.length > 0 && this.selectedServicioClinico && newService !== this.selectedServicioClinico) {
+      const confirmChange = confirm(
+        `Tienes ${this.servicioBatchEquipos.length} equipo(s) acumulados en la revisión activa de "${this.selectedServicioClinico}".\n\n¿Deseas cambiar de servicio y reiniciar la revisión actual?`
+      );
+      if (!confirmChange) {
+        if (select) select.value = this.selectedServicioClinico;
+        return;
+      }
+      this.servicioBatchEquipos = [];
+    }
+
+    this.selectedServicioClinico = newService;
+    this.renderServicioBatchUI();
+  },
+
+  initServicioAutocomplete() {
+    const input = document.getElementById("input-servicio-equipo-search");
+    const dropdown = document.getElementById("servicio-autocomplete-list");
+    if (!input || !dropdown) return;
+
+    input.addEventListener("input", () => {
+      clearTimeout(this.debounceTimers.servicioEquipos);
+      const val = input.value.trim();
+
+      if (val.length < 2) {
+        dropdown.style.display = "none";
+        return;
+      }
+
+      this.debounceTimers.servicioEquipos = setTimeout(async () => {
+        let equipos = [];
+        if (window.OfflineManager && window.OfflineManager.isOnline) {
+          try {
+            const res = await fetch(`/api/equipos?q=${encodeURIComponent(val)}&limit=15`);
+            if (res.ok) equipos = await res.json();
+          } catch (e) {
+            // fallback
+          }
+        }
+
+        if (!equipos || equipos.length === 0) {
+          equipos = this.searchEquiposOffline(val);
+        }
+
+        this.renderServicioAutocomplete(equipos, dropdown);
+      }, 150);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = "none";
+      }
+    });
+  },
+
+  renderServicioAutocomplete(equipos, dropdown) {
+    dropdown.innerHTML = "";
+    if (!equipos || equipos.length === 0) {
+      const item = document.createElement("div");
+      item.className = "autocomplete-item";
+      item.style.color = "var(--text-tertiary)";
+      item.textContent = "No se encontraron equipos coincidentes";
+      dropdown.appendChild(item);
+      dropdown.style.display = "block";
+      return;
+    }
+
+    equipos.slice(0, 10).forEach((eq) => {
+      const item = document.createElement("div");
+      item.className = "autocomplete-item";
+      const serie = eq.serie ? String(eq.serie).trim() : "S/N";
+      const marca = eq.marca ? String(eq.marca).trim() : "";
+      const modelo = eq.modelo ? String(eq.modelo).trim() : "";
+      const infoMarcaModelo = [marca, modelo].filter(Boolean).join(" - ");
+
+      item.innerHTML = `
+        <div class="ac-title">${eq.nombre || "Equipo Médico"}</div>
+        <div class="ac-meta">
+          <span>${infoMarcaModelo || "Sin marca/modelo"}</span>
+          <span>•</span>
+          <span style="font-family: var(--font-mono); color: var(--primary);">Serie: ${serie}</span>
+          <span>•</span>
+          <span class="badge" style="font-size: 0.65rem;">${eq.categoria || "GENERAL"}</span>
+        </div>
+      `;
+
+      item.addEventListener("click", () => {
+        this.selectServicioEquipment(eq);
+        dropdown.style.display = "none";
+      });
+
+      dropdown.appendChild(item);
+    });
+
+    dropdown.style.display = "block";
+  },
+
+  selectServicioEquipment(equipo) {
+    this.servicioSelectedEquipment = equipo;
+
+    const input = document.getElementById("input-servicio-equipo-search");
+    if (input) input.value = `${equipo.nombre} (S/N: ${equipo.serie || "S/N"})`;
+
+    const card = document.getElementById("servicio-selected-equipment-card");
+    if (card) {
+      document.getElementById("servicio-preview-nombre").textContent = equipo.nombre || "-";
+      document.getElementById("servicio-preview-marca-modelo").textContent = `${equipo.marca || ""} ${equipo.modelo || ""}`.trim() || "-";
+      document.getElementById("servicio-preview-serie").textContent = equipo.serie || "S/N";
+      document.getElementById("servicio-preview-categoria").textContent = equipo.categoria || "GENERAL";
+      document.getElementById("servicio-preview-estado").textContent = equipo.estado || "Operativo";
+      card.style.display = "grid";
+    }
+
+    // Cargar pauta preventiva por categoría
+    this.renderServicioChecklist(equipo.categoria || "GENERAL");
+  },
+
+  renderServicioChecklist(categoria) {
+    this.servicioCurrentCategory = categoria;
+    const cat = categoria ? categoria.toUpperCase() : "GENERAL";
+    const items = this.pautasPorCategoria[cat] || this.pautasPorCategoria["GENERAL"] || [];
+
+    const badge = document.getElementById("servicio-checklist-category-badge");
+    if (badge) {
+      badge.textContent = cat;
+      badge.className = "badge badge-primary";
+    }
+
+    const hint = document.getElementById("servicio-checklist-count-hint");
+    if (hint) {
+      hint.textContent = `${items.length} puntos técnicos verificados`;
+    }
+
+    const container = document.getElementById("servicio-checklist-container");
+    if (!container) return;
+
+    container.innerHTML = "";
+    this.servicioChecklistValues = {};
+
+    items.forEach((item, idx) => {
+      this.servicioChecklistValues[item] = "OK";
+
+      const div = document.createElement("div");
+      div.className = "checklist-item checked-ok";
+
+      div.innerHTML = `
+        <label class="custom-checkbox" style="flex: 1; cursor: pointer;">
+          <input type="checkbox" id="chk-srv-${idx}" checked>
+          <span class="chk-label" style="font-size: 0.8rem; font-weight: 500;">${item}</span>
+        </label>
+        <span class="chk-status" id="chk-srv-status-${idx}" style="font-size: 0.72rem; color: var(--success); font-weight: 600;">OK</span>
+      `;
+
+      const inputChk = div.querySelector(`#chk-srv-${idx}`);
+      const statusSpan = div.querySelector(`#chk-srv-status-${idx}`);
+
+      inputChk.addEventListener("change", (e) => {
+        if (e.target.checked) {
+          this.servicioChecklistValues[item] = "OK";
+          div.className = "checklist-item checked-ok";
+          statusSpan.textContent = "OK";
+          statusSpan.style.color = "var(--success)";
+        } else {
+          this.servicioChecklistValues[item] = "NO_CONFORME";
+          div.className = "checklist-item checked-nok";
+          statusSpan.textContent = "OBSERVADO";
+          statusSpan.style.color = "var(--danger)";
+        }
+      });
+
+      container.appendChild(div);
+    });
+  },
+
+  renderPlaceholderServicioChecklist() {
+    this.servicioCurrentCategory = null;
+    this.servicioChecklistValues = {};
+
+    const badge = document.getElementById("servicio-checklist-category-badge");
+    if (badge) {
+      badge.textContent = "Sin equipo seleccionado";
+      badge.className = "badge";
+    }
+
+    const hint = document.getElementById("servicio-checklist-count-hint");
+    if (hint) hint.textContent = "";
+
+    const container = document.getElementById("servicio-checklist-container");
+    if (container) {
+      container.innerHTML = `
+        <div style="grid-column: 1 / -1; padding: 1rem; text-align: center; color: var(--text-tertiary); font-size: 0.8rem; background: var(--surface-secondary); border-radius: var(--radius-md);">
+          Busca y selecciona un equipo para cargar automáticamente su pauta técnica preventiva.
+        </div>
+      `;
+    }
+  },
+
+  clearServicioSignature() {
+    if (this.servicioSignaturePad) {
+      this.servicioSignaturePad.clear();
+    }
+  },
+
+  resetChequeoServicioForm() {
+    this.servicioSelectedEquipment = null;
+    const input = document.getElementById("input-servicio-equipo-search");
+    if (input) input.value = "";
+
+    const card = document.getElementById("servicio-selected-equipment-card");
+    if (card) card.style.display = "none";
+
+    const obs = document.getElementById("input-servicio-obs");
+    if (obs) obs.value = "";
+
+    this.renderPlaceholderServicioChecklist();
+
+    if (this.servicioPhotoManager) {
+      this.servicioPhotoManager.clearAll();
+    }
+  },
+
+  addEquipmentToServicioBatch(e) {
+    e.preventDefault();
+
+    const selectServicio = document.getElementById("select-servicio-clinico");
+    const unidad = selectServicio ? selectServicio.value.trim() : "";
+    if (!unidad) {
+      this.showToast("Por favor selecciona primero el Servicio Clínico en la parte superior.", "error");
+      if (selectServicio) selectServicio.focus();
+      return;
+    }
+
+    if (!this.servicioSelectedEquipment) {
+      this.showToast("Por favor busca y selecciona el equipo médico a inspeccionar.", "error");
+      const searchInput = document.getElementById("input-servicio-equipo-search");
+      if (searchInput) searchInput.focus();
+      return;
+    }
+
+    const fotos = this.servicioPhotoManager ? this.servicioPhotoManager.getPhotos().filter(Boolean) : [];
+    if (fotos.length < 2) {
+      const confirmOk = confirm(
+        `Has adjuntado ${fotos.length} de 2 fotografías para este equipo.\n\n¿Deseas agregarlo a la revisión con las fotos actuales?`
+      );
+      if (!confirmOk) return;
+    }
+
+    const estadoEquipo = document.getElementById("select-servicio-estado-equipo") ? document.getElementById("select-servicio-estado-equipo").value : "Operativo";
+    const condicion = document.getElementById("select-servicio-condicion") ? document.getElementById("select-servicio-condicion").value : "Conforme";
+    const obsInput = document.getElementById("input-servicio-obs") ? document.getElementById("input-servicio-obs").value.trim() : "";
+
+    const item = {
+      id_lote: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      id_equipo: this.servicioSelectedEquipment.id_equipo || null,
+      nombre: this.servicioSelectedEquipment.nombre,
+      marca: this.servicioSelectedEquipment.marca || "",
+      modelo: this.servicioSelectedEquipment.modelo || "",
+      serie: this.servicioSelectedEquipment.serie || "S/N",
+      categoria: this.servicioSelectedEquipment.categoria || "GENERAL",
+      estado: estadoEquipo,
+      condicion: condicion,
+      puntos_control: { ...this.servicioChecklistValues },
+      observaciones: obsInput,
+      fotos: [...fotos],
+      timestamp: new Date().toISOString()
+    };
+
+    this.servicioBatchEquipos.push(item);
+    this.showToast(`✅ Equipo "${item.nombre}" agregado a la revisión (${this.servicioBatchEquipos.length} en total)`, "success");
+
+    // Limpiar formulario para chequear otro equipo
+    this.resetChequeoServicioForm();
+    this.renderServicioBatchUI();
+  },
+
+  removeEquipmentFromServicioBatch(index) {
+    if (index >= 0 && index < this.servicioBatchEquipos.length) {
+      const removed = this.servicioBatchEquipos.splice(index, 1);
+      this.showToast(`Equipo "${removed[0].nombre}" eliminado de la revisión.`, "info");
+      this.renderServicioBatchUI();
+    }
+  },
+
+  renderServicioBatchUI() {
+    const counterPill = document.getElementById("servicio-counter-pill");
+    const counterText = document.getElementById("servicio-counter-text");
+    const batchCountSpan = document.getElementById("servicio-batch-count");
+    const statusHint = document.getElementById("servicio-batch-status-hint");
+    const batchListContainer = document.getElementById("servicio-batch-list");
+
+    const count = this.servicioBatchEquipos.length;
+    if (batchCountSpan) batchCountSpan.textContent = count;
+
+    if (counterPill && counterText) {
+      if (this.selectedServicioClinico) {
+        counterPill.style.display = "inline-flex";
+        counterText.textContent = `${count} equipo(s) en revisión de ${this.selectedServicioClinico}`;
+      } else {
+        counterPill.style.display = "none";
+      }
+    }
+
+    if (statusHint) {
+      statusHint.textContent = count > 0 
+        ? `${count} equipo(s) listos para guardado general y reporte oficial` 
+        : "Agrega equipos para incluirlos en el reporte consolidado";
+    }
+
+    if (batchListContainer) {
+      if (count === 0) {
+        batchListContainer.innerHTML = `
+          <div style="text-align: center; padding: 2rem 1rem; color: var(--text-tertiary); background: var(--surface-secondary); border-radius: var(--radius-md);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 0.5rem; opacity: 0.6;"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            <p style="font-size: 0.88rem; font-weight: 500; margin: 0;">Aún no has agregado equipos a esta revisión</p>
+            <p style="font-size: 0.75rem; margin: 4px 0 0 0;">Usa el formulario superior para inspeccionar y agregar equipos uno a uno.</p>
+          </div>
+        `;
+      } else {
+        batchListContainer.innerHTML = "";
+        this.servicioBatchEquipos.forEach((eq, idx) => {
+          const card = document.createElement("div");
+          card.className = "batch-item-card";
+
+          const badgeState = eq.estado === "Operativo" ? "badge-success" : (eq.estado === "En Mantención" ? "badge-warning" : "badge-secondary");
+          const infoMarcaModelo = [eq.marca, eq.modelo].filter(Boolean).join(" - ");
+
+          let thumbsHtml = "";
+          if (eq.fotos && eq.fotos.length > 0) {
+            thumbsHtml = `<div class="batch-item-thumbs">` + 
+              eq.fotos.map((f, fIdx) => `<img src="${f}" class="batch-thumb-img" title="Foto ${fIdx + 1}: ${eq.nombre}" alt="Foto">`).join("") +
+              `</div>`;
+          } else {
+            thumbsHtml = `<span style="font-size: 0.7rem; color: var(--text-tertiary);">Sin fotos</span>`;
+          }
+
+          card.innerHTML = `
+            <div class="batch-item-info">
+              <div class="batch-item-num">#${idx + 1}</div>
+              <div class="batch-item-details">
+                <h4>${eq.nombre}</h4>
+                <p>
+                  <span>${infoMarcaModelo || "Sin marca/modelo"}</span> • 
+                  <code style="font-family: var(--font-mono); color: var(--primary);">S/N: ${eq.serie}</code> • 
+                  <span class="badge" style="font-size: 0.65rem;">${eq.categoria}</span>
+                </p>
+                <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+                  <span class="badge ${badgeState}">${eq.estado}</span>
+                  <span class="badge" style="font-size: 0.68rem;">Condición: ${eq.condicion}</span>
+                  ${eq.observaciones ? `<span style="font-size: 0.72rem; color: var(--text-secondary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">"${eq.observaciones}"</span>` : ""}
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.85rem;">
+              ${thumbsHtml}
+              <button type="button" class="btn btn-outline btn-xs" onclick="app.removeEquipmentFromServicioBatch(${idx})" style="color: var(--danger); border-color: var(--border-subtle); display: inline-flex; align-items: center; gap: 4px;" title="Quitar equipo de la revisión">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                Quitar
+              </button>
+            </div>
+          `;
+
+          batchListContainer.appendChild(card);
+        });
+      }
+    }
+
+    // Inicializar o ajustar resolución del canvas de firma
+    if (this.servicioSignaturePad) {
+      setTimeout(() => this.servicioSignaturePad.initCanvas(), 60);
+    }
+  },
+
+  async submitGeneralServicioRevision() {
+    const selectServicio = document.getElementById("select-servicio-clinico");
+    const unidad = selectServicio ? selectServicio.value.trim() : "";
+
+    if (!unidad) {
+      this.showToast("Por favor selecciona el Servicio Clínico en la parte superior.", "error");
+      if (selectServicio) selectServicio.focus();
+      return;
+    }
+
+    if (!this.servicioBatchEquipos || this.servicioBatchEquipos.length === 0) {
+      this.showToast("Debes inspeccionar y agregar al menos un equipo antes de finalizar la revisión general.", "warning");
+      const inputSearch = document.getElementById("input-servicio-equipo-search");
+      if (inputSearch) inputSearch.focus();
+      return;
+    }
+
+    if (!this.servicioSignaturePad || this.servicioSignaturePad.isEmpty()) {
+      this.showToast("Por favor dibuja la firma digital antes de finalizar la revisión.", "error");
+      return;
+    }
+
+    const btnSubmit = document.getElementById("btn-submit-general-revision");
+    if (btnSubmit) {
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        <span>Guardando Revisión y Generando Reporte...</span>
+      `;
+    }
+
+    try {
+      const firmaData = this.servicioSignaturePad.getSignatureData();
+      const firmaNombre = document.getElementById("input-servicio-firma-nombre") ? document.getElementById("input-servicio-firma-nombre").value.trim() : "";
+      const obsGeneral = document.getElementById("input-servicio-obs-general") ? document.getElementById("input-servicio-obs-general").value.trim() : "";
+      const batchId = "REV-" + Date.now();
+      const tecnicoNombre = this.currentUser ? this.currentUser.nombre : "Técnico EEMM";
+      const fechaNow = new Date().toISOString();
+
+      // Guardar cada equipo del lote en la base de datos o cola offline
+      let savedCount = 0;
+      for (const eq of this.servicioBatchEquipos) {
+        const fullObs = `[Revisión Servicio: ${unidad}] [Lote: ${batchId}] [Condición: ${eq.condicion}] ${eq.observaciones} ${obsGeneral ? `(Nota General: ${obsGeneral})` : ""}`.trim();
+        
+        const payload = {
+          id_equipo: eq.id_equipo || null,
+          nombre_equipo: eq.nombre,
+          marca: eq.marca || "",
+          modelo: eq.modelo || "",
+          serie: eq.serie || "S/N",
+          unidad: unidad,
+          categoria: eq.categoria || "GENERAL",
+          respuestas: eq.puntos_control,
+          obs: fullObs,
+          fotos: eq.fotos || [],
+          firma: firmaData,
+          firma_nombre: firmaNombre || tecnicoNombre,
+          fecha: eq.timestamp || fechaNow
+        };
+
+        const extraInfo = {
+          equipo: payload.nombre_equipo,
+          serie: payload.serie,
+          unidad: payload.unidad,
+          categoria: payload.categoria,
+          usuario: tecnicoNombre,
+          fecha: payload.fecha,
+          fotosCount: (payload.fotos || []).length,
+          hasFirma: !!firmaData
+        };
+
+        if (window.OfflineManager && !window.OfflineManager.isOnline) {
+          await window.OfflineManager.queueRequest("chequeo", "/api/chequeos", "POST", payload, extraInfo);
+          savedCount++;
+        } else {
+          try {
+            const res = await fetch("/api/chequeos", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) savedCount++;
+          } catch (netErr) {
+            if (window.OfflineManager) {
+              await window.OfflineManager.queueRequest("chequeo", "/api/chequeos", "POST", payload, extraInfo);
+              savedCount++;
+            }
+          }
+        }
+      }
+
+      // Preparar objeto de reporte consolidado (Folio estrictamente numérico)
+      const now = new Date();
+      const folioGen = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+      const reporteConsolidado = {
+        folio: folioGen,
+        batch_id: folioGen,
+        unidad: unidad,
+        fecha: fechaNow,
+        tecnico: tecnicoNombre,
+        supervisor: firmaNombre || "Responsable de Servicio",
+        obs_general: obsGeneral,
+        firma: firmaData,
+        firma_nombre: firmaNombre || tecnicoNombre,
+        total_equipos: this.servicioBatchEquipos.length,
+        equipos: [...this.servicioBatchEquipos]
+      };
+
+      // Registrar la revisión consolidada en el servidor (o caché local si offline)
+      try {
+        const revRes = await fetch("/api/revisiones-servicio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reporteConsolidado)
+        });
+        if (revRes.ok) {
+          const revJson = await revRes.json();
+          reporteConsolidado.id_revision = revJson.id_revision;
+          reporteConsolidado.folio = revJson.folio || folioGen;
+        }
+      } catch (revErr) {
+        console.warn("Modo sin conexión: guardando revisión consolidada en caché local", revErr);
+      }
+
+      // Guardar copia local para consulta offline inmediata
+      try {
+        const localRevs = JSON.parse(localStorage.getItem("local_revisiones_servicio") || "[]");
+        localRevs.unshift(reporteConsolidado);
+        localStorage.setItem("local_revisiones_servicio", JSON.stringify(localRevs.slice(0, 100)));
+      } catch (e) {}
+
+      this.showToast(`¡Revisión de ${unidad} guardada con éxito! Se registraron ${this.servicioBatchEquipos.length} equipos.`, "success");
+
+      // Abrir reporte consolidado
+      this.openServicioReporteModal(reporteConsolidado);
+
+      // Reiniciar lote para la siguiente revisión
+      this.servicioBatchEquipos = [];
+      if (document.getElementById("input-servicio-obs-general")) document.getElementById("input-servicio-obs-general").value = "";
+      if (document.getElementById("input-servicio-firma-nombre")) document.getElementById("input-servicio-firma-nombre").value = "";
+      this.clearServicioSignature();
+      this.renderServicioBatchUI();
+
+    } catch (err) {
+      console.error("Error al finalizar revisión general:", err);
+      this.showToast(err.message || "Error al procesar el guardado general", "error");
+    } finally {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span>Finalizar Revisión General y Generar Reporte</span>
+        `;
+      }
+    }
+  },
+
+  openServicioReporteModal(reporte) {
+    const modal = document.getElementById("modal-reporte-servicio");
+    if (!modal) return;
+
+    // Metadatos
+    const metaContainer = document.getElementById("reporte-meta-container");
+    if (metaContainer) {
+      const fechaFormat = new Date(reporte.fecha).toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
+      const rawFolio = String(reporte.folio || reporte.batch_id || reporte.id_revision || "");
+      const numericFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
+      metaContainer.innerHTML = `
+        <div class="reporte-meta-item">
+          <label>Servicio Clínico</label>
+          <span>${reporte.unidad}</span>
+        </div>
+        <div class="reporte-meta-item">
+          <label>Fecha y Hora</label>
+          <span>${fechaFormat}</span>
+        </div>
+        <div class="reporte-meta-item">
+          <label>Técnico Inspector EEMM</label>
+          <span>${reporte.tecnico}</span>
+        </div>
+        <div class="reporte-meta-item">
+          <label>Recepción / Supervisor</label>
+          <span>${reporte.supervisor || "Personal de Turno"}</span>
+        </div>
+        <div class="reporte-meta-item">
+          <label>FOLIO Nº</label>
+          <code style="font-family: var(--font-mono); font-weight: 700; color: #0f172a; font-size: 0.95rem;">${numericFolio}</code>
+        </div>
+      `;
+    }
+
+    // KPIs de Estados
+    const kpiContainer = document.getElementById("reporte-kpi-container");
+    if (kpiContainer) {
+      const total = reporte.equipos.length;
+      const operativos = reporte.equipos.filter((e) => e.estado === "Operativo").length;
+      const mantencion = reporte.equipos.filter((e) => e.estado === "En Mantención").length;
+      const otros = total - operativos - mantencion;
+
+      kpiContainer.innerHTML = `
+        <div class="servicio-stats-pill" style="border-color: #0f172a; color: #0f172a;">
+          <strong>Total Equipos:</strong> <span>${total}</span>
+        </div>
+        <div class="servicio-stats-pill" style="border-color: var(--success); color: var(--success);">
+          <strong>Operativos:</strong> <span>${operativos}</span>
+        </div>
+        ${mantencion > 0 ? `
+        <div class="servicio-stats-pill" style="border-color: var(--warning); color: var(--warning);">
+          <strong>En Mantención:</strong> <span>${mantencion}</span>
+        </div>` : ""}
+        ${otros > 0 ? `
+        <div class="servicio-stats-pill" style="border-color: var(--danger); color: var(--danger);">
+          <strong>Otros / Fuera de Servicio:</strong> <span>${otros}</span>
+        </div>` : ""}
+      `;
+    }
+
+    // Equipos con fotos
+    const eqContainer = document.getElementById("reporte-equipos-container");
+    if (eqContainer) {
+      eqContainer.innerHTML = "";
+      reporte.equipos.forEach((eq, idx) => {
+        const div = document.createElement("div");
+        div.className = "reporte-equipment-row";
+
+        const infoMarcaModelo = [eq.marca, eq.modelo].filter(Boolean).join(" - ");
+        const badgeClass = eq.estado === "Operativo" ? "badge-success" : (eq.estado === "En Mantención" ? "badge-warning" : "badge-secondary");
+
+        let photosHtml = "";
+        if (eq.fotos && eq.fotos.length > 0) {
+          photosHtml = `<div class="reporte-photos-flex">` +
+            eq.fotos.map((f, pIdx) => `
+              <div class="reporte-photo-box">
+                <img src="${f}" alt="Foto ${pIdx + 1}">
+                <span>${pIdx === 0 ? "Foto 1: Vista Frontal / General" : "Foto 2: Placa / Detalle Serie"}</span>
+              </div>
+            `).join("") +
+            `</div>`;
+        } else {
+          photosHtml = `<p style="font-size: 0.75rem; color: #64748b; margin-top: 0.5rem; font-style: italic;">Sin fotografías adjuntas para este equipo.</p>`;
+        }
+
+        // Puntos no conformes si existieran
+        let nokItems = [];
+        if (eq.puntos_control) {
+          for (let p in eq.puntos_control) {
+            if (eq.puntos_control[p] === "NO_CONFORME") nokItems.push(p);
+          }
+        }
+
+        div.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h4 style="font-size: 0.95rem; font-weight: 700; margin: 0 0 2px 0;">#${idx + 1} - ${eq.nombre}</h4>
+              <p style="font-size: 0.78rem; color: #64748b; margin: 0;">
+                ${infoMarcaModelo || "Sin marca/modelo"} • <code style="font-family: var(--font-mono); font-weight: 600;">S/N: ${eq.serie}</code> • Categoría: ${eq.categoria}
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.4rem; align-items: center;">
+              <span class="badge ${badgeClass}">${eq.estado}</span>
+              <span class="badge" style="font-size: 0.7rem;">${eq.condicion}</span>
+            </div>
+          </div>
+
+          ${eq.observaciones ? `<p style="font-size: 0.8rem; margin: 0.4rem 0 0 0; background: rgba(241, 245, 249, 0.6); padding: 0.4rem 0.65rem; border-radius: 4px;"><strong>Observaciones:</strong> ${eq.observaciones}</p>` : ""}
+          ${nokItems.length > 0 ? `<p style="font-size: 0.78rem; color: var(--danger); margin: 0.35rem 0 0 0;"><strong>⚠️ Puntos Observados:</strong> ${nokItems.join(", ")}</p>` : ""}
+
+          ${photosHtml}
+        `;
+
+        eqContainer.appendChild(div);
+      });
+    }
+
+    // Firma Estampada
+    const firmaBox = document.getElementById("reporte-firma-img-box");
+    if (firmaBox) {
+      if (reporte.firma) {
+        firmaBox.innerHTML = `<img src="${reporte.firma}" alt="Firma Digital">`;
+      } else {
+        firmaBox.innerHTML = `<span style="font-size: 0.75rem; color: #64748b;">Firma Digital Registrada</span>`;
+      }
+    }
+
+    const nombreLabel = document.getElementById("reporte-firma-nombre-label");
+    if (nombreLabel) {
+      nombreLabel.textContent = reporte.supervisor ? `${reporte.supervisor} / ${reporte.tecnico}` : reporte.tecnico;
+    }
+
+    const fechaLabel = document.getElementById("reporte-firma-fecha-label");
+    if (fechaLabel) {
+      fechaLabel.textContent = `Validación Digital Oficial EEMM · ${new Date(reporte.fecha).toLocaleDateString("es-CL")}`;
+    }
+
+    const btnPdf = document.getElementById("reporte-btn-download-pdf");
+    if (btnPdf) {
+      const idOrFolio = reporte.id_revision || reporte.folio || reporte.batch_id;
+      btnPdf.href = `/api/revisiones-servicio/${idOrFolio}/pdf`;
+    }
+
+    modal.style.display = "flex";
+  },
+
+  closeServicioReporteModal() {
+    const modal = document.getElementById("modal-reporte-servicio");
+    if (modal) modal.style.display = "none";
+  },
+
+  printServicioReporte() {
+    window.print();
+  },
+
+  /* ==========================================================================
+     SUB-PESTAÑAS DE HISTORIAL (EQUIPOS vs SERVICIOS CLÍNICOS)
+     ========================================================================== */
+
+  switchHistorialTab(tab) {
+    this.currentHistorialTab = tab;
+    const btnEquipos = document.getElementById("btn-historial-subnav-equipos");
+    const btnServicios = document.getElementById("btn-historial-subnav-servicios");
+    const tabEquipos = document.getElementById("historial-tab-equipos");
+    const tabServicios = document.getElementById("historial-tab-servicios");
+    const mainTitle = document.getElementById("historial-main-title");
+    const mainSubtitle = document.getElementById("historial-main-subtitle");
+
+    if (tab === "servicios") {
+      if (btnEquipos) btnEquipos.classList.remove("active");
+      if (btnServicios) btnServicios.classList.add("active");
+      if (tabEquipos) tabEquipos.style.display = "none";
+      if (tabServicios) tabServicios.style.display = "block";
+      if (mainTitle) mainTitle.textContent = "Historial de Revisiones por Servicio";
+      if (mainSubtitle) mainSubtitle.textContent = "Informes consolidados y pautas preventivas por unidad médica";
+      this.populateServiciosUnidadesFilter();
+      this.loadHistorialServicios();
+    } else {
+      if (btnEquipos) btnEquipos.classList.add("active");
+      if (btnServicios) btnServicios.classList.remove("active");
+      if (tabEquipos) tabEquipos.style.display = "block";
+      if (tabServicios) tabServicios.style.display = "none";
+      if (mainTitle) mainTitle.textContent = "Historial de Chequeos";
+      if (mainSubtitle) mainSubtitle.textContent = "Inspecciones preventivas realizadas y registradas";
+      this.loadHistorial();
+    }
+  },
+
+  refreshCurrentHistorialTab() {
+    if (this.currentHistorialTab === "servicios") {
+      this.loadHistorialServicios();
+    } else {
+      this.loadHistorial();
+    }
+  },
+
+  populateServiciosUnidadesFilter() {
+    const select = document.getElementById("filtro-historial-servicio-unidad");
+    if (!select || select.options.length > 1) return;
+    const unidades = [
+      "URGENCIA ADULTO", "URGENCIA PEDIATRIA", "PABELLONES QUIRURGICOS", "UPC (UCI / UTI)", 
+      "CIRUGIA ADULTO", "MEDICINA ADULTO", "PEDIATRIA", "GINECOLOGIA Y OBSTETRICIA", 
+      "NEONATOLOGIA", "DIALISIS", "LABORATORIO CLINICO", "IMAGENOLOGIA (RAYOS X / TAC)", 
+      "ANESTESIA Y RECUPERACION", "FARMACIA CLINICA", "CONSULTA EXTERNA (CAE)", "CENTRAL DE ESTERILIZACION"
+    ];
+    unidades.forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      select.appendChild(opt);
+    });
+  },
+
+  async loadHistorialServicios() {
+    const tbody = document.getElementById("historial-servicios-tbody");
+    if (!tbody) return;
+
+    const qInput = document.getElementById("filtro-historial-servicio-query");
+    const q = qInput ? qInput.value.trim().toLowerCase() : "";
+
+    const uniEl = document.getElementById("filtro-historial-servicio-unidad");
+    const unidad = uniEl ? uniEl.value : "";
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <span>Cargando revisiones de servicio...</span>
+          </div>
+        </td>
+      </tr>
+    `;
+
+    let data = [];
+    try {
+      let url = `/api/revisiones-servicio?limit=50`;
+      if (q) url += `&q=${encodeURIComponent(q)}`;
+      if (unidad) url += `&unidad=${encodeURIComponent(unidad)}`;
+
+      const res = await fetch(url);
+      if (res.ok) {
+        data = await res.json();
+      }
+    } catch (err) {
+      console.warn("Modo offline: buscando revisiones locales en localStorage", err);
+    }
+
+    // Combinar con revisiones en caché local si offline o no presentes
+    try {
+      const localRevs = JSON.parse(localStorage.getItem("local_revisiones_servicio") || "[]");
+      if (localRevs.length > 0) {
+        const existingFolios = new Set(data.map(d => d.folio));
+        localRevs.forEach(lr => {
+          if (!existingFolios.has(lr.folio) && !existingFolios.has(lr.batch_id)) {
+            data.unshift(lr);
+          }
+        });
+      }
+    } catch (e) {}
+
+    // Filtrar localmente si se está en modo offline
+    if (q || unidad) {
+      data = data.filter(item => {
+        if (unidad && (item.unidad || "").toLowerCase() !== unidad.toLowerCase()) return false;
+        if (q) {
+          const matchFolio = (item.folio || item.batch_id || "").toLowerCase().includes(q);
+          const matchUser = (item.usuario || "").toLowerCase().includes(q);
+          const matchSup = (item.supervisor || "").toLowerCase().includes(q);
+          const matchObs = (item.obs_general || "").toLowerCase().includes(q);
+          if (!matchFolio && !matchUser && !matchSup && !matchObs) return false;
+        }
+        return true;
+      });
+    }
+
+    this.historialServiciosData = data;
+
+    if (data.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2.5rem; color: var(--text-tertiary);">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 0.5rem auto; opacity: 0.5; display: block;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <p style="margin: 0; font-weight: 500;">No se encontraron revisiones por servicio registradas</p>
+            <small style="color: var(--text-tertiary);">Realiza una revisión en "Chequeo por Servicio" para verla reflejada aquí</small>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = "";
+    data.forEach(item => {
+      const tr = document.createElement("tr");
+      const rawFolio = String(item.folio || item.batch_id || item.id_revision || "");
+      const numericFolio = rawFolio.replace(/\D/g, "") || String(item.id_revision || "000001").padStart(6, "0");
+      const folioDisplay = `FOLIO Nº ${numericFolio}`;
+      const searchKey = item.folio || item.batch_id || item.id_revision || numericFolio;
+      const fechaFormatted = item.fecha ? new Date(item.fecha).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }) : "-";
+      const countEquipos = item.total_equipos || (item.equipos ? item.equipos.length : 0);
+      const hasFirma = !!(item.firma_data || item.firma);
+      const idOrFolio = item.id_revision || item.folio || item.batch_id || numericFolio;
+
+      tr.innerHTML = `
+        <td>
+          <code style="font-family: var(--font-mono); font-size: 0.78rem; font-weight: 700; color: #0f172a; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 2px 6px; border-radius: 4px;">${folioDisplay}</code>
+        </td>
+        <td style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;">${fechaFormatted}</td>
+        <td>
+          <span class="badge badge-secondary" style="font-size: 0.75rem;">${item.unidad || "General"}</span>
+        </td>
+        <td style="font-size: 0.82rem; font-weight: 500;">${item.usuario || "Técnico EEMM"}</td>
+        <td style="font-size: 0.82rem; color: var(--text-secondary);">${item.supervisor || "Responsable"}</td>
+        <td style="text-align: center;">
+          <span class="badge" style="background: var(--bg-surface-hover); color: var(--text-primary); font-weight: 700;">${countEquipos} Eq.</span>
+        </td>
+        <td style="font-size: 0.78rem;">
+          <span style="color: var(--success); font-weight: 600;">${item.resumen_estados || `${countEquipos} Operativos`}</span>
+        </td>
+        <td style="text-align: center;">
+          ${hasFirma ? '<span title="Firma digital estampada" style="color: var(--success); font-size: 1rem;">✍️</span>' : '<span style="color: var(--text-tertiary); font-size: 0.75rem;">Sin firma</span>'}
+        </td>
+        <td class="col-actions" style="text-align: center;">
+          <div style="display: inline-flex; gap: 0.35rem; align-items: center; justify-content: center;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="app.openServicioReporteFromHistorial('${searchKey}')" title="Ver informe y equipos">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              Ver Detalle
+            </button>
+            <a href="/api/revisiones-servicio/${idOrFolio}/pdf" target="_blank" class="btn btn-primary btn-sm" title="Descargar reporte oficial en PDF" style="text-decoration: none;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+              PDF
+            </a>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  },
+
+  filterHistorialServiciosDebounced() {
+    clearTimeout(this.debounceTimers.historialServicios);
+    this.debounceTimers.historialServicios = setTimeout(() => this.loadHistorialServicios(), 300);
+  },
+
+  async openServicioReporteFromHistorial(folioOrId) {
+    let item = (this.historialServiciosData || []).find(d => d.folio === folioOrId || d.batch_id === folioOrId || String(d.id_revision) === String(folioOrId));
+    if (!item) {
+      try {
+        const res = await fetch(`/api/revisiones-servicio/${folioOrId}`);
+        if (res.ok) item = await res.json();
+      } catch (e) {
+        console.error("Error al obtener detalle de revisión:", e);
+      }
+    }
+    if (item) {
+      const reporteConsolidado = {
+        id_revision: item.id_revision,
+        folio: item.folio || item.batch_id,
+        batch_id: item.folio || item.batch_id,
+        unidad: item.unidad,
+        fecha: item.fecha,
+        tecnico: item.usuario,
+        supervisor: item.supervisor,
+        obs_general: item.obs_general,
+        firma: item.firma_data || item.firma,
+        equipos: item.equipos || []
+      };
+      this.openServicioReporteModal(reporteConsolidado);
+    } else {
+      this.showToast("No se pudo cargar el detalle de la revisión seleccionada", "error");
+    }
+  },
+
+  /* ==========================================================================
      HISTORIAL DE CHEQUEOS PREVENTIVOS
      ========================================================================== */
   async loadHistorial() {
@@ -1328,8 +2288,9 @@ const app = {
           fechaFormatted = `<div style="font-weight:600; font-size:0.78rem;">${parts[0]}</div><div style="font-size:0.7rem; color:var(--text-tertiary);">${parts[1]}</div>`;
         }
 
+        const numericFolio = String(item.id_registro).replace(/\D/g, '').padStart(6, '0');
         tr.innerHTML = `
-          <td><strong>#${item.id_registro}</strong></td>
+          <td><strong style="font-family: var(--font-mono); color: #0f172a;">${numericFolio}</strong></td>
           <td>${fechaFormatted}</td>
           <td>
             <div style="font-weight: 500; font-size: 0.8rem;">${item.usuario || "Técnico"}</div>
@@ -1342,7 +2303,7 @@ const app = {
           </td>
           <td><code>${item.serie || "-"}</code></td>
           <td>
-            <span class="badge" style="background:var(--primary-subtle); color:var(--primary); font-size:0.72rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block;" title="${item.unidad || "-"}">
+            <span class="badge badge-secondary" style="font-size:0.72rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block;" title="${item.unidad || "-"}">
               ${item.unidad || "-"}
             </span>
           </td>
@@ -1358,7 +2319,7 @@ const app = {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 Ver Ficha
               </button>
-              <a href="/api/chequeos/${item.id_registro}/pdf" target="_blank" class="btn btn-primary btn-sm" title="Descargar o imprimir informe en PDF" style="text-decoration: none;">
+              <a href="/api/chequeos/${item.id_registro}/pdf" target="_blank" class="btn btn-outline btn-sm" title="Descargar o imprimir informe en PDF" style="text-decoration: none;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
                 PDF
               </a>
@@ -1382,7 +2343,8 @@ const app = {
       const res = await fetch(`/api/chequeos/${id}`);
       const item = await res.json();
 
-      document.getElementById("modal-title").textContent = `Chequeo Preventivo #${item.id_registro}`;
+      const folioNum = String(item.id_registro).replace(/\D/g, '').padStart(6, '0');
+      document.getElementById("modal-title").textContent = `FOLIO Nº ${folioNum}`;
       const pdfBtn = document.getElementById("modal-btn-pdf");
       if (pdfBtn) {
         pdfBtn.href = `/api/chequeos/${item.id_registro}/pdf`;
