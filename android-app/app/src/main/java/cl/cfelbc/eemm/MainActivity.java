@@ -549,7 +549,10 @@ public class MainActivity extends AppCompatActivity {
                     }
                     byte[] pdfBytes = Base64.decode(cleanBase64, Base64.DEFAULT);
 
-                    File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    File dir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                    if (dir == null) {
+                        dir = getCacheDir();
+                    }
                     if (!dir.exists()) {
                         dir.mkdirs();
                     }
@@ -559,13 +562,6 @@ public class MainActivity extends AppCompatActivity {
                         fos.write(pdfBytes);
                         fos.flush();
                     }
-
-                    MediaScannerConnection.scanFile(
-                            MainActivity.this,
-                            new String[]{file.getAbsolutePath()},
-                            new String[]{"application/pdf"},
-                            null
-                    );
 
                     Uri fileUri = FileProvider.getUriForFile(
                             MainActivity.this,
@@ -578,8 +574,24 @@ public class MainActivity extends AppCompatActivity {
                     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
+                    Intent chooser = Intent.createChooser(intent, "Abrir reporte PDF");
+                    chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                    try {
+                        java.util.List<android.content.pm.ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+                        for (android.content.pm.ResolveInfo resolveInfo : resInfoList) {
+                            String packageName = resolveInfo.activityInfo.packageName;
+                            grantUriPermission(packageName, fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        }
+                    } catch (Exception ignored) {}
+
                     Toast.makeText(MainActivity.this, "Abriendo reporte PDF...", Toast.LENGTH_SHORT).show();
-                    startActivity(Intent.createChooser(intent, "Abrir reporte PDF con"));
+                    try {
+                        startActivity(chooser);
+                    } catch (android.content.ActivityNotFoundException anf) {
+                        Toast.makeText(MainActivity.this, "No se encontró un visor de PDF (instale Google Drive, Adobe Reader o similar)", Toast.LENGTH_LONG).show();
+                    }
                 } catch (Exception e) {
                     Toast.makeText(MainActivity.this, "Error al procesar PDF: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }

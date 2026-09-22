@@ -1961,66 +1961,137 @@ const app = {
   },
 
   printServicioReporte() {
-    window.print();
-  },
-
-  async downloadCurrentServicioPdf() {
-    if (!this.currentActiveServicioReporte) {
-      this.showToast("No hay reporte de servicio seleccionado", "warning");
-      return;
-    }
-    const r = this.currentActiveServicioReporte;
-    const rawFolio = String(r.folio || r.batch_id || r.id_revision || "");
-    const numFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
-    const uniClean = (r.unidad || "GENERAL").replace(/[^a-zA-Z0-9_-]/g, "_");
-    const filename = `Reporte_Servicio_${numFolio}_${uniClean}.pdf`;
-    const idOrFolio = r.id_revision || r.folio || r.batch_id || numFolio;
-    await this.downloadServicioPdf(idOrFolio, filename);
+    this.openCurrentServicioPdf();
   },
 
   /* ==========================================================================
-     MOTOR UNIVERSAL DE DESCARGA Y VISUALIZACIÓN DE PDF (MÓVIL, NATIVO Y WEB)
+     MOTOR UNIVERSAL DE VISUALIZACIÓN Y DESCARGA DE PDF (MÓVIL, NATIVO Y WEB)
      ========================================================================== */
+
+  async openPdfDocument(url, filename, fallbackData = null) {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const hasAndroidBridge = !!(window.AndroidBridge && typeof window.AndroidBridge.openPdfBase64 === "function");
+
+    this.showToast("Abriendo visor de PDF...", "info");
+
+    let inlineUrl = url.replace(/([?&])download=[^&]+(&|$)/g, '$1').replace(/[?&]$/, '');
+    inlineUrl += (inlineUrl.includes("?") ? "&" : "?") + "download=false";
+
+    // 1. APLICACIÓN NATIVA ANDROID (APK):
+    // Usa el visor nativo de PDF de Android (Google Drive PDF Viewer, Adobe Reader, Samsung Notes, etc.)
+    if (hasAndroidBridge) {
+      try {
+        let res = await fetch(inlineUrl);
+        if (!res.ok && fallbackData) {
+          res = await fetch("/api/revisiones-servicio/pdf-preview?download=false", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(fallbackData)
+          });
+        }
+        if (res.ok) {
+          const blob = await res.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            try {
+              window.AndroidBridge.openPdfBase64(reader.result, filename);
+            } catch (err) {
+              console.warn("Error en openPdfBase64:", err);
+              if (typeof window.AndroidBridge.downloadPdf === "function") {
+                const absUrl = new URL(inlineUrl, window.location.origin).href;
+                window.AndroidBridge.downloadPdf(absUrl, filename);
+              }
+            }
+          };
+          reader.readAsDataURL(blob);
+          return;
+        } else {
+          let errDetail = "No se pudo obtener el PDF del servidor";
+          try {
+            const j = await res.json();
+            if (j && j.detail) errDetail = j.detail;
+          } catch (_) {}
+          this.showToast("Error al abrir PDF: " + errDetail, "error");
+          return;
+        }
+      } catch (bridgeErr) {
+        console.warn("Fallo con AndroidBridge openPdfBase64:", bridgeErr);
+      }
+    }
+
+    // 2. EN NAVEGADORES WEB (MÓVIL O ESCRITORIO):
+    try {
+      let res = await fetch(inlineUrl);
+      if (!res.ok && fallbackData) {
+        res = await fetch("/api/revisiones-servicio/pdf-preview?download=false", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fallbackData)
+        });
+      }
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const win = window.open(blobUrl, "_blank");
+        if (!win || win.closed || typeof win.closed === "undefined") {
+          window.location.href = inlineUrl;
+        } else {
+          this.showToast("Informe abierto en visor PDF", "success");
+        }
+        setTimeout(() => {
+          try { window.URL.revokeObjectURL(blobUrl); } catch (_) {}
+        }, 60000);
+        return;
+      }
+    } catch (err) {
+      console.warn("Fetch de PDF falló, usando redirección directa:", err);
+    }
+
+    if (isMobile) {
+      window.location.href = inlineUrl;
+    } else {
+      window.open(inlineUrl, "_blank");
+    }
+  },
 
   async handlePdfDownloadOrView(url, filename, fallbackData = null) {
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const hasAndroidBridge = !!(window.AndroidBridge && (typeof window.AndroidBridge.downloadPdf === "function" || typeof window.AndroidBridge.openPdfBase64 === "function"));
+    const hasAndroidBridge = !!(window.AndroidBridge && typeof window.AndroidBridge.downloadPdf === "function");
 
-    this.showToast("Generando reporte oficial PDF...", "info");
+    this.showToast("Descargando reporte oficial PDF...", "info");
 
-    let fullDownloadUrl = url;
-    if (!fullDownloadUrl.includes("download=")) {
-      fullDownloadUrl += (fullDownloadUrl.includes("?") ? "&" : "?") + "download=true";
+    let downloadUrl = url;
+    if (!downloadUrl.includes("download=")) {
+      downloadUrl += (downloadUrl.includes("?") ? "&" : "?") + "download=true";
     }
 
     // 1. SI ESTAMOS EN LA APLICACIÓN NATIVA ANDROID (APK):
     if (hasAndroidBridge) {
       try {
-        const absoluteUrl = new URL(fullDownloadUrl, window.location.origin).href;
-        if (typeof window.AndroidBridge.downloadPdf === "function") {
-          window.AndroidBridge.downloadPdf(absoluteUrl, filename);
-          this.showToast("Descargando PDF en tu teléfono...", "success");
-          return;
-        }
+        const absoluteUrl = new URL(downloadUrl, window.location.origin).href;
+        window.AndroidBridge.downloadPdf(absoluteUrl, filename);
+        this.showToast("Descargando PDF en tu teléfono...", "success");
+        return;
       } catch (bridgeErr) {
-        console.warn("AndroidBridge falló, intentando método estándar:", bridgeErr);
+        console.warn("AndroidBridge downloadPdf falló, intentando método alternativo:", bridgeErr);
       }
     }
 
-    // 2. EN NAVEGADORES MÓVILES (Chrome Android, Safari iOS, etc.):
+    // 2. EN NAVEGADORES MÓVILES:
     if (isMobile) {
       try {
-        window.location.href = fullDownloadUrl;
+        window.location.href = downloadUrl;
         this.showToast("Descargando archivo PDF en tu teléfono...", "success");
         return;
       } catch (mobErr) {
-        console.warn("Fallo redirección móvil directa, intentando fetch:", mobErr);
+        console.warn("Redirección móvil falló, intentando fetch:", mobErr);
       }
     }
 
-    // 3. EN ESCRITORIO O FALLBACK DE CONTINGENCIA:
+    // 3. EN ESCRITORIO O FALLBACK:
     try {
-      let res = await fetch(fullDownloadUrl);
+      let res = await fetch(downloadUrl);
       if (!res.ok && fallbackData) {
         res = await fetch("/api/revisiones-servicio/pdf-preview?download=true", {
           method: "POST",
@@ -2039,29 +2110,6 @@ const app = {
       }
 
       const blob = await res.blob();
-
-      // Si estamos en la app y tenemos openPdfBase64
-      if (hasAndroidBridge && typeof window.AndroidBridge.openPdfBase64 === "function") {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          window.AndroidBridge.openPdfBase64(reader.result, filename);
-        };
-        reader.readAsDataURL(blob);
-        return;
-      }
-
-      // En móviles si llegó aquí:
-      if (isMobile) {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const win = window.open(blobUrl, "_blank");
-        if (!win) {
-          window.location.href = blobUrl;
-        }
-        this.showToast("Abriendo reporte PDF...", "success");
-        return;
-      }
-
-      // En computadores de escritorio:
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.style.display = "none";
@@ -2076,37 +2124,21 @@ const app = {
         } catch (_) {}
       }, 4000);
       this.showToast("PDF descargado correctamente", "success");
-
     } catch (err) {
-      console.error("Error al procesar PDF:", err);
+      console.error("Error al descargar PDF:", err);
       if (isMobile) {
-        window.location.href = fullDownloadUrl;
+        window.location.href = downloadUrl;
       } else {
         this.showToast("Error al obtener PDF: " + (err.message || "Servidor no disponible"), "error");
       }
     }
   },
 
-  async downloadCurrentServicioPdf() {
-    if (!this.currentActiveServicioReporte) {
-      this.showToast("No hay reporte de servicio seleccionado", "warning");
-      return;
-    }
-    const r = this.currentActiveServicioReporte;
-    const rawFolio = String(r.folio || r.batch_id || r.id_revision || "");
-    const numFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
-    const uniClean = (r.unidad || "GENERAL").replace(/[^a-zA-Z0-9_-]/g, "_");
-    const filename = `Reporte_Servicio_${numFolio}_${uniClean}.pdf`;
-    const idOrFolio = r.id_revision || r.folio || r.batch_id || numFolio;
-    await this.downloadServicioPdf(idOrFolio, filename);
-  },
-
-  async downloadServicioPdf(idOrFolio, filename) {
+  async _resolveServicioPdfParams(idOrFolio, filename) {
     const rawId = String(idOrFolio || "").trim();
     const cleanNum = rawId.replace(/\D/g, "");
     const fn = filename || `Reporte_Servicio_${cleanNum || rawId}.pdf`;
 
-    // Localizar posible objeto local
     let localItem = null;
     if (this.currentActiveServicioReporte) {
       const cur = this.currentActiveServicioReporte;
@@ -2134,7 +2166,6 @@ const app = {
       } catch (_) {}
     }
 
-    // Si tiene datos locales pero no id_revision, sincronizar con el servidor en segundo plano
     if (localItem && !localItem.id_revision) {
       try {
         const syncRes = await fetch("/api/revisiones-servicio", {
@@ -2161,7 +2192,57 @@ const app = {
     }
 
     const targetKey = (localItem && localItem.id_revision) ? localItem.id_revision : (cleanNum || rawId);
+    return { targetKey, fn, localItem };
+  },
+
+  async openCurrentServicioPdf() {
+    if (!this.currentActiveServicioReporte) {
+      this.showToast("No hay reporte de servicio seleccionado", "warning");
+      return;
+    }
+    const r = this.currentActiveServicioReporte;
+    const rawFolio = String(r.folio || r.batch_id || r.id_revision || "");
+    const numFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
+    const uniClean = (r.unidad || "GENERAL").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const filename = `Reporte_Servicio_${numFolio}_${uniClean}.pdf`;
+    const idOrFolio = r.id_revision || r.folio || r.batch_id || numFolio;
+    await this.openServicioPdf(idOrFolio, filename);
+  },
+
+  async downloadCurrentServicioPdf() {
+    if (!this.currentActiveServicioReporte) {
+      this.showToast("No hay reporte de servicio seleccionado", "warning");
+      return;
+    }
+    const r = this.currentActiveServicioReporte;
+    const rawFolio = String(r.folio || r.batch_id || r.id_revision || "");
+    const numFolio = rawFolio.replace(/\D/g, "") || String(Date.now());
+    const uniClean = (r.unidad || "GENERAL").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const filename = `Reporte_Servicio_${numFolio}_${uniClean}.pdf`;
+    const idOrFolio = r.id_revision || r.folio || r.batch_id || numFolio;
+    await this.downloadServicioPdf(idOrFolio, filename);
+  },
+
+  async openServicioPdf(idOrFolio, filename) {
+    const { targetKey, fn, localItem } = await this._resolveServicioPdfParams(idOrFolio, filename);
+    await this.openPdfDocument(`/api/revisiones-servicio/${targetKey}/pdf`, fn, localItem);
+  },
+
+  async downloadServicioPdf(idOrFolio, filename) {
+    const { targetKey, fn, localItem } = await this._resolveServicioPdfParams(idOrFolio, filename);
     await this.handlePdfDownloadOrView(`/api/revisiones-servicio/${targetKey}/pdf`, fn, localItem);
+  },
+
+  async openCurrentChequeoPdf() {
+    if (!this.currentActiveChequeo) {
+      this.showToast("No hay chequeo seleccionado", "warning");
+      return;
+    }
+    const item = this.currentActiveChequeo;
+    const numFolio = String(item.id_registro || "1").replace(/\D/g, "").padStart(6, "0");
+    const serieClean = (item.serie || "SN").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const filename = `Chequeo_EEMM_${numFolio}_${serieClean}.pdf`;
+    await this.openChequeoPdf(item.id_registro, filename);
   },
 
   async downloadCurrentChequeoPdf() {
@@ -2174,6 +2255,14 @@ const app = {
     const serieClean = (item.serie || "SN").replace(/[^a-zA-Z0-9_-]/g, "_");
     const filename = `Chequeo_EEMM_${numFolio}_${serieClean}.pdf`;
     await this.downloadChequeoPdf(item.id_registro, filename);
+  },
+
+  async openChequeoPdf(id, filename) {
+    const rawId = String(id || "").trim();
+    const cleanNum = rawId.replace(/\D/g, "");
+    const fn = filename || `Chequeo_EEMM_${cleanNum || rawId}.pdf`;
+    const targetKey = cleanNum || rawId;
+    await this.openPdfDocument(`/api/chequeos/${targetKey}/pdf`, fn);
   },
 
   async downloadChequeoPdf(id, filename) {
@@ -2362,7 +2451,7 @@ const app = {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               Ver Detalle
             </button>
-            <button type="button" class="btn btn-primary btn-sm" onclick="app.downloadServicioPdf('${idOrFolio}', 'Reporte_Servicio_${numericFolio}.pdf')" title="Descargar reporte oficial en PDF">
+            <button type="button" class="btn btn-primary btn-sm" onclick="app.openServicioPdf('${idOrFolio}', 'Reporte_Servicio_${numericFolio}.pdf')" title="Abrir reporte oficial en formato PDF">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
               PDF
             </button>
@@ -2594,7 +2683,7 @@ const app = {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 Ver Ficha
               </button>
-              <button type="button" class="btn btn-outline btn-sm" onclick="app.downloadChequeoPdf(${item.id_registro}, 'Chequeo_EEMM_${numericFolio}.pdf')" title="Descargar o imprimir informe en PDF">
+              <button type="button" class="btn btn-outline btn-sm" onclick="app.openChequeoPdf(${item.id_registro}, 'Chequeo_EEMM_${numericFolio}.pdf')" title="Abrir informe oficial en formato PDF">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
                 PDF
               </button>
@@ -2721,9 +2810,13 @@ const app = {
         ${firmaHtml}
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.25rem; padding-top:0.85rem; border-top:1px solid var(--border-color); flex-wrap:wrap; gap:0.5rem;">
-          <button type="button" onclick="app.downloadCurrentChequeoPdf()" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px; flex:1 1 auto; justify-content:center;">
+          <button type="button" onclick="app.openCurrentChequeoPdf()" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px; flex:1 1 auto; justify-content:center;" title="Abrir informe oficial en formato PDF">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-            Descargar Informe PDF Oficial
+            Abrir en Formato PDF
+          </button>
+          <button type="button" onclick="app.downloadCurrentChequeoPdf()" class="btn btn-outline" style="display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; justify-content:center;" title="Descargar archivo PDF">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Descargar
           </button>
           <button type="button" class="btn btn-outline" onclick="app.closeModal()" style="flex:0 0 auto;">Cerrar</button>
         </div>

@@ -1208,13 +1208,13 @@
             </div>
           </div>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button type="button" id="modal-btn-pdf" onclick="app.downloadCurrentChequeoPdf()" class="btn btn-outline btn-sm" style="display: inline-flex; align-items: center; gap: 4px;">
+            <button type="button" id="modal-btn-open-pdf" onclick="app.openCurrentChequeoPdf()" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 4px;" title="Abrir informe oficial en formato PDF">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-              Exportar PDF
+              Abrir PDF
             </button>
-            <button type="button" class="btn btn-subtle btn-sm reporte-no-print" onclick="window.print()" title="Imprimir o Guardar como PDF" style="display: inline-flex; align-items: center; gap: 4px;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-              Imprimir
+            <button type="button" id="modal-btn-download-pdf" onclick="app.downloadCurrentChequeoPdf()" class="btn btn-outline btn-sm reporte-no-print" title="Descargar archivo PDF" style="display: inline-flex; align-items: center; gap: 4px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Descargar
             </button>
             <button class="btn-icon" onclick="app.closeModal()">✕</button>
           </div>
@@ -1608,13 +1608,13 @@
             Cerrar Reporte
           </button>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <button type="button" id="reporte-btn-download-pdf" class="btn btn-outline" onclick="app.downloadCurrentServicioPdf()" style="display: inline-flex; align-items: center; gap: 6px;">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-              <span>Descargar PDF Oficial</span>
+            <button type="button" id="reporte-btn-open-pdf" class="btn btn-primary" onclick="app.openCurrentServicioPdf()" style="display: inline-flex; align-items: center; gap: 6px;" title="Abrir informe oficial en formato PDF">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <strong>Abrir en Formato PDF</strong>
             </button>
-            <button type="button" class="btn btn-primary" onclick="app.printServicioReporte()" style="display: inline-flex; align-items: center; gap: 6px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-              <strong>Imprimir / Guardar como PDF</strong>
+            <button type="button" id="reporte-btn-download-pdf" class="btn btn-outline" onclick="app.downloadCurrentServicioPdf()" style="display: inline-flex; align-items: center; gap: 6px;" title="Descargar archivo PDF oficial">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Descargar PDF</span>
             </button>
           </div>
         </div>
@@ -1628,9 +1628,9 @@
   </div>
 
   <!-- Scripts de la Aplicación -->
-  <script src="/static/js/offline-manager.js?v=3.2"></script>
-  <script src="/static/js/signature.js?v=3.2"></script>
-  <script src="/static/js/photos.js?v=3.2"></script>
-  <script src="/static/js/app.js?v=3.2"></script>
+  <script src="/static/js/offline-manager.js?v=3.3"></script>
+  <script src="/static/js/signature.js?v=3.3"></script>
+  <script src="/static/js/photos.js?v=3.3"></script>
+  <script src="/static/js/app.js?v=3.3"></script>
 </body>
 </html>
