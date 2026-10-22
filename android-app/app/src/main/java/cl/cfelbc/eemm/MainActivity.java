@@ -17,6 +17,10 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.media.MediaScannerConnection;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
@@ -75,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setupStatusBar();
         setContentView(R.layout.activity_main);
 
         initViews();
@@ -85,6 +90,21 @@ public class MainActivity extends AppCompatActivity {
 
         hideErrorScreen();
         webView.loadUrl(APP_URL);
+    }
+
+    private void setupStatusBar() {
+        Window window = getWindow();
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.status_bar_dark));
+        window.setNavigationBarColor(ContextCompat.getColor(this, R.color.status_bar_dark));
+
+        // Forzar iconos claros/blancos en la barra de estado (batería, reloj, wifi) para máxima visibilidad sin reflejos
+        WindowInsetsControllerCompat insetsController = WindowCompat.getInsetsController(window, window.getDecorView());
+        if (insetsController != null) {
+            insetsController.setAppearanceLightStatusBars(false);
+            insetsController.setAppearanceLightNavigationBars(false);
+        }
     }
 
     private void initViews() {

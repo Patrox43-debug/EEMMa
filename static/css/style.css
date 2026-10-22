@@ -2169,18 +2169,18 @@ select.form-control {
     font-size: 16px !important;
   }
 
-  /* Espacio superior para la bandeja de notificaciones del dispositivo y borde delimitador */
+  /* Cabecera Móvil Limpia y Sin Bordes Invasivos */
   .header {
     height: auto !important;
-    min-height: 72px !important;
+    min-height: 56px !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 50 !important;
-    padding-top: max(28px, env(safe-area-inset-top, 28px)) !important; /* Espacio para bandeja de notificaciones */
+    padding-top: 0.5rem !important;
     padding-bottom: 0.55rem !important;
     padding-left: max(0.85rem, env(safe-area-inset-left, 0.85rem)) !important;
     padding-right: max(0.85rem, env(safe-area-inset-right, 0.85rem)) !important;
-    border-top: 4px solid var(--primary) !important; /* Borde superior visible que enmarca la app */
+    border-top: none !important;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06) !important;
   }
 
