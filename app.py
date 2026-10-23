@@ -168,6 +168,22 @@ def ensure_db_initialized():
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_inventario_estanteria ON inventario(estanteria_id);")
 
+        # 5.1 Tabla inventario_movimientos (Historial de salidas, descuentos y movimientos)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS inventario_movimientos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_caja TEXT NOT NULL,
+            tipo TEXT NOT NULL DEFAULT 'DESCUENTO',
+            cantidad INTEGER NOT NULL,
+            razon TEXT NOT NULL,
+            usuario TEXT,
+            stock_anterior INTEGER,
+            stock_nuevo INTEGER,
+            fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_mov_caja ON inventario_movimientos(id_caja);")
+
         # 6. Tabla unidades
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS unidades (
@@ -1852,6 +1868,11 @@ class InsumoIngreso(BaseModel):
     cantidad: int
     estado: Optional[str] = None
 
+class InsumoDescuento(BaseModel):
+    cantidad: int
+    razon: str
+    usuario: Optional[str] = None
+
 @app.post("/api/inventario")
 def create_insumo(item: InsumoCreate):
     conn = get_db()
@@ -1943,6 +1964,77 @@ def ingresar_stock(id_caja: str, ingreso: InsumoIngreso):
     updated = cursor.fetchone()
     conn.close()
     return {"ok": True, "caja": dict(updated)}
+
+@app.post("/api/inventario/{id_caja}/descuento")
+def descontar_stock(id_caja: str, descuento: InsumoDescuento):
+    if descuento.cantidad <= 0:
+        raise HTTPException(status_code=400, detail="La cantidad a descontar debe ser mayor a 0")
+    
+    razon = (descuento.razon or "").strip()
+    if not razon:
+        raise HTTPException(status_code=400, detail="Debe indicar la razón o motivo del descuento")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (id_caja,))
+    curr = cursor.fetchone()
+    if not curr:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+    
+    curr_cant = curr["cantidad"] or 0
+    if curr_cant < descuento.cantidad:
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stock insuficiente. Stock actual: {curr_cant} un., solicitado a descontar: {descuento.cantidad} un."
+        )
+    
+    nueva_cant = curr_cant - descuento.cantidad
+    nuevo_estado = "Agotado" if nueva_cant == 0 else ("Stock Bajo" if nueva_cant < 5 else "OK")
+    
+    cursor.execute("""
+        UPDATE inventario
+        SET cantidad = ?, estado = ?
+        WHERE id_caja = ?
+    """, (nueva_cant, nuevo_estado, id_caja))
+    
+    usuario = (descuento.usuario or "Técnico EEMM").strip()
+    cursor.execute("""
+        INSERT INTO inventario_movimientos (id_caja, tipo, cantidad, razon, usuario, stock_anterior, stock_nuevo, fecha)
+        VALUES (?, 'DESCUENTO', ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    """, (id_caja, descuento.cantidad, razon, usuario, curr_cant, nueva_cant))
+    
+    conn.commit()
+    
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (id_caja,))
+    updated = cursor.fetchone()
+    conn.close()
+    
+    return {
+        "ok": True,
+        "caja": dict(updated),
+        "descontado": descuento.cantidad,
+        "razon": razon,
+        "stock_anterior": curr_cant,
+        "stock_nuevo": nueva_cant
+    }
+
+@app.get("/api/inventario/{id_caja}/movimientos")
+def get_movimientos_insumo(id_caja: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, id_caja, tipo, cantidad, razon, usuario, stock_anterior, stock_nuevo,
+               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
+        FROM inventario_movimientos
+        WHERE id_caja = ?
+        ORDER BY id DESC
+        LIMIT 15
+    """, (id_caja,))
+    movs = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return movs
 
 @app.delete("/api/inventario/{id_caja}")
 def delete_insumo(id_caja: str):

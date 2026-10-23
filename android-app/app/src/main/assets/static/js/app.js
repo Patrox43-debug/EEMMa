@@ -4088,6 +4088,58 @@ const app = {
           </div>
         </div>
 
+        <!-- Sección Descontar Stock / Registrar Salida -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 1rem;">📉</span> Descontar Cantidades / Registrar Salida
+            </div>
+            <span class="badge" style="background: var(--bg-subtle); color: var(--text-secondary); font-size: 0.7rem;">Stock actual: <strong>${box.cantidad}</strong></span>
+          </div>
+
+          ${box.cantidad > 0 ? `
+            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+              <div style="display: grid; grid-template-columns: 110px 1fr; gap: 0.5rem; align-items: start;">
+                <div>
+                  <label for="descuento-cant-${box.id_caja}" style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 3px;">
+                    Descontar (un.):
+                  </label>
+                  <input type="number" id="descuento-cant-${box.id_caja}" class="form-control" min="1" max="${box.cantidad}" value="1" style="height: 36px; font-size: 0.95rem; font-weight: 700; text-align: center;">
+                </div>
+                <div>
+                  <label for="descuento-razon-${box.id_caja}" style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 3px;">
+                    Razón / Motivo de la salida: <span style="color: var(--danger, #ef4444);">*</span>
+                  </label>
+                  <input type="text" id="descuento-razon-${box.id_caja}" class="form-control" placeholder="Ej: Utilizado en reparación de monitor Pabellón 2, merma..." style="height: 36px; font-size: 0.825rem;" onkeydown="if(event.key==='Enter') app.descontarStockInsumo('${box.id_caja}')">
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
+                <button type="button" id="btn-descontar-${box.id_caja}" class="btn btn-warning btn-sm" onclick="app.descontarStockInsumo('${box.id_caja}')" style="display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Aplicar Descuento
+                </button>
+              </div>
+            </div>
+          ` : `
+            <div style="padding: 0.55rem 0.75rem; background: var(--warning-subtle); color: var(--warning); border-radius: var(--radius-md); font-size: 0.775rem; font-weight: 600;">
+              ⚠️ Insumo sin stock (0 unidades disponibles). No es posible realizar descuentos.
+            </div>
+          `}
+
+          <!-- Historial de salidas / descuentos -->
+          <div style="margin-top: 0.85rem; padding-top: 0.6rem; border-top: 1px dashed var(--border-subtle);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em;">
+                Historial de Salidas / Descuentos:
+              </span>
+            </div>
+            <div id="historial-salidas-${box.id_caja}" style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.75rem;">
+              <div style="color: var(--text-tertiary); font-style: italic; padding: 0.2rem 0;">Cargando historial de salidas...</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Detalles de Código y Referencias -->
         <div style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem; font-size: 0.825rem; display: flex; flex-direction: column; gap: 0.45rem;">
           <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-subtle); padding-bottom: 0.4rem;">
@@ -4141,11 +4193,154 @@ const app = {
     `;
 
     modal.classList.add("active");
+    this.loadMovimientosInsumo(box.id_caja);
   },
 
   closeCajaModal() {
     const modal = document.getElementById("modal-caja");
     if (modal) modal.classList.remove("active");
+  },
+
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  },
+
+  async loadMovimientosInsumo(idCaja) {
+    const container = document.getElementById(`historial-salidas-${idCaja}`);
+    if (!container) return;
+    try {
+      const res = await fetch(`/api/inventario/${encodeURIComponent(idCaja)}/movimientos`);
+      if (!res.ok) throw new Error("Error cargando historial");
+      const movs = await res.json();
+      if (!movs || movs.length === 0) {
+        container.innerHTML = `
+          <div style="color: var(--text-tertiary); font-style: italic; padding: 0.2rem 0;">
+            No se registran salidas ni descuentos previos para este insumo.
+          </div>
+        `;
+        return;
+      }
+      container.innerHTML = movs.map(m => `
+        <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.35rem 0.55rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+          <div style="display: flex; flex-direction: column; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 600; color: var(--danger, #ef4444);">
+              <span>-${m.cantidad} un.</span>
+              <span style="font-weight: 500; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${this.escapeHtml(m.razon || '')}">
+                ${this.escapeHtml(m.razon || 'Sin motivo')}
+              </span>
+            </div>
+            <div style="font-size: 0.68rem; color: var(--text-tertiary);">
+              Por: <strong>${this.escapeHtml(m.usuario || 'Técnico')}</strong> · Stock: ${m.stock_anterior ?? '?'} → ${m.stock_nuevo ?? '?'}
+            </div>
+          </div>
+          <div style="font-size: 0.68rem; color: var(--text-tertiary); white-space: nowrap; text-align: right;">
+            ${m.fecha_fmt || m.fecha || ''}
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error("Error al cargar movimientos:", err);
+      container.innerHTML = `
+        <div style="color: var(--danger, #ef4444); font-size: 0.75rem;">
+          No fue posible cargar el historial de movimientos.
+        </div>
+      `;
+    }
+  },
+
+  async descontarStockInsumo(idCaja) {
+    const cantInput = document.getElementById(`descuento-cant-${idCaja}`);
+    const razonInput = document.getElementById(`descuento-razon-${idCaja}`);
+    const btn = document.getElementById(`btn-descontar-${idCaja}`);
+
+    if (!cantInput || !razonInput) return;
+
+    const cantidad = parseInt(cantInput.value, 10);
+    const razon = razonInput.value.trim();
+
+    if (isNaN(cantidad) || cantidad <= 0) {
+      this.showToast("La cantidad a descontar debe ser mayor a 0", "error");
+      cantInput.focus();
+      return;
+    }
+
+    if (!razon) {
+      this.showToast("Debe especificar la razón o motivo del descuento", "warning");
+      razonInput.focus();
+      return;
+    }
+
+    const maxStock = parseInt(cantInput.getAttribute("max") || "999999", 10);
+    if (cantidad > maxStock) {
+      this.showToast(`No puede descontar más del stock actual (${maxStock} un.)`, "error");
+      cantInput.focus();
+      return;
+    }
+
+    const usuario = (this.currentUser && (this.currentUser.nombre || this.currentUser.username)) || "Técnico EEMM";
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm" style="width:12px;height:12px;border-width:2px;"></span> Descontando...`;
+    }
+
+    try {
+      const res = await fetch(`/api/inventario/${encodeURIComponent(idCaja)}/descuento`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cantidad: cantidad,
+          razon: razon,
+          usuario: usuario
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Error al descontar stock");
+      }
+
+      this.showToast(`Se descontaron ${cantidad} un. correctamente`, "success");
+
+      // Actualizar datos locales de inventario si existen
+      if (this.inventarioData && Array.isArray(this.inventarioData)) {
+        const idx = this.inventarioData.findIndex(i => i.id_caja === idCaja);
+        if (idx !== -1 && data.caja) {
+          this.inventarioData[idx] = { ...this.inventarioData[idx], ...data.caja };
+        }
+      }
+
+      // Reabrir modal de la caja con los datos actualizados
+      if (data.caja) {
+        this.openBoxModal(data.caja);
+      } else {
+        this.closeCajaModal();
+      }
+
+      // Refrescar inventario en segundo plano
+      if (typeof this.loadInventario === "function") {
+        this.loadInventario();
+      }
+      if (typeof this.renderRack === "function") {
+        this.renderRack();
+      }
+    } catch (err) {
+      console.error("Error al descontar stock:", err);
+      this.showToast(err.message || "Error al procesar el descuento", "error");
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Aplicar Descuento
+        `;
+      }
+    }
   },
 
   /* ==========================================================================
