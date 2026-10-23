@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -96,8 +98,10 @@ public class MainActivity extends AppCompatActivity {
         Window window = getWindow();
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-        window.setStatusBarColor(ContextCompat.getColor(this, R.color.status_bar_dark));
-        window.setNavigationBarColor(ContextCompat.getColor(this, R.color.status_bar_dark));
+        int darkColor = ContextCompat.getColor(this, R.color.app_bg_dark);
+        window.setStatusBarColor(darkColor);
+        window.setNavigationBarColor(darkColor);
+        window.setBackgroundDrawable(new ColorDrawable(darkColor));
 
         // Forzar iconos claros/blancos en la barra de estado (batería, reloj, wifi) para máxima visibilidad sin reflejos
         WindowInsetsControllerCompat insetsController = WindowCompat.getInsetsController(window, window.getDecorView());
@@ -165,6 +169,9 @@ public class MainActivity extends AppCompatActivity {
         settings.setDisplayZoomControls(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+        webView.setBackgroundColor(ContextCompat.getColor(this, R.color.app_bg_dark));
+        swipeRefreshLayout.setBackgroundColor(ContextCompat.getColor(this, R.color.app_bg_dark));
 
         // Append custom indicator to User-Agent
         String defaultUa = settings.getUserAgentString();
@@ -615,6 +622,31 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Exception e) {
                     Toast.makeText(MainActivity.this, "Error al procesar PDF: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
+            });
+        }
+
+        @JavascriptInterface
+        public void updateStatusBarTheme(boolean isDark) {
+            runOnUiThread(() -> {
+                try {
+                    Window window = getWindow();
+                    int barColor = isDark ? ContextCompat.getColor(MainActivity.this, R.color.app_bg_dark)
+                                           : Color.parseColor("#ffffff");
+                    window.setStatusBarColor(barColor);
+                    window.setNavigationBarColor(barColor);
+                    window.setBackgroundDrawable(new ColorDrawable(barColor));
+
+                    View root = findViewById(R.id.rootLayout);
+                    if (root != null) {
+                        root.setBackgroundColor(barColor);
+                    }
+
+                    WindowInsetsControllerCompat insetsController = WindowCompat.getInsetsController(window, window.getDecorView());
+                    if (insetsController != null) {
+                        insetsController.setAppearanceLightStatusBars(!isDark);
+                        insetsController.setAppearanceLightNavigationBars(!isDark);
+                    }
+                } catch (Exception ignored) {}
             });
         }
 

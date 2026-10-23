@@ -415,6 +415,12 @@ const app = {
     if (this.signaturePad) {
       this.signaturePad.updateStrokeStyle();
     }
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.updateStatusBarTheme === "function") {
+      try {
+        window.AndroidBridge.updateStatusBarTheme(theme === "dark");
+      } catch (e) {}
+    }
   },
 
   toggleTheme() {
