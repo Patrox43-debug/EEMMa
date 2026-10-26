@@ -230,10 +230,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.8.2";
+        this.currentAppVersion = "1.8.3";
       }
     } else {
-      this.currentAppVersion = "1.8.2";
+      this.currentAppVersion = "1.8.3";
     }
 
     setTimeout(() => {
@@ -4994,16 +4994,16 @@ const app = {
             </div>
           </div>
           
-          <div style="display: flex; align-items: center; gap: 0.85rem; flex-shrink: 0;">
+          <div class="accesorio-search-item-actions" style="display: flex; align-items: center; gap: 0.65rem; flex-shrink: 0;">
             <div style="text-align: right;">
-              <div style="font-size: 1.05rem; font-weight: 800; color: ${badgeColor}; line-height: 1.1;">
+              <div style="font-size: 1rem; font-weight: 800; color: ${badgeColor}; line-height: 1.1;">
                 ${stock} un.
               </div>
-              <div style="font-size: 0.68rem; font-weight: 600; color: ${badgeColor}; margin-top: 2px;">
+              <div style="font-size: 0.65rem; font-weight: 600; color: ${badgeColor}; margin-top: 1px;">
                 ${stockLabel}
               </div>
             </div>
-            <button type="button" class="${btnClass}" style="white-space: nowrap; font-size: 0.78rem; padding: 0.35rem 0.75rem; pointer-events: none;">
+            <button type="button" class="${btnClass}" style="white-space: nowrap; font-size: 0.75rem; padding: 0.3rem 0.65rem; pointer-events: none;">
               ${btnText}
             </button>
           </div>
@@ -5060,14 +5060,14 @@ const app = {
     if (stockBadge) {
       stockBadge.style.background = badgeBg;
       stockBadge.style.color = badgeColor;
-      stockBadge.textContent = `${stock} un. disponibles`;
+      stockBadge.innerHTML = `🟢 <strong>${stock}</strong> un. disp.`;
     }
 
     if (infoDiv) {
       infoDiv.innerHTML = `
-        <span class="badge" style="background: ${badgeBg}; color: ${badgeColor}; font-weight: 700;">
-          Stock disponible en bodega: ${stock} unidades (Estante: ${item.estanteria_id || 'S/E'} / Sección: ${item.seccion_id || 'S/S'})
-        </span>
+        <div style="font-size: 0.74rem; font-weight: 600; color: ${badgeColor}; padding: 0.3rem 0.55rem; background: ${badgeBg}; border-radius: 6px; word-break: break-word; line-height: 1.35; max-width: 100%; box-sizing: border-box; margin-top: 0.35rem;">
+          ✓ Stock en bodega: <strong>${stock} un.</strong> (Estante: ${item.estanteria_id || 'S/E'} / Sección: ${item.seccion_id || 'S/S'})
+        </div>
       `;
     }
 
@@ -5420,7 +5420,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.8.2",
+  currentAppVersion: "1.8.3",
   pendingUpdateInfo: null,
   updateDownloading: false,
 

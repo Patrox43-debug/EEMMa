@@ -3011,17 +3011,64 @@ select.form-control {
 /* ==========================================================================
    VENTANA DE BÚSQUEDA Y DETALLE DE ACCESORIOS (BODEGA & ENTREGAS)
    ========================================================================== */
+#view-entregas {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+#view-entregas .panel-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.entrega-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .entrega-form-grid {
+    grid-template-columns: 2.2fr 1fr;
+  }
+}
+
+.entrega-selected-card {
+  display: flex;
+  flex-direction: column;
+  border: 1.5px solid var(--color-primary, #2563eb);
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  background: rgba(37, 99, 235, 0.04);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
 .accesorio-search-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 0.85rem;
   border: 1px solid var(--border-subtle, #e2e8f0);
   border-radius: 8px;
   background: var(--bg-surface, #ffffff);
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  gap: 0.5rem;
 }
 
 .accesorio-search-item:hover {
@@ -3043,16 +3090,36 @@ select.form-control {
   box-shadow: none;
 }
 
+@media (max-width: 480px) {
+  .accesorio-search-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .accesorio-search-item-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px dashed var(--border-subtle, #e2e8f0);
+    padding-top: 0.4rem;
+    width: 100%;
+  }
+}
+
 .entrega-trigger-box {
   display: flex;
   align-items: center;
   justify-content: space-between;
   border: 1.5px dashed var(--color-primary, #2563eb);
   border-radius: 8px;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0.85rem;
   background: var(--bg-surface-elevated, #f8fafc);
   cursor: pointer;
   transition: all 0.2s ease;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  gap: 0.65rem;
 }
 
 .entrega-trigger-box:hover {
