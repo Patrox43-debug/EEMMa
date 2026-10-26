@@ -186,7 +186,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>EEMM Hospital · <strong>v1.8.1</strong></span>
+              <span>EEMM Hospital · <strong>v1.8.2</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -288,7 +288,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            EEMM Hospital · Versión <strong>1.8.1</strong>
+            EEMM Hospital · Versión <strong>1.8.2</strong>
           </div>
         </form>
       </section>
@@ -2093,7 +2093,7 @@
     <!-- ====================================================================
          MODAL BÚSQUEDA Y SELECCIÓN DE ACCESORIO EN BODEGA
          ==================================================================== -->
-    <div id="modal-buscar-accesorio" class="modal-overlay" style="display: none;" onclick="if(event.target === this) app.closeBuscarAccesorioModal();">
+    <div id="modal-buscar-accesorio" class="modal-overlay" onclick="if(event.target === this) app.closeBuscarAccesorioModal();">
       <div class="modal-card" style="max-width: 680px; width: 95%; max-height: 88vh; display: flex; flex-direction: column; padding: 1.25rem;">
         
         <!-- Header -->
@@ -2155,7 +2155,7 @@
     <!-- ====================================================================
          MODAL ACTUALIZACIÓN DE LA APLICACIÓN (AUTO-UPDATE)
          ==================================================================== -->
-    <div id="modal-app-update" class="modal-overlay" style="display: none;" onclick="if(event.target === this && !app.updateDownloading) app.closeUpdateModal();">
+    <div id="modal-app-update" class="modal-overlay" onclick="if(event.target === this && !app.updateDownloading) app.closeUpdateModal();">
       <div class="modal-card" style="max-width: 440px; text-align: center; padding: 1.5rem;">
         <div style="width: 58px; height: 58px; margin: 0 auto 1rem; border-radius: 50%; background: rgba(37, 99, 235, 0.12); display: flex; align-items: center; justify-content: center; color: var(--color-primary, #2563eb);">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">

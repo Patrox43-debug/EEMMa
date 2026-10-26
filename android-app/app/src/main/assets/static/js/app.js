@@ -230,10 +230,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.8.1";
+        this.currentAppVersion = "1.8.2";
       }
     } else {
-      this.currentAppVersion = "1.8.1";
+      this.currentAppVersion = "1.8.2";
     }
 
     setTimeout(() => {
@@ -4827,7 +4827,7 @@ const app = {
     const modal = document.getElementById("modal-buscar-accesorio");
     if (!modal) return;
 
-    modal.style.display = "flex";
+    modal.classList.add("active");
 
     // Si aún no se han cargado los insumos, cargarlos ahora
     if (!this.entregasInsumosList || this.entregasInsumosList.length === 0) {
@@ -4856,7 +4856,7 @@ const app = {
 
   closeBuscarAccesorioModal() {
     const modal = document.getElementById("modal-buscar-accesorio");
-    if (modal) modal.style.display = "none";
+    if (modal) modal.classList.remove("active");
   },
 
   setBuscarAccesorioFilter(filter, btn) {
@@ -5420,7 +5420,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.8.1",
+  currentAppVersion: "1.8.2",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
@@ -5570,7 +5570,7 @@ const app = {
     if (btnCancel) btnCancel.style.display = "inline-block";
 
     this.updateDownloading = false;
-    if (modal) modal.style.display = "flex";
+    modal.classList.add("active");
   },
 
   closeUpdateModal() {
@@ -5578,7 +5578,7 @@ const app = {
       this.showToast("Descargando actualización en segundo plano...", "info");
     }
     const modal = document.getElementById("modal-app-update");
-    if (modal) modal.style.display = "none";
+    if (modal) modal.classList.remove("active");
   },
 
   confirmAppUpdate() {
@@ -5596,29 +5596,27 @@ const app = {
     const btnConfirmText = document.getElementById("btn-update-confirm-text");
     const btnCancel = document.getElementById("btn-update-cancel");
 
-    // Verificar si estamos dentro de la APK Android nativa
-    if (window.AndroidBridge && typeof window.AndroidBridge.startAppUpdate === "function") {
-      this.updateDownloading = true;
-      if (progCont) progCont.style.display = "block";
-      if (progBar) progBar.style.width = "5%";
-      if (progPct) progPct.textContent = "5%";
-      if (progLbl) progLbl.textContent = "Iniciando descarga...";
-      if (btnConfirm) btnConfirm.disabled = true;
-      if (btnConfirmText) btnConfirmText.textContent = "Descargando...";
-      if (btnCancel) btnCancel.style.display = "none";
+    // Mostrar progreso de descarga en la UI
+    this.updateDownloading = true;
+    if (progCont) progCont.style.display = "block";
+    if (progBar) progBar.style.width = "5%";
+    if (progPct) progPct.textContent = "5%";
+    if (progLbl) progLbl.textContent = "Iniciando descarga de actualización...";
+    if (btnConfirm) btnConfirm.disabled = true;
+    if (btnConfirmText) btnConfirmText.textContent = "Descargando...";
+    if (btnCancel) btnCancel.style.display = "none";
 
+    // Si estamos en la APK Android nativa con el actualizador integrado
+    if (window.AndroidBridge && typeof window.AndroidBridge.startAppUpdate === "function") {
       window.AndroidBridge.startAppUpdate(downloadUrl);
     } else {
-      // Si está en navegador Web móvil/escritorio, descargar APK directamente
-      this.showToast("Descargando archivo APK de la versión " + this.pendingUpdateInfo.version + "...", "info");
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = `EEMM_v${this.pendingUpdateInfo.version}.apk`;
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      this.closeUpdateModal();
+      // Fallback para versiones previas (v1.7.0 / v1.6.1) o navegador web móvil:
+      // Redirigir URL directamente para que el Download Manager o navegador comience la descarga
+      this.showToast("Descargando actualización APK (versión " + this.pendingUpdateInfo.version + ")...", "info");
+      window.location.href = downloadUrl;
+      setTimeout(() => {
+        this.closeUpdateModal();
+      }, 1500);
     }
   },
 

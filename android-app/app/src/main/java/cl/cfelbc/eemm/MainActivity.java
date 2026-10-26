@@ -258,6 +258,12 @@ public class MainActivity extends AppCompatActivity {
                 Uri uri = request.getUrl();
                 String path = uri.getPath();
 
+                // Interceptar descarga e instalación directa de actualización APK
+                if (path != null && path.endsWith(".apk")) {
+                    downloadAndInstallApk(uri.toString());
+                    return true;
+                }
+
                 // Interceptar peticiones de PDF para descargarlas de forma nativa con DownloadManager
                 if (path != null && (path.endsWith("/pdf") || path.endsWith(".pdf") || path.contains("/pdf/"))) {
                     try {
@@ -820,9 +826,13 @@ public class MainActivity extends AppCompatActivity {
                     output.write(data, 0, count);
 
                     long now = System.currentTimeMillis();
-                    if (fileLength > 0 && (now - lastReportTime > 200)) {
-                        int percent = (int) (total * 100 / fileLength);
-                        reportDownloadProgress(percent, "Descargando actualización: " + percent + "%");
+                    if (now - lastReportTime > 200) {
+                        if (fileLength > 0) {
+                            int percent = (int) (total * 100 / fileLength);
+                            reportDownloadProgress(percent, String.format(Locale.US, "Descargando: %d%% (%.1f / %.1f MB)", percent, total / (1024.0 * 1024.0), fileLength / (1024.0 * 1024.0)));
+                        } else {
+                            reportDownloadProgress(50, String.format(Locale.US, "Descargando: %.1f MB", total / (1024.0 * 1024.0)));
+                        }
                         lastReportTime = now;
                     }
                 }
@@ -831,6 +841,7 @@ public class MainActivity extends AppCompatActivity {
                 reportDownloadProgress(100, "Descarga completada. Abriendo instalador...");
 
                 runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Descarga completada. Abriendo instalador...", Toast.LENGTH_SHORT).show();
                     installApkFile(apkFile);
                 });
 
