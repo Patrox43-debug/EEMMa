@@ -679,7 +679,8 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public String getAppVersionName() {
             try {
-                return BuildConfig.VERSION_NAME;
+                android.content.pm.PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+                return pInfo.versionName != null ? pInfo.versionName : "1.8.0";
             } catch (Exception e) {
                 return "1.8.0";
             }
@@ -688,7 +689,12 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public int getAppVersionCode() {
             try {
-                return BuildConfig.VERSION_CODE;
+                android.content.pm.PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    return (int) pInfo.getLongVersionCode();
+                } else {
+                    return pInfo.versionCode;
+                }
             } catch (Exception e) {
                 return 17;
             }
