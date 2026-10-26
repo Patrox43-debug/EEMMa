@@ -222,6 +222,21 @@ const app = {
     });
 
     this.syncLocalRevisionesServicio();
+
+    // Auto-actualización: inicializar versión y chequear en segundo plano
+    if (window.AndroidBridge && typeof window.AndroidBridge.getAppVersionName === "function") {
+      try {
+        this.currentAppVersion = window.AndroidBridge.getAppVersionName();
+      } catch (e) {
+        this.currentAppVersion = "1.8.0";
+      }
+    } else {
+      this.currentAppVersion = "1.8.0";
+    }
+
+    setTimeout(() => {
+      this.checkForUpdates(true);
+    }, 3000);
   },
 
   /* ==========================================================================
@@ -5171,6 +5186,245 @@ const app = {
       toast.style.transition = "all 0.3s ease";
       setTimeout(() => toast.remove(), 300);
     }, 3500);
+  },
+
+  /* ==========================================================================
+     SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
+     ========================================================================== */
+  currentAppVersion: "1.8.0",
+  pendingUpdateInfo: null,
+  updateDownloading: false,
+
+  isVersionNewer(latestStr, currentStr) {
+    if (!latestStr || !currentStr) return false;
+    const cleanL = latestStr.replace(/^v/i, "").trim().split(".").map(n => parseInt(n, 10) || 0);
+    const cleanC = currentStr.replace(/^v/i, "").trim().split(".").map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(cleanL.length, cleanC.length); i++) {
+      const l = cleanL[i] || 0;
+      const c = cleanC[i] || 0;
+      if (l > c) return true;
+      if (l < c) return false;
+    }
+    return false;
+  },
+
+  async checkForUpdates(isSilent = false) {
+    try {
+      if (!isSilent) {
+        this.showToast("Buscando actualizaciones disponibles...", "info");
+      }
+
+      let updateData = null;
+
+      // 1. Intentar consultar endpoint local del servidor EEMM
+      try {
+        const resp = await fetch("/api/app-version", { cache: "no-store" });
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json && json.version_name) {
+            updateData = {
+              version: json.version_name,
+              downloadUrl: json.download_url || json.latest_url,
+              notes: json.notes || "Actualización disponible con nuevas funciones y optimizaciones.",
+              tag: json.release_tag || ("v" + json.version_name)
+            };
+          }
+        }
+      } catch (e) {
+        console.warn("[Updater] No se pudo conectar a /api/app-version, intentando GitHub API...", e);
+      }
+
+      // 2. Si no hay respuesta o para mayor certeza, verificar GitHub Releases API directamente
+      if (!updateData || !this.isVersionNewer(updateData.version, this.currentAppVersion)) {
+        try {
+          const ghResp = await fetch("https://api.github.com/repos/Patrox43-debug/EEMMa/releases/latest", {
+            cache: "no-store"
+          });
+          if (ghResp.ok) {
+            const ghJson = await ghResp.json();
+            const ghTag = (ghJson.tag_name || "").replace(/^v/i, "");
+            let apkUrl = "";
+            if (ghJson.assets && Array.isArray(ghJson.assets)) {
+              const apkAsset = ghJson.assets.find(a => a.name === "EEMM.apk" || a.name.endsWith(".apk"));
+              if (apkAsset) {
+                apkUrl = apkAsset.browser_download_url;
+              }
+            }
+            if (!apkUrl) {
+              apkUrl = `https://github.com/Patrox43-debug/EEMMa/releases/download/${ghJson.tag_name || 'latest'}/EEMM.apk`;
+            }
+
+            if (ghTag && (!updateData || this.isVersionNewer(ghTag, updateData.version))) {
+              updateData = {
+                version: ghTag,
+                downloadUrl: apkUrl,
+                notes: ghJson.body || "Actualización disponible en GitHub Releases.",
+                tag: ghJson.tag_name
+              };
+            }
+          }
+        } catch (ghErr) {
+          console.warn("[Updater] Error al consultar GitHub Releases:", ghErr);
+        }
+      }
+
+      if (!updateData) {
+        if (!isSilent) {
+          this.showToast("No se pudo comprobar la versión en este momento.", "warning");
+        }
+        return;
+      }
+
+      // Comparar con la versión actual instalada
+      const isNewer = this.isVersionNewer(updateData.version, this.currentAppVersion);
+
+      if (isNewer) {
+        this.pendingUpdateInfo = updateData;
+        this.showUpdateBanner(updateData);
+        if (!isSilent) {
+          this.showUpdateModal(updateData);
+        }
+      } else {
+        if (!isSilent) {
+          this.showToast(`Tu aplicación está al día en la versión más reciente (v${this.currentAppVersion}).`, "success");
+        }
+      }
+    } catch (err) {
+      console.error("[Updater] Error general comprobando actualizaciones:", err);
+      if (!isSilent) {
+        this.showToast("Error al buscar actualizaciones.", "error");
+      }
+    }
+  },
+
+  showUpdateBanner(data) {
+    const bar = document.getElementById("update-notification-bar");
+    const verEl = document.getElementById("update-bar-version");
+    if (bar && verEl) {
+      verEl.textContent = `v${data.version}`;
+      bar.style.display = "flex";
+    }
+  },
+
+  showPendingUpdateModal() {
+    if (this.pendingUpdateInfo) {
+      this.showUpdateModal(this.pendingUpdateInfo);
+    } else {
+      this.checkForUpdates(false);
+    }
+  },
+
+  showUpdateModal(data) {
+    this.pendingUpdateInfo = data;
+    const modal = document.getElementById("modal-app-update");
+    const curVerEl = document.getElementById("update-current-version");
+    const newVerEl = document.getElementById("update-new-version");
+    const notesEl = document.getElementById("update-modal-notes");
+    const progCont = document.getElementById("update-progress-container");
+    const progBar = document.getElementById("update-progress-bar");
+    const progPct = document.getElementById("update-progress-pct");
+    const btnConfirm = document.getElementById("btn-update-confirm");
+    const btnConfirmText = document.getElementById("btn-update-confirm-text");
+    const btnCancel = document.getElementById("btn-update-cancel");
+
+    if (curVerEl) curVerEl.textContent = `v${this.currentAppVersion}`;
+    if (newVerEl) newVerEl.textContent = `v${data.version}`;
+    if (notesEl) {
+      notesEl.textContent = data.notes || "Se han incluido mejoras de estabilidad y nuevas funciones.";
+    }
+
+    if (progCont) progCont.style.display = "none";
+    if (progBar) progBar.style.width = "0%";
+    if (progPct) progPct.textContent = "0%";
+    if (btnConfirm) btnConfirm.disabled = false;
+    if (btnConfirmText) btnConfirmText.textContent = "Actualizar Ahora";
+    if (btnCancel) btnCancel.style.display = "inline-block";
+
+    this.updateDownloading = false;
+    if (modal) modal.style.display = "flex";
+  },
+
+  closeUpdateModal() {
+    if (this.updateDownloading) {
+      this.showToast("Descargando actualización en segundo plano...", "info");
+    }
+    const modal = document.getElementById("modal-app-update");
+    if (modal) modal.style.display = "none";
+  },
+
+  confirmAppUpdate() {
+    if (!this.pendingUpdateInfo || !this.pendingUpdateInfo.downloadUrl) {
+      this.showToast("No se encontró enlace de descarga.", "error");
+      return;
+    }
+
+    const downloadUrl = this.pendingUpdateInfo.downloadUrl;
+    const progCont = document.getElementById("update-progress-container");
+    const progBar = document.getElementById("update-progress-bar");
+    const progPct = document.getElementById("update-progress-pct");
+    const progLbl = document.getElementById("update-progress-label");
+    const btnConfirm = document.getElementById("btn-update-confirm");
+    const btnConfirmText = document.getElementById("btn-update-confirm-text");
+    const btnCancel = document.getElementById("btn-update-cancel");
+
+    // Verificar si estamos dentro de la APK Android nativa
+    if (window.AndroidBridge && typeof window.AndroidBridge.startAppUpdate === "function") {
+      this.updateDownloading = true;
+      if (progCont) progCont.style.display = "block";
+      if (progBar) progBar.style.width = "5%";
+      if (progPct) progPct.textContent = "5%";
+      if (progLbl) progLbl.textContent = "Iniciando descarga...";
+      if (btnConfirm) btnConfirm.disabled = true;
+      if (btnConfirmText) btnConfirmText.textContent = "Descargando...";
+      if (btnCancel) btnCancel.style.display = "none";
+
+      window.AndroidBridge.startAppUpdate(downloadUrl);
+    } else {
+      // Si está en navegador Web móvil/escritorio, descargar APK directamente
+      this.showToast("Descargando archivo APK de la versión " + this.pendingUpdateInfo.version + "...", "info");
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = `EEMM_v${this.pendingUpdateInfo.version}.apk`;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      this.closeUpdateModal();
+    }
+  },
+
+  // Callbacks llamados desde AndroidBridge vía evaluateJavascript
+  onUpdateDownloadProgress(percent, message) {
+    const progCont = document.getElementById("update-progress-container");
+    const progBar = document.getElementById("update-progress-bar");
+    const progPct = document.getElementById("update-progress-pct");
+    const progLbl = document.getElementById("update-progress-label");
+
+    if (progCont) progCont.style.display = "block";
+    if (progBar) progBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+    if (progPct) progPct.textContent = `${percent}%`;
+    if (progLbl && message) progLbl.textContent = message;
+
+    if (percent >= 100) {
+      if (progLbl) progLbl.textContent = "¡Descarga finalizada! Abriendo instalador...";
+      const btnConfirmText = document.getElementById("btn-update-confirm-text");
+      if (btnConfirmText) btnConfirmText.textContent = "Instalando...";
+    }
+  },
+
+  onUpdateDownloadError(errorMsg) {
+    this.updateDownloading = false;
+    const progCont = document.getElementById("update-progress-container");
+    const btnConfirm = document.getElementById("btn-update-confirm");
+    const btnConfirmText = document.getElementById("btn-update-confirm-text");
+    const btnCancel = document.getElementById("btn-update-cancel");
+
+    if (progCont) progCont.style.display = "none";
+    if (btnConfirm) btnConfirm.disabled = false;
+    if (btnConfirmText) btnConfirmText.textContent = "Reintentar";
+    if (btnCancel) btnCancel.style.display = "inline-block";
+
+    this.showToast("Error al descargar actualización: " + errorMsg, "error");
   }
 };
 

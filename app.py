@@ -333,6 +333,22 @@ def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.get("/api/app-version")
+def get_app_version():
+    """
+    Retorna la información de la versión más reciente del APK para auto-actualización.
+    Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
+    """
+    return {
+        "version_name": "1.8.0",
+        "version_code": 17,
+        "release_tag": "v1.8.0",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.8.0/EEMM.apk",
+        "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
+        "notes": "• Sistema de actualización automática dentro de la app con descarga e instalador directo.\n• Módulo de Entrega de Accesorios con descuento de bodega y firmas digitales.\n• Exportación de reportes PDF filtrados por rango de fechas.",
+        "published_at": "2026-10-26T18:50:00-03:00"
+    }
+
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
     """Guarda una imagen enviada como base64 data URI a disco con compresión y retorna la ruta relativa."""
     if not data_uri or not isinstance(data_uri, str) or not data_uri.startswith("data:image"):

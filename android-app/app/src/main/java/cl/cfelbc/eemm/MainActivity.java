@@ -16,8 +16,13 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
+import android.content.pm.ResolveInfo;
 import android.util.Base64;
 import android.media.MediaScannerConnection;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONObject;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -77,6 +82,8 @@ public class MainActivity extends AppCompatActivity {
 
     private ActivityResultLauncher<Intent> fileChooserLauncher;
     private ActivityResultLauncher<String[]> permissionsLauncher;
+    private ActivityResultLauncher<Intent> manageUnknownSourcesLauncher;
+    private File pendingInstallApk = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -151,6 +158,18 @@ public class MainActivity extends AppCompatActivity {
                 permissions -> {
                     // Once permissions granted, launch file chooser intent
                     launchFileChooserIntent();
+                }
+        );
+
+        manageUnknownSourcesLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        if (getPackageManager().canRequestPackageInstalls() && pendingInstallApk != null) {
+                            launchInstallerIntent(pendingInstallApk);
+                            pendingInstallApk = null;
+                        }
+                    }
                 }
         );
     }
@@ -656,5 +675,189 @@ public class MainActivity extends AppCompatActivity {
         public boolean isNativeApp() {
             return true;
         }
+
+        @JavascriptInterface
+        public String getAppVersionName() {
+            try {
+                return BuildConfig.VERSION_NAME;
+            } catch (Exception e) {
+                return "1.8.0";
+            }
+        }
+
+        @JavascriptInterface
+        public int getAppVersionCode() {
+            try {
+                return BuildConfig.VERSION_CODE;
+            } catch (Exception e) {
+                return 17;
+            }
+        }
+
+        @JavascriptInterface
+        public void startAppUpdate(String downloadUrl) {
+            runOnUiThread(() -> {
+                Toast.makeText(MainActivity.this, "Iniciando descarga de actualización...", Toast.LENGTH_SHORT).show();
+                downloadAndInstallApk(downloadUrl);
+            });
+        }
+    }
+
+    private void installApkFile(File apkFile) {
+        if (apkFile == null || !apkFile.exists()) {
+            Toast.makeText(this, "El archivo de actualización no se encontró.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                Toast.makeText(this, "Por favor autorice la instalación para actualizar EEMM", Toast.LENGTH_LONG).show();
+                pendingInstallApk = apkFile;
+                try {
+                    Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                    settingsIntent.setData(Uri.parse("package:" + getPackageName()));
+                    manageUnknownSourcesLauncher.launch(settingsIntent);
+                } catch (Exception e) {
+                    Intent fallbackIntent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
+                    startActivity(fallbackIntent);
+                }
+                return;
+            }
+        }
+
+        launchInstallerIntent(apkFile);
+    }
+
+    private void launchInstallerIntent(File apkFile) {
+        try {
+            Uri apkUri = FileProvider.getUriForFile(
+                    MainActivity.this,
+                    getApplicationContext().getPackageName() + ".fileprovider",
+                    apkFile
+            );
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            java.util.List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String packageName = resolveInfo.activityInfo.packageName;
+                grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(MainActivity.this, "Error al abrir instalador de Android: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void downloadAndInstallApk(String urlString) {
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            InputStream input = null;
+            FileOutputStream output = null;
+            try {
+                reportDownloadProgress(0, "Iniciando conexión con el servidor...");
+                String currentUrl = urlString;
+                int redirectCount = 0;
+
+                while (redirectCount < 6) {
+                    URL url = new URL(currentUrl);
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setInstanceFollowRedirects(true);
+                    connection.setConnectTimeout(15000);
+                    connection.setReadTimeout(30000);
+                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 EEMM-Android-Updater");
+
+                    int status = connection.getResponseCode();
+                    if (status == HttpURLConnection.HTTP_MOVED_TEMP ||
+                        status == HttpURLConnection.HTTP_MOVED_PERM ||
+                        status == HttpURLConnection.HTTP_SEE_OTHER ||
+                        status == 307 || status == 308) {
+                        currentUrl = connection.getHeaderField("Location");
+                        connection.disconnect();
+                        redirectCount++;
+                        continue;
+                    }
+                    if (status != HttpURLConnection.HTTP_OK) {
+                        throw new IOException("El servidor respondió con código HTTP " + status);
+                    }
+                    break;
+                }
+
+                int fileLength = connection.getContentLength();
+                File downloadDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (downloadDir == null) {
+                    downloadDir = getCacheDir();
+                }
+                if (!downloadDir.exists()) {
+                    downloadDir.mkdirs();
+                }
+
+                File apkFile = new File(downloadDir, "eemm_update.apk");
+                if (apkFile.exists()) {
+                    apkFile.delete();
+                }
+
+                input = connection.getInputStream();
+                output = new FileOutputStream(apkFile);
+
+                byte[] data = new byte[8192];
+                long total = 0;
+                int count;
+                long lastReportTime = 0;
+
+                while ((count = input.read(data)) != -1) {
+                    total += count;
+                    output.write(data, 0, count);
+
+                    long now = System.currentTimeMillis();
+                    if (fileLength > 0 && (now - lastReportTime > 200)) {
+                        int percent = (int) (total * 100 / fileLength);
+                        reportDownloadProgress(percent, "Descargando actualización: " + percent + "%");
+                        lastReportTime = now;
+                    }
+                }
+
+                output.flush();
+                reportDownloadProgress(100, "Descarga completada. Abriendo instalador...");
+
+                runOnUiThread(() -> {
+                    installApkFile(apkFile);
+                });
+
+            } catch (Exception e) {
+                reportDownloadError(e.getMessage());
+            } finally {
+                try {
+                    if (output != null) output.close();
+                    if (input != null) input.close();
+                } catch (Exception ignored) {}
+                if (connection != null) connection.disconnect();
+            }
+        }).start();
+    }
+
+    private void reportDownloadProgress(int percent, String message) {
+        runOnUiThread(() -> {
+            if (webView != null) {
+                String safeMsg = JSONObject.quote(message != null ? message : "");
+                String script = "if (window.app && window.app.onUpdateDownloadProgress) { window.app.onUpdateDownloadProgress(" + percent + ", " + safeMsg + "); }";
+                webView.evaluateJavascript(script, null);
+            }
+        });
+    }
+
+    private void reportDownloadError(String errorMsg) {
+        runOnUiThread(() -> {
+            Toast.makeText(MainActivity.this, "Error de actualización: " + errorMsg, Toast.LENGTH_LONG).show();
+            if (webView != null) {
+                String safeMsg = JSONObject.quote(errorMsg != null ? errorMsg : "Error desconocido");
+                String script = "if (window.app && window.app.onUpdateDownloadError) { window.app.onUpdateDownloadError(" + safeMsg + "); }";
+                webView.evaluateJavascript(script, null);
+            }
+        });
     }
 }

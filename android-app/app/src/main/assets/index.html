@@ -172,16 +172,39 @@
                   <span class="dropdown-item-desc">Salir del sistema</span>
                 </div>
               </button>
+
+              <button class="dropdown-item" type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                </svg>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Buscar Actualizaciones</span>
+                  <span class="dropdown-item-desc">Comprobar nueva versión del APK</span>
+                </div>
+              </button>
             </div>
 
             <!-- Versión de la Aplicación -->
-            <div style="padding: 0.45rem 0.65rem 0.15rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); text-align: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              EEMM Hospital · <strong>v1.7.0</strong>
+            <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
+              <span>EEMM Hospital · <strong>v1.8.0</strong></span>
+              <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
         </div>
       </div>
     </header>
+
+    <!-- Barra de Notificación de Actualización Disponible -->
+    <div id="update-notification-bar" style="display: none; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff; padding: 0.55rem 1rem; font-size: 0.82rem; font-weight: 500; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 999; position: sticky; top: 0;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Nueva versión disponible: <strong id="update-bar-version">v1.8.0</strong></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <button type="button" onclick="app.showPendingUpdateModal()" style="background: #ffffff; color: #1e3a8a; border: none; border-radius: 4px; padding: 0.25rem 0.65rem; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Actualizar ahora</button>
+        <button type="button" onclick="document.getElementById('update-notification-bar').style.display='none'" style="background: transparent; border: none; color: rgba(255,255,255,0.8); font-size: 1rem; cursor: pointer; padding: 0 0.25rem;">✕</button>
+      </div>
+    </div>
 
     <!-- Navegación por Pestañas -->
     <nav class="nav-tabs" id="app-nav" style="display: none;">
@@ -265,7 +288,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            EEMM Hospital · Versión <strong>1.7.0</strong>
+            EEMM Hospital · Versión <strong>1.8.0</strong>
           </div>
         </form>
       </section>
@@ -2020,6 +2043,54 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ====================================================================
+         MODAL ACTUALIZACIÓN DE LA APLICACIÓN (AUTO-UPDATE)
+         ==================================================================== -->
+    <div id="modal-app-update" class="modal-overlay" style="display: none;" onclick="if(event.target === this && !app.updateDownloading) app.closeUpdateModal();">
+      <div class="modal-card" style="max-width: 440px; text-align: center; padding: 1.5rem;">
+        <div style="width: 58px; height: 58px; margin: 0 auto 1rem; border-radius: 50%; background: rgba(37, 99, 235, 0.12); display: flex; align-items: center; justify-content: center; color: var(--color-primary, #2563eb);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </div>
+        <h3 id="update-modal-title" style="margin: 0 0 0.4rem; font-size: 1.2rem; font-weight: 700; color: var(--text-primary);">Actualización Disponible</h3>
+        <p style="margin: 0 0 0.85rem; font-size: 0.82rem; color: var(--text-secondary);">Una nueva versión de EEMM está lista para instalar.</p>
+        
+        <div style="display: inline-flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; padding: 0.35rem 0.85rem; background: var(--bg-surface-elevated, #f1f5f9); border-radius: 999px; font-size: 0.82rem; font-weight: 600;">
+          <span id="update-current-version" style="color: var(--text-secondary);">v1.7.0</span>
+          <span style="color: var(--color-primary, #2563eb);">➜</span>
+          <span id="update-new-version" style="color: var(--color-primary, #2563eb); font-weight: 700;">v1.8.0</span>
+        </div>
+
+        <div id="update-modal-notes" style="text-align: left; font-size: 0.82rem; color: var(--text-secondary); background: var(--bg-surface, #f8fafc); border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 8px; padding: 0.85rem; margin-bottom: 1.25rem; white-space: pre-line; max-height: 150px; overflow-y: auto;">
+        </div>
+        
+        <!-- Barra de progreso de descarga -->
+        <div id="update-progress-container" style="display: none; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-primary);">
+            <span id="update-progress-label">Descargando actualización...</span>
+            <span id="update-progress-pct">0%</span>
+          </div>
+          <div style="width: 100%; height: 8px; background: var(--border-subtle, #e2e8f0); border-radius: 4px; overflow: hidden;">
+            <div id="update-progress-bar" style="width: 0%; height: 100%; background: var(--color-primary, #2563eb); transition: width 0.2s ease;"></div>
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div id="update-modal-actions" style="display: flex; gap: 0.75rem; justify-content: center;">
+          <button type="button" id="btn-update-cancel" onclick="app.closeUpdateModal()" class="btn btn-outline" style="flex: 1;">
+            Más tarde
+          </button>
+          <button type="button" id="btn-update-confirm" onclick="app.confirmAppUpdate()" class="btn btn-primary" style="flex: 1.3; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span id="btn-update-confirm-text">Actualizar Ahora</span>
+          </button>
+        </div>
       </div>
     </div>
 
