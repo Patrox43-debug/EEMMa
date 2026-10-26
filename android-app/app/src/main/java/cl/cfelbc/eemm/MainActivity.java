@@ -702,7 +702,7 @@ public class MainActivity extends AppCompatActivity {
                     return pInfo.versionCode;
                 }
             } catch (Exception e) {
-                return 17;
+                return 21;
             }
         }
 
@@ -752,6 +752,7 @@ public class MainActivity extends AppCompatActivity {
             intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
             java.util.List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
             for (ResolveInfo resolveInfo : resInfoList) {
@@ -838,6 +839,21 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 output.flush();
+                try {
+                    output.close();
+                    output = null;
+                } catch (Exception ignored) {}
+                try {
+                    if (input != null) {
+                        input.close();
+                        input = null;
+                    }
+                } catch (Exception ignored) {}
+
+                try {
+                    apkFile.setReadable(true, false);
+                } catch (Exception ignored) {}
+
                 reportDownloadProgress(100, "Descarga completada. Abriendo instalador...");
 
                 runOnUiThread(() -> {

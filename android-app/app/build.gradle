@@ -10,18 +10,29 @@ android {
         applicationId "cl.cfelbc.eemm"
         minSdk 24
         targetSdk 35
-        versionCode 20
-        versionName "1.8.3"
+        versionCode 21
+        versionName "1.8.4"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            storeFile file("keystore/app-key.jks")
+            storePassword "eemmhospital2026"
+            keyAlias "eemm"
+            keyPassword "eemmhospital2026"
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
+            signingConfig signingConfigs.release
             applicationIdSuffix ""
             debuggable true
         }
