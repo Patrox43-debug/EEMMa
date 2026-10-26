@@ -863,3 +863,308 @@ def generate_servicio_pdf(record: dict) -> bytes:
     doc.build(story, onFirstPage=build_pdf_header_footer, onLaterPages=build_pdf_header_footer)
     buf.seek(0)
     return buf.getvalue()
+
+
+def generate_entregas_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: str = None) -> bytes:
+    """
+    Genera un informe PDF oficial consolidado de entregas de accesorios e insumos clínicos
+    por rango de fechas para el Hospital de Curicó (Ingeniería Clínica EEMM).
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=42
+    )
+
+    styles = getSampleStyleSheet()
+
+    # Estilos tipográficos
+    title_style = ParagraphStyle(
+        'DocTitleEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=11,
+        leading=13,
+        textColor=colors.HexColor('#0f172a')
+    )
+    subtitle_style = ParagraphStyle(
+        'DocSubEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#0f172a')
+    )
+    tag_style = ParagraphStyle(
+        'DocTagEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor('#64748b')
+    )
+    meta_title = ParagraphStyle(
+        'MetaTitleEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=11,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor('#0f172a')
+    )
+    meta_sub = ParagraphStyle(
+        'MetaSubEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        leading=9,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor('#64748b')
+    )
+    sec_heading = ParagraphStyle(
+        'SecHeadEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#0f172a')
+    )
+    cell_hdr = ParagraphStyle(
+        'CellHdrEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=7,
+        leading=8.5,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#ffffff')
+    )
+    cell_txt = ParagraphStyle(
+        'CellTxtEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=6.8,
+        leading=8.5,
+        textColor=colors.HexColor('#1e293b')
+    )
+    cell_txt_bold = ParagraphStyle(
+        'CellTxtBoldEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=7,
+        leading=8.5,
+        textColor=colors.HexColor('#0f172a')
+    )
+    cell_txt_center = ParagraphStyle(
+        'CellTxtCenterEnt',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        leading=8.5,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    story = []
+
+    # 1. ENCABEZADO INSTITUCIONAL
+    logo_hcv = get_scaled_image("static/hcv_logo.png", max_width=95, max_height=42) or \
+               get_scaled_image("static/eemm_logo.jpg", max_width=95, max_height=42)
+    
+    col_izq = []
+    if logo_hcv:
+        col_izq.append(logo_hcv)
+    else:
+        col_izq.append(Paragraph("<b>HOSPITAL DE CURICÓ</b>", subtitle_style))
+    
+    col_centro = [
+        Paragraph("HOSPITAL DE CURICÓ — EEMM", title_style),
+        Spacer(1, 1),
+        Paragraph("CONTROL DE ENTREGA Y DESPACHO DE ACCESORIOS E INSUMOS", subtitle_style),
+        Spacer(1, 1),
+        Paragraph("UNIDAD DE INGENIERÍA CLÍNICA Y GESTIÓN BIOMÉDICA", tag_style)
+    ]
+
+    rango_texto = "Histórico Completo"
+    if fecha_inicio and fecha_fin:
+        rango_texto = f"{fecha_inicio} al {fecha_fin}"
+    elif fecha_inicio:
+        rango_texto = f"Desde {fecha_inicio}"
+    elif fecha_fin:
+        rango_texto = f"Hasta {fecha_fin}"
+
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+    col_der = [
+        Paragraph("ACTA OFICIAL DE ENTREGA", meta_title),
+        Spacer(1, 1),
+        Paragraph(f"<b>Período:</b> {rango_texto}", meta_sub),
+        Paragraph(f"<b>Emisión:</b> {now_str}", meta_sub),
+        Paragraph(f"<b>Total Registros:</b> {len(entregas)}", meta_sub)
+    ]
+
+    header_table = Table([[col_izq, col_centro, col_der]], colWidths=[100, 260, 180])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    story.append(header_table)
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#0f172a'), spaceBefore=4, spaceAfter=8))
+
+    # 2. TARJETAS DE RESUMEN EJECUTIVO
+    total_unidades = sum(int(e.get("cantidad") or 0) for e in entregas)
+    servicios_unicos = len(set(e.get("servicio") for e in entregas if e.get("servicio")))
+
+    summary_data = [
+        [
+            Paragraph("TOTAL ENTREGAS", tag_style),
+            Paragraph("UNIDADES ENTREGADAS", tag_style),
+            Paragraph("SERVICIOS BENEFICIADOS", tag_style),
+            Paragraph("ESTADO DE BODEGA", tag_style)
+        ],
+        [
+            Paragraph(f"<b>{len(entregas)}</b> entregas", cell_txt_bold),
+            Paragraph(f"<b>{total_unidades}</b> unidades", cell_txt_bold),
+            Paragraph(f"<b>{servicios_unicos}</b> áreas / servicios", cell_txt_bold),
+            Paragraph("<b>Descontado en Bodega</b>", cell_txt_bold)
+        ]
+    ]
+    summary_table = Table(summary_data, colWidths=[135, 135, 135, 135])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 8))
+
+    # 3. TABLA DE ENTREGAS
+    story.append(Paragraph("DETALLE DE ENTREGAS Y RECEPCIÓN CONFORME", sec_heading))
+    story.append(Spacer(1, 4))
+
+    # Anchos de columna que suman exactamente 540 pt (ancho imprimible en carta con 36pt de márgenes)
+    col_w = [24, 66, 78, 124, 34, 110, 104]
+
+    table_data = [
+        [
+            Paragraph("<b>#</b>", cell_hdr),
+            Paragraph("<b>Fecha / Folio</b>", cell_hdr),
+            Paragraph("<b>Servicio Clínico</b>", cell_hdr),
+            Paragraph("<b>Accesorio / Insumo</b>", cell_hdr),
+            Paragraph("<b>Cant.</b>", cell_hdr),
+            Paragraph("<b>Receptor / Entrega</b>", cell_hdr),
+            Paragraph("<b>Firma Recepción</b>", cell_hdr),
+        ]
+    ]
+
+    if not entregas:
+        table_data.append([
+            "",
+            Paragraph("No se encontraron entregas en el rango de fechas seleccionado.", cell_txt),
+            "", "", "", "", ""
+        ])
+    else:
+        for idx, e in enumerate(entregas, 1):
+            fecha_e = str(e.get("fecha_fmt") or e.get("fecha") or "")
+            folio_e = str(e.get("folio") or f"ENT-{e.get('id', idx)}")
+            rec_e = str(e.get("nombre_receptor") or "")
+            tec_e = str(e.get("usuario_entrega") or "Técnico EEMM")
+            acc_e = str(e.get("nombre_accesorio") or "")
+            serv_e = str(e.get("servicio") or "")
+            cant_e = str(e.get("cantidad") or "1")
+            obs_e = str(e.get("observaciones") or "").strip()
+
+            c_fecha = [
+                Paragraph(f"<b>{fecha_e}</b>", cell_txt),
+                Paragraph(f"<font color='#64748b'>{folio_e}</font>", tag_style)
+            ]
+            c_serv = Paragraph(f"<b>{serv_e}</b>", cell_txt)
+            c_acc_items = [Paragraph(f"<b>{acc_e}</b>", cell_txt_bold)]
+            if obs_e:
+                c_acc_items.append(Paragraph(f"<i>Nota: {obs_e}</i>", tag_style))
+            
+            c_cant = Paragraph(f"<b>{cant_e}</b> un.", cell_txt_center)
+            c_rec = [
+                Paragraph(f"<b>Recibe:</b> {rec_e}", cell_txt),
+                Paragraph(f"<b>Entrega:</b> {tec_e}", tag_style)
+            ]
+
+            # Firma digital
+            firma_data = e.get("firma_data") or e.get("firma")
+            sig_img = get_scaled_image(firma_data, max_width=94, max_height=30)
+            if sig_img:
+                c_sig = sig_img
+            else:
+                c_sig = Paragraph("<font color='#94a3b8'>Firma digital registrada</font>", tag_style)
+
+            table_data.append([
+                Paragraph(str(idx), cell_txt_center),
+                c_fecha,
+                c_serv,
+                c_acc_items,
+                c_cant,
+                c_rec,
+                c_sig
+            ])
+
+    ent_table = Table(table_data, colWidths=col_w, repeatRows=1)
+    t_styles = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (4, 0), (4, -1), 'CENTER'),
+        ('ALIGN', (6, 0), (6, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+    ]
+
+    for r in range(1, len(table_data)):
+        bg = colors.HexColor('#ffffff') if r % 2 != 0 else colors.HexColor('#f8fafc')
+        t_styles.append(('BACKGROUND', (0, r), (-1, r), bg))
+
+    ent_table.setStyle(TableStyle(t_styles))
+    story.append(ent_table)
+    story.append(Spacer(1, 10))
+
+    # 4. CIERRE INSTITUCIONAL Y DECLARACIÓN
+    closing_elements = [
+        Paragraph(
+            "<b>Nota Legal e Institucional:</b> La presente acta certifica el despacho efectivo y la recepción conforme de los insumos y accesorios descritos precedentemente para el servicio hospitalario correspondiente, habiéndose descontado debidamente del inventario oficial de la bodega EEMM.",
+            tag_style
+        ),
+        Spacer(1, 12)
+    ]
+
+    firmas_cierre = [
+        [
+            Paragraph("__________________________________________<br/><b>Responsable de Bodega / Ingeniería Clínica</b><br/>Unidad de Equipos Médicos", cell_txt_center),
+            Paragraph("__________________________________________<br/><b>Supervisión / Jefatura de Servicio</b><br/>Hospital de Curicó", cell_txt_center)
+        ]
+    ]
+    t_firmas = Table(firmas_cierre, colWidths=[270, 270])
+    t_firmas.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    closing_elements.append(t_firmas)
+    story.append(KeepTogether(closing_elements))
+
+    doc.build(story, onFirstPage=build_pdf_header_footer, onLaterPages=build_pdf_header_footer)
+    buf.seek(0)
+    return buf.getvalue()
+

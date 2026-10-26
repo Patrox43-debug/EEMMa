@@ -1998,7 +1998,7 @@ select.form-control {
 
 .module-cards-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
   margin-bottom: 1.75rem;
 }
@@ -2033,6 +2033,10 @@ select.form-control {
   background: linear-gradient(90deg, #f59e0b, #d97706);
 }
 
+.module-card-entregas::before {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
 .module-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-lg);
@@ -2044,6 +2048,10 @@ select.form-control {
 
 .module-card-bodega:hover {
   border-color: #f59e0b;
+}
+
+.module-card-entregas:hover {
+  border-color: #10b981;
 }
 
 .module-card-header {

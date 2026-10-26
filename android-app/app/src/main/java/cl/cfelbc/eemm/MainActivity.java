@@ -252,6 +252,8 @@ public class MainActivity extends AppCompatActivity {
                             fileName = "Reporte_Servicio_" + System.currentTimeMillis() + ".pdf";
                         } else if (path.contains("chequeo")) {
                             fileName = "Chequeo_EEMM_" + System.currentTimeMillis() + ".pdf";
+                        } else if (path.contains("entregas")) {
+                            fileName = "Reporte_Entregas_" + System.currentTimeMillis() + ".pdf";
                         }
 
                         dmReq.setDescription("Descargando reporte oficial EEMM...");

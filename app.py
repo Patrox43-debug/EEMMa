@@ -24,7 +24,7 @@ import csv
 import json
 from pydantic import BaseModel
 
-from pdf_generator import generate_chequeo_pdf, generate_servicio_pdf
+from pdf_generator import generate_chequeo_pdf, generate_servicio_pdf, generate_entregas_pdf
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.getenv("DB_PATH", os.path.join(BASE_DIR, "eemm.db"))
@@ -183,6 +183,26 @@ def ensure_db_initialized():
         );
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_mov_caja ON inventario_movimientos(id_caja);")
+
+        # 5.2 Tabla entregas_accesorios (Despacho a servicios clínicos con firma de recepción)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS entregas_accesorios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            folio TEXT UNIQUE,
+            nombre_receptor TEXT NOT NULL,
+            servicio TEXT NOT NULL,
+            id_caja TEXT NOT NULL,
+            nombre_accesorio TEXT NOT NULL,
+            cantidad INTEGER NOT NULL,
+            usuario_entrega TEXT NOT NULL,
+            firma_data TEXT,
+            observaciones TEXT,
+            fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_fecha ON entregas_accesorios(fecha);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_caja ON entregas_accesorios(id_caja);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_servicio ON entregas_accesorios(servicio);")
 
         # 6. Tabla unidades
         cursor.execute("""
@@ -2080,6 +2100,281 @@ def delete_insumo(id_caja: str):
     conn.commit()
     conn.close()
     return {"ok": True, "message": f"Insumo '{curr['nombre_caja']}' eliminado correctamente"}
+
+
+# ==============================================================================
+# MÓDULO ENTREGA DE ACCESORIOS E INSUMOS CLÍNICOS
+# ==============================================================================
+
+class EntregaAccesorioCreate(BaseModel):
+    nombre_receptor: str
+    servicio: str
+    id_caja: str
+    cantidad: int
+    firma_data: Optional[str] = None
+    observaciones: Optional[str] = None
+    usuario_entrega: Optional[str] = None
+
+@app.post("/api/entregas-accesorios")
+def create_entrega_accesorio(item: EntregaAccesorioCreate):
+    nombre_rec = (item.nombre_receptor or "").strip()
+    if not nombre_rec:
+        raise HTTPException(status_code=400, detail="Debe indicar el nombre de quien recibe el accesorio")
+    
+    servicio = (item.servicio or "").strip()
+    if not servicio:
+        raise HTTPException(status_code=400, detail="Debe indicar el servicio clínico de destino")
+    
+    if item.cantidad <= 0:
+        raise HTTPException(status_code=400, detail="La cantidad a entregar debe ser mayor a 0")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Asegurar que existan las tablas requeridas
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS entregas_accesorios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folio TEXT UNIQUE,
+        nombre_receptor TEXT NOT NULL,
+        servicio TEXT NOT NULL,
+        id_caja TEXT NOT NULL,
+        nombre_accesorio TEXT NOT NULL,
+        cantidad INTEGER NOT NULL,
+        usuario_entrega TEXT NOT NULL,
+        firma_data TEXT,
+        observaciones TEXT,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS inventario_movimientos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_caja TEXT NOT NULL,
+        tipo TEXT NOT NULL DEFAULT 'DESCUENTO',
+        cantidad INTEGER NOT NULL,
+        razon TEXT NOT NULL,
+        usuario TEXT,
+        stock_anterior INTEGER,
+        stock_nuevo INTEGER,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    # Verificar stock en bodega
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (item.id_caja,))
+    curr_caja = cursor.fetchone()
+    if not curr_caja:
+        conn.close()
+        raise HTTPException(status_code=404, detail="El accesorio seleccionado no existe en bodega")
+    
+    curr_cant = curr_caja["cantidad"] or 0
+    if curr_cant < item.cantidad:
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stock insuficiente en bodega. Stock actual: {curr_cant} un., solicitado: {item.cantidad} un."
+        )
+    
+    # 1. Descontar stock en inventario
+    nueva_cant = curr_cant - item.cantidad
+    nuevo_estado = "Agotado" if nueva_cant == 0 else ("Stock Bajo" if nueva_cant < 5 else "OK")
+    cursor.execute("""
+        UPDATE inventario
+        SET cantidad = ?, estado = ?
+        WHERE id_caja = ?
+    """, (nueva_cant, nuevo_estado, item.id_caja))
+
+    # 2. Registrar movimiento en inventario_movimientos
+    usuario_ent = (item.usuario_entrega or "Técnico EEMM").strip()
+    nombre_accesorio = curr_caja["nombre_caja"]
+    razon_mov = f"Entrega a {nombre_rec} ({servicio})"
+    if item.observaciones and item.observaciones.strip():
+        razon_mov += f" - {item.observaciones.strip()}"
+    
+    cursor.execute("""
+        INSERT INTO inventario_movimientos (id_caja, tipo, cantidad, razon, usuario, stock_anterior, stock_nuevo, fecha)
+        VALUES (?, 'ENTREGA', ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    """, (item.id_caja, item.cantidad, razon_mov, usuario_ent, curr_cant, nueva_cant))
+
+    # 3. Generar folio oficial de entrega (ENT-YYYYMMDD-XXXX)
+    date_prefix = datetime.now().strftime("%Y%m%d")
+    cursor.execute("SELECT COUNT(*) FROM entregas_accesorios WHERE date(fecha) = date('now', 'localtime')")
+    seq = (cursor.fetchone()[0] or 0) + 1
+    folio = f"ENT-{date_prefix}-{seq:04d}"
+
+    # 4. Insertar registro de entrega
+    cursor.execute("""
+        INSERT INTO entregas_accesorios (
+            folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
+            cantidad, usuario_entrega, firma_data, observaciones, fecha
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    """, (
+        folio,
+        nombre_rec,
+        servicio,
+        item.id_caja,
+        nombre_accesorio,
+        item.cantidad,
+        usuario_ent,
+        item.firma_data,
+        (item.observaciones or "").strip(),
+    ))
+    entrega_id = cursor.lastrowid
+    conn.commit()
+
+    # Obtener el registro creado
+    cursor.execute("""
+        SELECT id, folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
+               cantidad, usuario_entrega, firma_data, observaciones,
+               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
+        FROM entregas_accesorios
+        WHERE id = ?
+    """, (entrega_id,))
+    entrega_row = cursor.fetchone()
+
+    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (item.id_caja,))
+    updated_caja = cursor.fetchone()
+    conn.close()
+
+    return {
+        "ok": True,
+        "entrega": dict(entrega_row),
+        "caja": dict(updated_caja),
+        "message": f"Entrega {folio} registrada exitosamente. Se descontaron {item.cantidad} un. de bodega."
+    }
+
+@app.get("/api/entregas-accesorios")
+def list_entregas_accesorios(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 100
+):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS entregas_accesorios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folio TEXT UNIQUE,
+        nombre_receptor TEXT NOT NULL,
+        servicio TEXT NOT NULL,
+        id_caja TEXT NOT NULL,
+        nombre_accesorio TEXT NOT NULL,
+        cantidad INTEGER NOT NULL,
+        usuario_entrega TEXT NOT NULL,
+        firma_data TEXT,
+        observaciones TEXT,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    clauses = []
+    params = []
+
+    if fecha_inicio and fecha_inicio.strip():
+        clauses.append("date(fecha) >= date(?)")
+        params.append(fecha_inicio.strip())
+
+    if fecha_fin and fecha_fin.strip():
+        clauses.append("date(fecha) <= date(?)")
+        params.append(fecha_fin.strip())
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        clauses.append("(folio LIKE ? OR nombre_receptor LIKE ? OR servicio LIKE ? OR nombre_accesorio LIKE ? OR usuario_entrega LIKE ?)")
+        params.extend([term, term, term, term, term])
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"""
+        SELECT id, folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
+               cantidad, usuario_entrega, firma_data, observaciones,
+               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
+        FROM entregas_accesorios
+        {where_sql}
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    params.append(limit)
+    cursor.execute(sql, tuple(params))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+@app.get("/api/entregas-accesorios/pdf")
+def export_entregas_pdf(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    q: Optional[str] = None,
+    download: bool = False
+):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS entregas_accesorios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folio TEXT UNIQUE,
+        nombre_receptor TEXT NOT NULL,
+        servicio TEXT NOT NULL,
+        id_caja TEXT NOT NULL,
+        nombre_accesorio TEXT NOT NULL,
+        cantidad INTEGER NOT NULL,
+        usuario_entrega TEXT NOT NULL,
+        firma_data TEXT,
+        observaciones TEXT,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    clauses = []
+    params = []
+
+    if fecha_inicio and fecha_inicio.strip():
+        clauses.append("date(fecha) >= date(?)")
+        params.append(fecha_inicio.strip())
+
+    if fecha_fin and fecha_fin.strip():
+        clauses.append("date(fecha) <= date(?)")
+        params.append(fecha_fin.strip())
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        clauses.append("(folio LIKE ? OR nombre_receptor LIKE ? OR servicio LIKE ? OR nombre_accesorio LIKE ? OR usuario_entrega LIKE ?)")
+        params.extend([term, term, term, term, term])
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"""
+        SELECT id, folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
+               cantidad, usuario_entrega, firma_data, observaciones,
+               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
+        FROM entregas_accesorios
+        {where_sql}
+        ORDER BY fecha ASC, id ASC
+    """
+    cursor.execute(sql, tuple(params))
+    entregas = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    try:
+        pdf_bytes = generate_entregas_pdf(entregas, fecha_inicio, fecha_fin)
+        disposition = "attachment" if download else "inline"
+        
+        f_ini = fecha_inicio or "inicio"
+        f_fin = fecha_fin or datetime.now().strftime("%Y-%m-%d")
+        filename = f"Reporte_Entregas_Accesorios_{f_ini}_{f_fin}.pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
+                "Content-Type": "application/pdf",
+                "Cache-Control": "no-cache"
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] Error generando PDF de entregas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al generar el reporte PDF: {str(e)}")
 
 
 # Catálogo oficial de pautas técnicas por categoría

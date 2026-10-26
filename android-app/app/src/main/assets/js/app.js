@@ -25,6 +25,11 @@ const app = {
   currentHistorialTab: "equipos",
   historialServiciosData: [],
 
+  // Estado para Entrega de Accesorios
+  entregaSignaturePad: null,
+  entregasData: [],
+  entregasInsumosList: [],
+
   currentCategory: "GENERAL",
   currentChecklistItems: [],
   checklistValues: {},
@@ -170,6 +175,9 @@ const app = {
       "Foto 2: Placa / Detalle"
     ]);
     this.servicioSignaturePad = new SignaturePad("servicio-signature-canvas");
+
+    // Inicializar manejador de firma para Entrega de Accesorios
+    this.entregaSignaturePad = new SignaturePad("entrega-signature-canvas");
 
     // Configurar buscadores con autocompletado
     this.initAutocomplete();
@@ -415,6 +423,12 @@ const app = {
     if (this.signaturePad) {
       this.signaturePad.updateStrokeStyle();
     }
+    if (this.servicioSignaturePad) {
+      this.servicioSignaturePad.updateStrokeStyle();
+    }
+    if (this.entregaSignaturePad) {
+      this.entregaSignaturePad.updateStrokeStyle();
+    }
 
     if (window.AndroidBridge && typeof window.AndroidBridge.updateStatusBarTheme === "function") {
       try {
@@ -453,7 +467,7 @@ const app = {
     this.activeTab = tabName;
 
     // Ocultar todas las vistas
-    const views = ["login", "modulo-selector", "dashboard", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario"];
+    const views = ["login", "modulo-selector", "dashboard", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario", "entregas"];
     views.forEach((v) => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = v === tabName ? "block" : "none";
@@ -467,6 +481,8 @@ const app = {
       // Mantener sincronizado el módulo activo según la pestaña navegada
       if (tabName === "inventario") {
         this.currentModule = "bodega";
+      } else if (tabName === "entregas") {
+        this.currentModule = "entregas";
       } else if (tabName === "chequeo" || tabName === "chequeo-servicio" || tabName === "historial" || tabName === "equipos" || tabName === "dashboard") {
         this.currentModule = "chequeo";
       }
@@ -493,6 +509,11 @@ const app = {
       this.loadAdminDashboard();
     } else if (tabName === "inventario") {
       this.loadInventario();
+    } else if (tabName === "entregas") {
+      this.loadEntregasView();
+      if (this.entregaSignaturePad) {
+        setTimeout(() => this.entregaSignaturePad.initCanvas(), 100);
+      }
     } else if (tabName === "chequeo" && this.signaturePad) {
       // Reajustar canvas para tamaño correcto
       setTimeout(() => this.signaturePad.initCanvas(), 100);
@@ -859,6 +880,8 @@ const app = {
     } else {
       if (moduleName === "bodega") {
         this.navigate("inventario");
+      } else if (moduleName === "entregas") {
+        this.navigate("entregas");
       } else {
         if (this.currentUser && this.currentUser.rol === "ingeniero") {
           this.navigate("dashboard");
@@ -906,6 +929,11 @@ const app = {
     if (tabsBodega) tabsBodega.style.display = isBodega ? "flex" : "none";
 
     // Pestañas globales en la barra superior
+    const entregasTab = document.getElementById("nav-tab-entregas");
+    if (entregasTab) {
+      entregasTab.style.display = "inline-flex";
+    }
+
     const dashTab = document.getElementById("nav-tab-dashboard");
     if (dashTab) {
       dashTab.style.display = (isAdmin || isIngeniero) ? "inline-flex" : "none";
@@ -4659,6 +4687,471 @@ const app = {
 
     this.showToast("Generando y descargando reporte Excel de bodega...", "info");
     window.location.href = url;
+  },
+
+  /* ==========================================================================
+     MÓDULO ENTREGA DE ACCESORIOS E INSUMOS CLÍNICOS
+     ========================================================================== */
+  switchEntregasSubTab(subTab) {
+    const vNueva = document.getElementById("entregas-subview-nueva");
+    const vHist = document.getElementById("entregas-subview-historial");
+    const btnNueva = document.getElementById("btn-tab-nueva-entrega");
+    const btnHist = document.getElementById("btn-tab-historial-entregas");
+
+    if (subTab === "nueva") {
+      if (vNueva) vNueva.style.display = "block";
+      if (vHist) vHist.style.display = "none";
+      if (btnNueva) {
+        btnNueva.className = "btn btn-primary btn-sm";
+      }
+      if (btnHist) {
+        btnHist.className = "btn btn-outline btn-sm";
+      }
+      if (this.entregaSignaturePad) {
+        setTimeout(() => this.entregaSignaturePad.initCanvas(), 100);
+      }
+    } else {
+      if (vNueva) vNueva.style.display = "none";
+      if (vHist) vHist.style.display = "block";
+      if (btnNueva) {
+        btnNueva.className = "btn btn-outline btn-sm";
+      }
+      if (btnHist) {
+        btnHist.className = "btn btn-primary btn-sm";
+      }
+      this.loadEntregasHistory();
+    }
+  },
+
+  async loadEntregasView() {
+    // Configurar fechas por defecto si están vacías
+    const fDesde = document.getElementById("filtro-entrega-desde");
+    const fHasta = document.getElementById("filtro-entrega-hasta");
+    const now = new Date();
+    const hoyStr = now.toISOString().slice(0, 10);
+    const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+
+    if (fDesde && !fDesde.value) fDesde.value = primerDiaMes;
+    if (fHasta && !fHasta.value) fHasta.value = hoyStr;
+
+    // Cargar listas desplegables
+    await this.populateEntregasServicios();
+    await this.populateEntregasAccesorios();
+
+    // Inicializar canvas de firma
+    if (this.entregaSignaturePad) {
+      setTimeout(() => this.entregaSignaturePad.initCanvas(), 120);
+    }
+  },
+
+  async populateEntregasServicios() {
+    const select = document.getElementById("entrega-servicio");
+    if (!select) return;
+
+    let servicios = [];
+    try {
+      const res = await fetch("/api/unidades");
+      if (res.ok) {
+        servicios = await res.json();
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener lista de servicios desde API:", e);
+    }
+
+    if (!servicios || servicios.length === 0) {
+      servicios = [
+        "PABELLÓN CENTRAL", "URGENCIAS ADULTO", "URGENCIAS PEDIÁTRICA", "UCI ADULTO", "UCI PEDIÁTRICA",
+        "UTI ADULTO", "MEDICINA", "CIRUGÍA", "PEDIATRÍA", "MATERNIDAD", "LABORATORIO", "IMAGENOLOGÍA",
+        "DIÁLISIS", "ENDOSCOPÍA", "CONSULTA EXTERNA", "ESTERILIZACIÓN", "ONCOLOGÍA", "ANATOMÍA PATOLÓGICA",
+        "ALIVIO DEL DOLOR", "CARDIOVASCULAR", "NEONATOLOGÍA", "KINESIOLOGÍA", "OFTALMOLOGÍA", "DENTAL"
+      ];
+    }
+
+    select.innerHTML = '<option value="">-- Selecciona el Servicio Clínico --</option>';
+    servicios.sort().forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      select.appendChild(opt);
+    });
+  },
+
+  async populateEntregasAccesorios() {
+    const select = document.getElementById("entrega-accesorio");
+    if (!select) return;
+
+    select.innerHTML = '<option value="">-- Cargando accesorios de bodega... --</option>';
+
+    try {
+      const res = await fetch("/api/inventario");
+      if (!res.ok) throw new Error("Error cargando inventario");
+      const items = await res.json();
+      this.entregasInsumosList = Array.isArray(items) ? items : [];
+
+      select.innerHTML = '<option value="">-- Selecciona un accesorio de bodega --</option>';
+      
+      // Ordenar alfabéticamente por nombre
+      const sorted = [...this.entregasInsumosList].sort((a, b) =>
+        (a.nombre_caja || "").localeCompare(b.nombre_caja || "")
+      );
+
+      sorted.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item.id_caja;
+        const stock = item.cantidad || 0;
+        const estadoTxt = stock === 0 ? "⚠️ SIN STOCK" : `${stock} un. disp.`;
+        opt.textContent = `${item.nombre_caja || item.id_caja} (${estadoTxt} - Estante: ${item.estanteria_id || 'S/E'})`;
+        if (stock <= 0) {
+          opt.style.color = "var(--text-tertiary)";
+        }
+        select.appendChild(opt);
+      });
+
+    } catch (err) {
+      console.error("Error al cargar accesorios para entrega:", err);
+      select.innerHTML = '<option value="">-- Error al cargar insumos de bodega --</option>';
+    }
+  },
+
+  onEntregaAccesorioChanged() {
+    const select = document.getElementById("entrega-accesorio");
+    const infoDiv = document.getElementById("entrega-stock-info");
+    const cantInput = document.getElementById("entrega-cantidad");
+
+    if (!select || !infoDiv || !cantInput) return;
+
+    const selectedId = select.value;
+    if (!selectedId) {
+      infoDiv.innerHTML = "Selecciona un accesorio para verificar el stock disponible en bodega.";
+      cantInput.removeAttribute("max");
+      cantInput.value = 1;
+      return;
+    }
+
+    const item = (this.entregasInsumosList || []).find(i => i.id_caja === selectedId);
+    if (!item) return;
+
+    const stock = item.cantidad || 0;
+    cantInput.setAttribute("max", stock);
+
+    if (stock <= 0) {
+      infoDiv.innerHTML = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; font-weight: 700;">⚠️ Insumo Agotado (0 un. disponibles). No es posible realizar entregas.</span>`;
+      cantInput.value = 0;
+    } else {
+      const badgeColor = stock < 5 ? '#f59e0b' : '#10b981';
+      const badgeBg = stock < 5 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+      infoDiv.innerHTML = `
+        <span class="badge" style="background: ${badgeBg}; color: ${badgeColor}; font-weight: 700;">
+          Stock disponible en bodega: ${stock} un. (Estante: ${item.estanteria_id || 'S/E'} / Sección: ${item.seccion_id || 'S/S'})
+        </span>
+      `;
+      if (parseInt(cantInput.value, 10) <= 0 || parseInt(cantInput.value, 10) > stock) {
+        cantInput.value = 1;
+      }
+    }
+  },
+
+  clearEntregaSignature() {
+    if (this.entregaSignaturePad) {
+      this.entregaSignaturePad.clear();
+      this.showToast("Lienzo de firma limpiado", "info");
+    }
+  },
+
+  resetEntregaForm() {
+    const receptorInput = document.getElementById("entrega-receptor");
+    const servicioSelect = document.getElementById("entrega-servicio");
+    const accesorioSelect = document.getElementById("entrega-accesorio");
+    const cantInput = document.getElementById("entrega-cantidad");
+    const obsInput = document.getElementById("entrega-observaciones");
+    const stockInfo = document.getElementById("entrega-stock-info");
+
+    if (receptorInput) receptorInput.value = "";
+    if (servicioSelect) servicioSelect.value = "";
+    if (accesorioSelect) accesorioSelect.value = "";
+    if (cantInput) {
+      cantInput.value = 1;
+      cantInput.removeAttribute("max");
+    }
+    if (obsInput) obsInput.value = "";
+    if (stockInfo) stockInfo.innerHTML = "Selecciona un accesorio para verificar el stock disponible en bodega.";
+
+    if (this.entregaSignaturePad) {
+      this.entregaSignaturePad.clear();
+    }
+  },
+
+  async submitEntregaAccesorio() {
+    const receptorInput = document.getElementById("entrega-receptor");
+    const servicioSelect = document.getElementById("entrega-servicio");
+    const accesorioSelect = document.getElementById("entrega-accesorio");
+    const cantInput = document.getElementById("entrega-cantidad");
+    const obsInput = document.getElementById("entrega-observaciones");
+    const submitBtn = document.getElementById("btn-submit-entrega");
+
+    if (!receptorInput || !servicioSelect || !accesorioSelect || !cantInput) return;
+
+    const receptor = receptorInput.value.trim();
+    const servicio = servicioSelect.value.trim();
+    const idCaja = accesorioSelect.value.trim();
+    const cantidad = parseInt(cantInput.value, 10);
+    const obs = obsInput ? obsInput.value.trim() : "";
+
+    if (!receptor) {
+      this.showToast("Ingresa el nombre de quien recibe el accesorio", "warning");
+      receptorInput.focus();
+      return;
+    }
+
+    if (!servicio) {
+      this.showToast("Selecciona el servicio clínico de destino", "warning");
+      servicioSelect.focus();
+      return;
+    }
+
+    if (!idCaja) {
+      this.showToast("Selecciona el accesorio que vas a despachar de bodega", "warning");
+      accesorioSelect.focus();
+      return;
+    }
+
+    if (isNaN(cantidad) || cantidad <= 0) {
+      this.showToast("La cantidad a entregar debe ser mayor a 0", "warning");
+      cantInput.focus();
+      return;
+    }
+
+    const maxStock = parseInt(cantInput.getAttribute("max") || "999999", 10);
+    if (cantidad > maxStock) {
+      this.showToast(`No puedes entregar más del stock disponible (${maxStock} un.)`, "error");
+      cantInput.focus();
+      return;
+    }
+
+    if (!this.entregaSignaturePad || this.entregaSignaturePad.isEmpty()) {
+      this.showToast("Debe registrar la firma digital de recepción antes de continuar", "warning");
+      return;
+    }
+
+    const firmaData = this.entregaSignaturePad.toDataURL();
+    const usuarioEntrega = (this.currentUser && (this.currentUser.nombre || this.currentUser.username)) || "Técnico EEMM";
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm" style="width:14px;height:14px;border-width:2px;"></span> Descontando bodega y registrando...`;
+    }
+
+    try {
+      const res = await fetch("/api/entregas-accesorios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre_receptor: receptor,
+          servicio: servicio,
+          id_caja: idCaja,
+          cantidad: cantidad,
+          firma_data: firmaData,
+          observaciones: obs,
+          usuario_entrega: usuarioEntrega
+        })
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (e) {}
+
+      if (!res.ok) {
+        throw new Error((data && data.detail) || `Error ${res.status} al registrar la entrega`);
+      }
+
+      this.showToast(data.message || "Entrega registrada exitosamente", "success");
+
+      // Actualizar datos locales de bodega si están cacheados
+      if (this.inventarioData && Array.isArray(this.inventarioData) && data.caja) {
+        const idx = this.inventarioData.findIndex(i => i.id_caja === idCaja);
+        if (idx !== -1) {
+          this.inventarioData[idx] = { ...this.inventarioData[idx], ...data.caja };
+        }
+      }
+      this.estantesSummary = [];
+
+      // Resetear formulario
+      this.resetEntregaForm();
+
+      // Recargar lista de accesorios para reflejar el nuevo stock
+      await this.populateEntregasAccesorios();
+
+      // Cambiar a la pestaña de historial para ver la nueva entrega
+      this.switchEntregasSubTab("historial");
+
+    } catch (err) {
+      console.error("Error registrando entrega:", err);
+      this.showToast(err.message || "Error al registrar la entrega", "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          Confirmar Entrega y Descontar Stock
+        `;
+      }
+    }
+  },
+
+  async loadEntregasHistory() {
+    const fDesde = document.getElementById("filtro-entrega-desde");
+    const fHasta = document.getElementById("filtro-entrega-hasta");
+    const fQ = document.getElementById("filtro-entrega-q");
+    const tbody = document.getElementById("entregas-history-tbody");
+    const kpiBar = document.getElementById("entregas-kpi-bar");
+
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
+          <span class="spinner-border spinner-border-sm" style="width:16px;height:16px;border-width:2px;"></span> Cargando historial de entregas...
+        </td>
+      </tr>
+    `;
+
+    const desde = fDesde ? fDesde.value.trim() : "";
+    const hasta = fHasta ? fHasta.value.trim() : "";
+    const q = fQ ? fQ.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (desde) params.append("fecha_inicio", desde);
+    if (hasta) params.append("fecha_fin", hasta);
+    if (q) params.append("q", q);
+    params.append("limit", 150);
+
+    try {
+      const res = await fetch(`/api/entregas-accesorios?${params.toString()}`);
+      if (!res.ok) throw new Error("Error al consultar historial de entregas");
+      const entregas = await res.json();
+      this.entregasData = Array.isArray(entregas) ? entregas : [];
+
+      // Renderizar KPIs
+      const totalEntregas = this.entregasData.length;
+      const totalUnidades = this.entregasData.reduce((acc, e) => acc + (parseInt(e.cantidad, 10) || 0), 0);
+      const serviciosSet = new Set(this.entregasData.map(e => e.servicio).filter(Boolean));
+
+      if (kpiBar) {
+        kpiBar.innerHTML = `
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Entregas en Período</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #10b981; margin-top: 2px;">${totalEntregas}</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Unidades Despachadas</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: var(--primary); margin-top: 2px;">${totalUnidades} un.</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Servicios Receptores</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: var(--warning); margin-top: 2px;">${serviciosSet.size} áreas</div>
+          </div>
+        `;
+      }
+
+      if (totalEntregas === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-tertiary);">
+              <div style="font-size: 1.75rem; margin-bottom: 0.4rem;">📦</div>
+              <div style="font-weight: 600; color: var(--text-secondary);">No se encontraron entregas registradas en este período.</div>
+              <div style="font-size: 0.78rem; margin-top: 4px;">Prueba ajustando el rango de fechas o registra una nueva entrega.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = this.entregasData.map((e, idx) => {
+        const fecha = e.fecha_fmt || e.fecha || "";
+        const folio = e.folio || `ENT-${e.id}`;
+        const firmaThumb = e.firma_data
+          ? `<img src="${e.firma_data}" alt="Firma" style="max-height: 28px; max-width: 80px; object-fit: contain; background: white; border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px;">`
+          : `<span style="font-size: 0.7rem; color: var(--text-tertiary);">(Sin firma)</span>`;
+
+        return `
+          <tr>
+            <td>
+              <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; font-weight: 700; font-family: monospace;">
+                ${this.escapeHtml(folio)}
+              </span>
+            </td>
+            <td style="font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap;">
+              ${this.escapeHtml(fecha)}
+            </td>
+            <td>
+              <span style="font-weight: 600; color: var(--text-primary); font-size: 0.825rem;">
+                ${this.escapeHtml(e.servicio || '')}
+              </span>
+            </td>
+            <td>
+              <div style="font-weight: 600; font-size: 0.825rem; color: var(--text-primary);">
+                ${this.escapeHtml(e.nombre_accesorio || '')}
+              </div>
+              ${e.observaciones ? `
+                <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 2px; font-style: italic;">
+                  ${this.escapeHtml(e.observaciones)}
+                </div>
+              ` : ''}
+            </td>
+            <td style="text-align: center;">
+              <span class="badge badge-primary" style="font-weight: 700; font-size: 0.825rem;">
+                ${e.cantidad}
+              </span>
+            </td>
+            <td>
+              <div style="font-weight: 600; font-size: 0.825rem; color: var(--text-primary);">
+                ${this.escapeHtml(e.nombre_receptor || '')}
+              </div>
+            </td>
+            <td style="font-size: 0.78rem; color: var(--text-secondary);">
+              ${this.escapeHtml(e.usuario_entrega || 'Técnico')}
+            </td>
+            <td style="text-align: center;">
+              ${firmaThumb}
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+    } catch (err) {
+      console.error("Error al cargar entregas:", err);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 2rem; color: var(--danger, #ef4444);">
+            No fue posible cargar el historial de entregas: ${this.escapeHtml(err.message || 'Error del servidor')}
+          </td>
+        </tr>
+      `;
+    }
+  },
+
+  exportEntregasPdf() {
+    const fDesde = document.getElementById("filtro-entrega-desde");
+    const fHasta = document.getElementById("filtro-entrega-hasta");
+    const fQ = document.getElementById("filtro-entrega-q");
+
+    const desde = fDesde ? fDesde.value.trim() : "";
+    const hasta = fHasta ? fHasta.value.trim() : "";
+    const q = fQ ? fQ.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (desde) params.append("fecha_inicio", desde);
+    if (hasta) params.append("fecha_fin", hasta);
+    if (q) params.append("q", q);
+    params.append("download", "true");
+
+    const url = `/api/entregas-accesorios/pdf?${params.toString()}`;
+    const fIni = desde || "inicio";
+    const fFin = hasta || "actual";
+    const filename = `Reporte_Entregas_Accesorios_${fIni}_${fFin}.pdf`;
+
+    this.handlePdfDownloadOrView(url, filename);
   },
 
   /* ==========================================================================

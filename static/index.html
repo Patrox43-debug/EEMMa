@@ -176,7 +176,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.15rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); text-align: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              EEMM Hospital · <strong>v1.5.1</strong>
+              EEMM Hospital · <strong>v1.7.0</strong>
             </div>
           </div>
         </div>
@@ -225,6 +225,12 @@
         Administración
       </button>
 
+      <!-- Pestaña Entrega de Accesorios (Disponible para Todos los Usuarios) -->
+      <button class="nav-tab" data-tab="entregas" id="nav-tab-entregas" onclick="app.navigate('entregas')" title="Entrega de accesorios e insumos a servicios clínicos">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+        Entrega Accesorios
+      </button>
+
       <!-- Botón de Salto Rápido entre Módulos en la Barra -->
       <button type="button" class="nav-tab nav-tab-switcher" id="btn-nav-switch-module" onclick="app.toggleModuleSwitch()" title="Cambiar de módulo rápidamente">
         <span id="nav-switch-label">Ir a Bodega</span>
@@ -259,7 +265,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            EEMM Hospital · Versión <strong>1.6.1</strong>
+            EEMM Hospital · Versión <strong>1.7.0</strong>
           </div>
         </form>
       </section>
@@ -352,6 +358,36 @@
                 <button type="button" class="btn btn-warning-solid module-btn-main" onclick="app.selectModule('bodega', 'inventario')">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                   <span>Ingresar a Bodega / Insumos</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- TARJETA 3: MÓDULO ENTREGA DE ACCESORIOS -->
+            <div class="module-card module-card-entregas">
+              <div class="module-card-header">
+                <div class="module-card-icon-box" style="background: rgba(16, 185, 129, 0.12); color: #10b981;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <polyline points="16 11 18 13 22 9"></polyline>
+                  </svg>
+                </div>
+                <div class="module-card-status">
+                  <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">Despacho & Firma</span>
+                </div>
+              </div>
+
+              <div class="module-card-body">
+                <h3 class="module-card-title">Entrega de Accesorios</h3>
+                <p class="module-card-desc">
+                  Despacho de accesorios e insumos a servicios clínicos con descuento automático en bodega, firma digital de recepción y actas PDF por rango de fechas.
+                </p>
+              </div>
+
+              <div class="module-card-actions">
+                <button type="button" class="btn module-btn-main" onclick="app.selectModule('entregas', 'entregas')" style="background: #10b981; border-color: #10b981; color: white;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+                  <span>Ingresar a Entregas</span>
                 </button>
               </div>
             </div>
@@ -1359,6 +1395,200 @@
             </table>
           </div>
 
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           9. MÓDULO DE ENTREGA DE ACCESORIOS E INSUMOS CLÍNICOS
+           ==================================================================== -->
+      <section id="view-entregas" style="display: none;">
+        <div class="panel-card" style="margin-bottom: 1.25rem;">
+          <div class="panel-header" style="flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: rgba(16, 185, 129, 0.15); color: #10b981; display: flex; align-items: center; justify-content: center;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+                </div>
+                <h2 class="panel-title" style="margin: 0;">Entrega de Accesorios e Insumos</h2>
+              </div>
+              <p class="panel-subtitle" style="margin-top: 0.25rem;">
+                Despacho formal con descuento automático de bodega, firma digital de recepción y actas PDF por rango de fechas.
+              </p>
+            </div>
+
+            <!-- Botones de alternancia de vista dentro de Entregas -->
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" id="btn-tab-nueva-entrega" class="btn btn-primary btn-sm" onclick="app.switchEntregasSubTab('nueva')" style="display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Nueva Entrega
+              </button>
+              <button type="button" id="btn-tab-historial-entregas" class="btn btn-outline btn-sm" onclick="app.switchEntregasSubTab('historial')" style="display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+                Historial y Reportes PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUB-VISTA 1: FORMULARIO DE NUEVA ENTREGA -->
+        <div id="entregas-subview-nueva" class="panel-card" style="max-width: 820px; margin: 0 auto 2rem auto;">
+          <div style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+            <h3 style="font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+              <span>📝</span> Registro de Despacho y Entrega
+            </h3>
+            <p style="font-size: 0.78rem; color: var(--text-tertiary); margin: 0.25rem 0 0 0;">
+              Ingresa los datos de recepción. El accesorio seleccionado se descontará automáticamente de la bodega.
+            </p>
+          </div>
+
+          <form id="form-nueva-entrega" onsubmit="event.preventDefault(); app.submitEntregaAccesorio();">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="entrega-receptor" class="form-label">
+                  Nombre de Quien Recibe: <span style="color: var(--danger, #ef4444);">*</span>
+                </label>
+                <input type="text" id="entrega-receptor" class="form-control" placeholder="Ej: Enf. María Rojas / TENS Juan Pérez" required autocomplete="off">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="entrega-servicio" class="form-label">
+                  Servicio Clínico / Unidad Hospitalaria: <span style="color: var(--danger, #ef4444);">*</span>
+                </label>
+                <select id="entrega-servicio" class="form-control" required>
+                  <option value="">-- Selecciona el Servicio Clínico --</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem; align-items: start;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="entrega-accesorio" class="form-label">
+                  Accesorio / Insumo (Bodega): <span style="color: var(--danger, #ef4444);">*</span>
+                </label>
+                <select id="entrega-accesorio" class="form-control" onchange="app.onEntregaAccesorioChanged()" required>
+                  <option value="">-- Selecciona un accesorio de bodega --</option>
+                </select>
+                <div id="entrega-stock-info" style="margin-top: 0.4rem; font-size: 0.75rem; color: var(--text-tertiary);">
+                  Selecciona un accesorio para verificar el stock disponible en bodega.
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="entrega-cantidad" class="form-label">
+                  Cantidad a Entregar: <span style="color: var(--danger, #ef4444);">*</span>
+                </label>
+                <input type="number" id="entrega-cantidad" class="form-control" min="1" value="1" style="font-size: 1.05rem; font-weight: 700; text-align: center; height: 38px;" required>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="entrega-observaciones" class="form-label">
+                Observaciones / Motivo: <span style="color: var(--text-tertiary); font-weight: 400;">(Opcional)</span>
+              </label>
+              <input type="text" id="entrega-observaciones" class="form-control" placeholder="Ej: Reposición por daño en sensor, monitor Pabellón 3...">
+            </div>
+
+            <!-- Firma Digital del Receptor -->
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <span>Firma de Recepción Conforme: <span style="color: var(--danger, #ef4444);">*</span></span>
+                <span style="font-size: 0.72rem; color: var(--text-tertiary); font-weight: 400;">(Firma de quien recibe)</span>
+              </label>
+              
+              <div class="signature-container">
+                <div class="signature-canvas-wrapper" style="height: 180px;">
+                  <canvas id="entrega-signature-canvas"></canvas>
+                </div>
+                <div class="signature-footer">
+                  <span class="signature-hint">Traza la firma de recepción con el dedo, lápiz o mouse</span>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="app.clearEntregaSignature()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    Limpiar Firma
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
+              <button type="button" class="btn btn-outline" onclick="app.resetEntregaForm()">
+                Restablecer
+              </button>
+              <button type="submit" id="btn-submit-entrega" class="btn btn-success" style="background: #10b981; border-color: #10b981; color: white; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; padding: 0.65rem 1.35rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                Confirmar Entrega y Descontar Stock
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- SUB-VISTA 2: HISTORIAL Y EXPORTACIÓN PDF -->
+        <div id="entregas-subview-historial" style="display: none;">
+          <!-- Filtros de fecha y exportación -->
+          <div class="panel-card" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;">
+              <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; flex: 1;">
+                <div>
+                  <label for="filtro-entrega-desde" style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                    Desde:
+                  </label>
+                  <input type="date" id="filtro-entrega-desde" class="form-control" style="height: 38px;">
+                </div>
+                <div>
+                  <label for="filtro-entrega-hasta" style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                    Hasta:
+                  </label>
+                  <input type="date" id="filtro-entrega-hasta" class="form-control" style="height: 38px;">
+                </div>
+                <div style="flex: 1; min-width: 180px;">
+                  <label for="filtro-entrega-q" style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                    Buscar receptor, accesorio o servicio:
+                  </label>
+                  <input type="text" id="filtro-entrega-q" class="form-control" placeholder="Ej: Urgencias, sensor, María..." style="height: 38px;" onkeydown="if(event.key==='Enter') app.loadEntregasHistory()">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="app.loadEntregasHistory()" style="height: 38px; display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  Filtrar
+                </button>
+              </div>
+
+              <!-- Botón Exportar PDF con rango de fechas -->
+              <div>
+                <button type="button" id="btn-export-entregas-pdf" class="btn btn-warning-solid" onclick="app.exportEntregasPdf()" style="height: 38px; display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 700;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                  Exportar PDF del Período
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resumen de resultados (KPI Bar) -->
+          <div id="entregas-kpi-bar" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
+            <!-- Rellenado por JS -->
+          </div>
+
+          <!-- Tabla de historial de entregas -->
+          <div class="panel-card" style="padding: 0; overflow: hidden;">
+            <div style="overflow-x: auto;">
+              <table class="data-table" style="width: 100%; margin: 0;">
+                <thead>
+                  <tr>
+                    <th style="width: 120px;">Folio</th>
+                    <th style="width: 125px;">Fecha / Hora</th>
+                    <th>Servicio Clínico</th>
+                    <th>Accesorio Entregado</th>
+                    <th style="text-align: center; width: 80px;">Cant.</th>
+                    <th>Receptor</th>
+                    <th>Técnico EEMM</th>
+                    <th style="text-align: center; width: 110px;">Firma</th>
+                  </tr>
+                </thead>
+                <tbody id="entregas-history-tbody">
+                  <!-- Rellenado por JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
