@@ -4216,6 +4216,14 @@ const app = {
     if (!container) return;
     try {
       const res = await fetch(`/api/inventario/${encodeURIComponent(idCaja)}/movimientos`);
+      if (res.status === 404) {
+        container.innerHTML = `
+          <div style="color: var(--text-tertiary); font-style: italic; padding: 0.2rem 0; font-size: 0.73rem;">
+            Sin historial registrado aún en el servidor.
+          </div>
+        `;
+        return;
+      }
       if (!res.ok) throw new Error("Error cargando historial");
       const movs = await res.json();
       if (!movs || movs.length === 0) {
@@ -4245,10 +4253,10 @@ const app = {
         </div>
       `).join('');
     } catch (err) {
-      console.error("Error al cargar movimientos:", err);
+      console.warn("Aviso al cargar movimientos:", err);
       container.innerHTML = `
-        <div style="color: var(--danger, #ef4444); font-size: 0.75rem;">
-          No fue posible cargar el historial de movimientos.
+        <div style="color: var(--text-tertiary); font-style: italic; padding: 0.2rem 0; font-size: 0.73rem;">
+          Historial no disponible temporalmente.
         </div>
       `;
     }
@@ -4301,9 +4309,18 @@ const app = {
         })
       });
 
-      const data = await res.json();
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (e) {
+        // En caso de respuesta HTML o error de proxy
+      }
+
       if (!res.ok) {
-        throw new Error(data.detail || "Error al descontar stock");
+        if (res.status === 404) {
+          throw new Error("El servidor en la nube aún no se ha actualizado con la función de descuento (404 Not Found). Es necesario pulsar 'Deploy' en el panel de Coolify.");
+        }
+        throw new Error((data && data.detail) || `Error del servidor (${res.status}) al procesar el descuento`);
       }
 
       this.showToast(`Se descontaron ${cantidad} un. correctamente`, "success");
@@ -4311,13 +4328,16 @@ const app = {
       // Actualizar datos locales de inventario si existen
       if (this.inventarioData && Array.isArray(this.inventarioData)) {
         const idx = this.inventarioData.findIndex(i => i.id_caja === idCaja);
-        if (idx !== -1 && data.caja) {
+        if (idx !== -1 && data && data.caja) {
           this.inventarioData[idx] = { ...this.inventarioData[idx], ...data.caja };
         }
       }
 
+      // Limpiar resumen de estantes para forzar recálculo
+      this.estantesSummary = [];
+
       // Reabrir modal de la caja con los datos actualizados
-      if (data.caja) {
+      if (data && data.caja) {
         this.openBoxModal(data.caja);
       } else {
         this.closeCajaModal();
@@ -4325,7 +4345,7 @@ const app = {
 
       // Refrescar inventario en segundo plano
       if (typeof this.loadInventario === "function") {
-        this.loadInventario();
+        await this.loadInventario();
       }
       if (typeof this.renderRack === "function") {
         this.renderRack();
@@ -4333,6 +4353,7 @@ const app = {
     } catch (err) {
       console.error("Error al descontar stock:", err);
       this.showToast(err.message || "Error al procesar el descuento", "error");
+    } finally {
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = `

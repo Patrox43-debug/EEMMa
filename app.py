@@ -755,7 +755,7 @@ async def import_database(file: UploadFile = File(...)):
 
         # Obtener estadísticas de los datos que se van a restaurar
         stats = {}
-        for tbl in ["perfiles", "equipos", "registros", "inventario", "unidades", "reparaciones"]:
+        for tbl in ["perfiles", "equipos", "registros", "inventario", "inventario_movimientos", "unidades", "reparaciones"]:
             if tbl in tables:
                 cursor.execute(f"SELECT COUNT(*) FROM {tbl}")
                 stats[tbl] = cursor.fetchone()[0]
@@ -1976,11 +1976,28 @@ def descontar_stock(id_caja: str, descuento: InsumoDescuento):
     
     conn = get_db()
     cursor = conn.cursor()
+    
+    # Garantizar que la tabla e índices existan siempre en la base de datos
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS inventario_movimientos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_caja TEXT NOT NULL,
+        tipo TEXT NOT NULL DEFAULT 'DESCUENTO',
+        cantidad INTEGER NOT NULL,
+        razon TEXT NOT NULL,
+        usuario TEXT,
+        stock_anterior INTEGER,
+        stock_nuevo INTEGER,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_mov_caja ON inventario_movimientos(id_caja);")
+
     cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (id_caja,))
     curr = cursor.fetchone()
     if not curr:
         conn.close()
-        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+        raise HTTPException(status_code=404, detail="Insumo no encontrado en bodega")
     
     curr_cant = curr["cantidad"] or 0
     if curr_cant < descuento.cantidad:
@@ -2024,6 +2041,19 @@ def descontar_stock(id_caja: str, descuento: InsumoDescuento):
 def get_movimientos_insumo(id_caja: str):
     conn = get_db()
     cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS inventario_movimientos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_caja TEXT NOT NULL,
+        tipo TEXT NOT NULL DEFAULT 'DESCUENTO',
+        cantidad INTEGER NOT NULL,
+        razon TEXT NOT NULL,
+        usuario TEXT,
+        stock_anterior INTEGER,
+        stock_nuevo INTEGER,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
     cursor.execute("""
         SELECT id, id_caja, tipo, cantidad, razon, usuario, stock_anterior, stock_nuevo,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
