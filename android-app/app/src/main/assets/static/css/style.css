@@ -3008,5 +3008,57 @@ select.form-control {
   flex-shrink: 0;
 }
 
+/* ==========================================================================
+   VENTANA DE BÚSQUEDA Y DETALLE DE ACCESORIOS (BODEGA & ENTREGAS)
+   ========================================================================== */
+.accesorio-search-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-surface, #ffffff);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.accesorio-search-item:hover {
+  border-color: var(--color-primary, #2563eb) !important;
+  background: rgba(37, 99, 235, 0.05) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07);
+}
+
+.accesorio-search-item.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-surface-elevated, #f8fafc);
+}
+
+.accesorio-search-item.disabled:hover {
+  border-color: var(--border-subtle, #e2e8f0) !important;
+  transform: none;
+  box-shadow: none;
+}
+
+.entrega-trigger-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1.5px dashed var(--color-primary, #2563eb);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  background: var(--bg-surface-elevated, #f8fafc);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.entrega-trigger-box:hover {
+  background: rgba(37, 99, 235, 0.06);
+  border-color: var(--color-primary-hover, #1d4ed8);
+}
+
 
 

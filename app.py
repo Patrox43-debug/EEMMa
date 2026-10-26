@@ -340,13 +340,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.8.0",
-        "version_code": 17,
-        "release_tag": "v1.8.0",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.8.0/EEMM.apk",
+        "version_name": "1.8.1",
+        "version_code": 18,
+        "release_tag": "v1.8.1",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.8.1/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Sistema de actualización automática dentro de la app con descarga e instalador directo.\n• Módulo de Entrega de Accesorios con descuento de bodega y firmas digitales.\n• Exportación de reportes PDF filtrados por rango de fechas.",
-        "published_at": "2026-10-26T18:50:00-03:00"
+        "notes": "• Nueva ventana y catálogo interactivo de búsqueda de accesorios para entregas con visualización de stock en tiempo real y ubicación.\n• Sistema de auto-actualización automática desde el APK.",
+        "published_at": "2026-10-26T19:10:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:

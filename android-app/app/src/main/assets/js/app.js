@@ -29,6 +29,8 @@ const app = {
   entregaSignaturePad: null,
   entregasData: [],
   entregasInsumosList: [],
+  selectedEntregaAccesorio: null,
+  buscarAccesorioFilter: "all",
 
   currentCategory: "GENERAL",
   currentChecklistItems: [],
@@ -228,10 +230,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.8.0";
+        this.currentAppVersion = "1.8.1";
       }
     } else {
-      this.currentAppVersion = "1.8.0";
+      this.currentAppVersion = "1.8.1";
     }
 
     setTimeout(() => {
@@ -4792,77 +4794,311 @@ const app = {
   },
 
   async populateEntregasAccesorios() {
-    const select = document.getElementById("entrega-accesorio");
-    if (!select) return;
-
-    select.innerHTML = '<option value="">-- Cargando accesorios de bodega... --</option>';
-
     try {
       const res = await fetch("/api/inventario");
       if (!res.ok) throw new Error("Error cargando inventario");
       const items = await res.json();
       this.entregasInsumosList = Array.isArray(items) ? items : [];
 
-      select.innerHTML = '<option value="">-- Selecciona un accesorio de bodega --</option>';
-      
-      // Ordenar alfabéticamente por nombre
-      const sorted = [...this.entregasInsumosList].sort((a, b) =>
-        (a.nombre_caja || "").localeCompare(b.nombre_caja || "")
-      );
-
-      sorted.forEach(item => {
-        const opt = document.createElement("option");
-        opt.value = item.id_caja;
-        const stock = item.cantidad || 0;
-        const estadoTxt = stock === 0 ? "⚠️ SIN STOCK" : `${stock} un. disp.`;
-        opt.textContent = `${item.nombre_caja || item.id_caja} (${estadoTxt} - Estante: ${item.estanteria_id || 'S/E'})`;
-        if (stock <= 0) {
-          opt.style.color = "var(--text-tertiary)";
-        }
-        select.appendChild(opt);
-      });
-
+      const select = document.getElementById("entrega-accesorio-select");
+      if (select) {
+        select.innerHTML = '<option value="">-- Selecciona un accesorio de bodega --</option>';
+        const sorted = [...this.entregasInsumosList].sort((a, b) =>
+          (a.nombre_caja || "").localeCompare(b.nombre_caja || "")
+        );
+        sorted.forEach(item => {
+          const opt = document.createElement("option");
+          opt.value = item.id_caja;
+          const stock = item.cantidad || 0;
+          const estadoTxt = stock === 0 ? "⚠️ SIN STOCK" : `${stock} un. disp.`;
+          opt.textContent = `${item.nombre_caja || item.id_caja} (${estadoTxt} - Estante: ${item.estanteria_id || 'S/E'})`;
+          select.appendChild(opt);
+        });
+      }
     } catch (err) {
       console.error("Error al cargar accesorios para entrega:", err);
-      select.innerHTML = '<option value="">-- Error al cargar insumos de bodega --</option>';
     }
   },
 
-  onEntregaAccesorioChanged() {
-    const select = document.getElementById("entrega-accesorio");
-    const infoDiv = document.getElementById("entrega-stock-info");
-    const cantInput = document.getElementById("entrega-cantidad");
+  /* ==========================================================================
+     VENTANA DE BÚSQUEDA Y SELECCIÓN DE ACCESORIO EN BODEGA
+     ========================================================================== */
+  async openBuscarAccesorioModal() {
+    const modal = document.getElementById("modal-buscar-accesorio");
+    if (!modal) return;
 
-    if (!select || !infoDiv || !cantInput) return;
+    modal.style.display = "flex";
 
-    const selectedId = select.value;
-    if (!selectedId) {
-      infoDiv.innerHTML = "Selecciona un accesorio para verificar el stock disponible en bodega.";
-      cantInput.removeAttribute("max");
-      cantInput.value = 1;
+    // Si aún no se han cargado los insumos, cargarlos ahora
+    if (!this.entregasInsumosList || this.entregasInsumosList.length === 0) {
+      await this.populateEntregasAccesorios();
+    }
+
+    const input = document.getElementById("buscar-accesorio-input");
+    if (input) {
+      input.value = "";
+      setTimeout(() => input.focus(), 150);
+    }
+
+    // Resetear filtro a 'all'
+    this.buscarAccesorioFilter = "all";
+    const tabs = document.querySelectorAll("#buscar-accesorio-filter-tabs .filter-stock-tab");
+    tabs.forEach(t => {
+      if (t.getAttribute("data-filter") === "all") {
+        t.className = "btn btn-sm btn-primary filter-stock-tab";
+      } else {
+        t.className = "btn btn-sm btn-outline filter-stock-tab";
+      }
+    });
+
+    this.renderBuscarAccesorioList();
+  },
+
+  closeBuscarAccesorioModal() {
+    const modal = document.getElementById("modal-buscar-accesorio");
+    if (modal) modal.style.display = "none";
+  },
+
+  setBuscarAccesorioFilter(filter, btn) {
+    this.buscarAccesorioFilter = filter;
+    const tabs = document.querySelectorAll("#buscar-accesorio-filter-tabs .filter-stock-tab");
+    tabs.forEach(t => {
+      t.className = "btn btn-sm btn-outline filter-stock-tab";
+    });
+    if (btn) {
+      btn.className = "btn btn-sm btn-primary filter-stock-tab";
+    }
+    this.renderBuscarAccesorioList();
+  },
+
+  filterBuscarAccesorioModal() {
+    this.renderBuscarAccesorioList();
+  },
+
+  renderBuscarAccesorioList() {
+    const listCont = document.getElementById("buscar-accesorio-lista");
+    const input = document.getElementById("buscar-accesorio-input");
+    const countAll = document.getElementById("count-stock-all");
+    const countAvail = document.getElementById("count-stock-avail");
+    const countCrit = document.getElementById("count-stock-crit");
+    const countEmpty = document.getElementById("count-stock-empty");
+    const resumenEl = document.getElementById("buscar-accesorio-resumen");
+
+    if (!listCont) return;
+
+    const allItems = this.entregasInsumosList || [];
+    const q = input ? input.value.toLowerCase().trim() : "";
+
+    // Contadores globales
+    let cAll = allItems.length;
+    let cAvail = 0;
+    let cCrit = 0;
+    let cEmpty = 0;
+
+    allItems.forEach(i => {
+      const cant = i.cantidad || 0;
+      if (cant > 4) cAvail++;
+      else if (cant >= 1 && cant <= 4) cCrit++;
+      else cEmpty++;
+    });
+
+    if (countAll) countAll.textContent = cAll;
+    if (countAvail) countAvail.textContent = cAvail;
+    if (countCrit) countCrit.textContent = cCrit;
+    if (countEmpty) countEmpty.textContent = cEmpty;
+
+    // Filtrar por texto
+    let filtered = allItems.filter(i => {
+      if (!q) return true;
+      const nom = (i.nombre_caja || "").toLowerCase();
+      const id = (i.id_caja || "").toLowerCase();
+      const est = (i.estanteria_id || "").toLowerCase();
+      const sec = (i.seccion_id || "").toLowerCase();
+      const bar = (i.barcode || "").toLowerCase();
+      return nom.includes(q) || id.includes(q) || est.includes(q) || sec.includes(q) || bar.includes(q);
+    });
+
+    // Filtrar por pestaña de stock
+    if (this.buscarAccesorioFilter === "available") {
+      filtered = filtered.filter(i => (i.cantidad || 0) > 4);
+    } else if (this.buscarAccesorioFilter === "critical") {
+      filtered = filtered.filter(i => (i.cantidad || 0) >= 1 && (i.cantidad || 0) <= 4);
+    } else if (this.buscarAccesorioFilter === "empty") {
+      filtered = filtered.filter(i => (i.cantidad || 0) <= 0);
+    }
+
+    // Ordenar alfabéticamente por nombre
+    filtered.sort((a, b) => (a.nombre_caja || "").localeCompare(b.nombre_caja || ""));
+
+    if (resumenEl) {
+      resumenEl.textContent = `Mostrando ${filtered.length} accesorio(s) (${cAvail + cCrit} disponibles para entrega).`;
+    }
+
+    if (filtered.length === 0) {
+      listCont.innerHTML = `
+        <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-tertiary);">
+          <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">🔍</div>
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">No se encontraron accesorios</div>
+          <div style="font-size: 0.8rem; margin-top: 0.25rem;">Intenta con otro término de búsqueda o cambia el filtro de stock.</div>
+        </div>
+      `;
       return;
     }
 
-    const item = (this.entregasInsumosList || []).find(i => i.id_caja === selectedId);
+    let html = "";
+    filtered.forEach(item => {
+      const stock = item.cantidad || 0;
+      const isSelected = this.selectedEntregaAccesorio && this.selectedEntregaAccesorio.id_caja === item.id_caja;
+      
+      let badgeBg, badgeColor, stockLabel, btnClass, btnText, itemDisabled;
+      if (stock > 4) {
+        badgeBg = "rgba(16, 185, 129, 0.15)";
+        badgeColor = "#10b981";
+        stockLabel = "Stock Disponible";
+        btnClass = "btn btn-primary btn-sm";
+        btnText = isSelected ? "✓ Seleccionado" : "Seleccionar ➔";
+        itemDisabled = false;
+      } else if (stock >= 1) {
+        badgeBg = "rgba(245, 158, 11, 0.15)";
+        badgeColor = "#f59e0b";
+        stockLabel = "⚠️ Stock Crítico";
+        btnClass = "btn btn-primary btn-sm";
+        btnText = isSelected ? "✓ Seleccionado" : "Seleccionar ➔";
+        itemDisabled = false;
+      } else {
+        badgeBg = "rgba(239, 68, 68, 0.15)";
+        badgeColor = "#ef4444";
+        stockLabel = "Agotado";
+        btnClass = "btn btn-disabled btn-sm";
+        btnText = "Sin Stock";
+        itemDisabled = true;
+      }
+
+      const selectedBorder = isSelected ? "border-color: var(--color-primary, #2563eb); background: rgba(37, 99, 235, 0.06);" : "";
+
+      html += `
+        <div class="accesorio-search-item ${itemDisabled ? 'disabled' : ''}" 
+             onclick="${itemDisabled ? `app.showToast('Este insumo no tiene stock disponible', 'warning')` : `app.selectEntregaAccesorio('${item.id_caja}')`}"
+             style="${selectedBorder}">
+          <div style="flex: 1; padding-right: 0.85rem; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; flex-wrap: wrap;">
+              <span style="font-weight: 700; font-size: 0.92rem; color: var(--text-primary);">${item.nombre_caja || 'Sin Nombre'}</span>
+              <span class="badge" style="font-size: 0.7rem; background: var(--bg-surface-elevated, #f1f5f9); color: var(--text-secondary); border: 1px solid var(--border-subtle, #e2e8f0); padding: 0.15rem 0.45rem;">
+                ${item.id_caja}
+              </span>
+            </div>
+            <div style="font-size: 0.76rem; color: var(--text-secondary); display: flex; gap: 0.85rem; flex-wrap: wrap;">
+              <span>📍 Estante: <strong style="color: var(--text-primary);">${item.estanteria_id || 'S/E'}</strong></span>
+              <span>📦 Sección: <strong style="color: var(--text-primary);">${item.seccion_id || 'S/S'}</strong></span>
+              ${item.barcode ? `<span style="color: var(--text-tertiary);">🏷️ ${item.barcode}</span>` : ''}
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: center; gap: 0.85rem; flex-shrink: 0;">
+            <div style="text-align: right;">
+              <div style="font-size: 1.05rem; font-weight: 800; color: ${badgeColor}; line-height: 1.1;">
+                ${stock} un.
+              </div>
+              <div style="font-size: 0.68rem; font-weight: 600; color: ${badgeColor}; margin-top: 2px;">
+                ${stockLabel}
+              </div>
+            </div>
+            <button type="button" class="${btnClass}" style="white-space: nowrap; font-size: 0.78rem; padding: 0.35rem 0.75rem; pointer-events: none;">
+              ${btnText}
+            </button>
+          </div>
+        </div>
+      `;
+    });
+
+    listCont.innerHTML = html;
+  },
+
+  selectEntregaAccesorio(id_caja) {
+    if (!id_caja) return;
+    const item = (this.entregasInsumosList || []).find(i => i.id_caja === id_caja);
     if (!item) return;
 
     const stock = item.cantidad || 0;
-    cantInput.setAttribute("max", stock);
-
     if (stock <= 0) {
-      infoDiv.innerHTML = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; font-weight: 700;">⚠️ Insumo Agotado (0 un. disponibles). No es posible realizar entregas.</span>`;
-      cantInput.value = 0;
-    } else {
-      const badgeColor = stock < 5 ? '#f59e0b' : '#10b981';
-      const badgeBg = stock < 5 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+      this.showToast(`El accesorio "${item.nombre_caja}" no tiene stock disponible en bodega`, "warning");
+      return;
+    }
+
+    this.selectedEntregaAccesorio = item;
+
+    // Actualizar input oculto y select
+    const inputOculto = document.getElementById("entrega-accesorio");
+    if (inputOculto) inputOculto.value = item.id_caja;
+
+    const selectOculto = document.getElementById("entrega-accesorio-select");
+    if (selectOculto) selectOculto.value = item.id_caja;
+
+    // Cambiar caja disparadora por tarjeta de accesorio seleccionado
+    const triggerBox = document.getElementById("entrega-accesorio-trigger");
+    const selectedCard = document.getElementById("entrega-accesorio-selected-card");
+    const nombreEl = document.getElementById("entrega-selected-nombre");
+    const idEl = document.getElementById("entrega-selected-id");
+    const estanteEl = document.getElementById("entrega-selected-estante");
+    const seccionEl = document.getElementById("entrega-selected-seccion");
+    const stockBadge = document.getElementById("entrega-selected-stock-badge");
+    const infoDiv = document.getElementById("entrega-stock-info");
+    const cantInput = document.getElementById("entrega-cantidad");
+
+    if (triggerBox) triggerBox.style.display = "none";
+    if (selectedCard) selectedCard.style.display = "flex";
+
+    if (nombreEl) nombreEl.textContent = item.nombre_caja || item.id_caja;
+    if (idEl) idEl.textContent = item.id_caja;
+    if (estanteEl) estanteEl.textContent = item.estanteria_id || "S/E";
+    if (seccionEl) seccionEl.textContent = item.seccion_id || "S/S";
+
+    const isCritical = stock < 5;
+    const badgeBg = isCritical ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+    const badgeColor = isCritical ? '#f59e0b' : '#10b981';
+
+    if (stockBadge) {
+      stockBadge.style.background = badgeBg;
+      stockBadge.style.color = badgeColor;
+      stockBadge.textContent = `${stock} un. disponibles`;
+    }
+
+    if (infoDiv) {
       infoDiv.innerHTML = `
         <span class="badge" style="background: ${badgeBg}; color: ${badgeColor}; font-weight: 700;">
-          Stock disponible en bodega: ${stock} un. (Estante: ${item.estanteria_id || 'S/E'} / Sección: ${item.seccion_id || 'S/S'})
+          Stock disponible en bodega: ${stock} unidades (Estante: ${item.estanteria_id || 'S/E'} / Sección: ${item.seccion_id || 'S/S'})
         </span>
       `;
-      if (parseInt(cantInput.value, 10) <= 0 || parseInt(cantInput.value, 10) > stock) {
+    }
+
+    if (cantInput) {
+      cantInput.setAttribute("max", stock);
+      const curVal = parseInt(cantInput.value, 10);
+      if (isNaN(curVal) || curVal <= 0 || curVal > stock) {
         cantInput.value = 1;
       }
+    }
+
+    this.closeBuscarAccesorioModal();
+    this.showToast(`Accesorio "${item.nombre_caja}" seleccionado (${stock} un. disponibles)`, "success");
+  },
+
+  clearSelectedEntregaAccesorio() {
+    this.selectedEntregaAccesorio = null;
+    const inputOculto = document.getElementById("entrega-accesorio");
+    if (inputOculto) inputOculto.value = "";
+
+    const triggerBox = document.getElementById("entrega-accesorio-trigger");
+    const selectedCard = document.getElementById("entrega-accesorio-selected-card");
+    const infoDiv = document.getElementById("entrega-stock-info");
+    const cantInput = document.getElementById("entrega-cantidad");
+
+    if (triggerBox) triggerBox.style.display = "flex";
+    if (selectedCard) selectedCard.style.display = "none";
+    if (infoDiv) infoDiv.innerHTML = "Selecciona un accesorio para verificar el stock disponible en bodega.";
+    if (cantInput) {
+      cantInput.removeAttribute("max");
+      cantInput.value = 1;
     }
   },
 
@@ -4876,20 +5112,13 @@ const app = {
   resetEntregaForm() {
     const receptorInput = document.getElementById("entrega-receptor");
     const servicioSelect = document.getElementById("entrega-servicio");
-    const accesorioSelect = document.getElementById("entrega-accesorio");
-    const cantInput = document.getElementById("entrega-cantidad");
     const obsInput = document.getElementById("entrega-observaciones");
-    const stockInfo = document.getElementById("entrega-stock-info");
 
     if (receptorInput) receptorInput.value = "";
     if (servicioSelect) servicioSelect.value = "";
-    if (accesorioSelect) accesorioSelect.value = "";
-    if (cantInput) {
-      cantInput.value = 1;
-      cantInput.removeAttribute("max");
-    }
     if (obsInput) obsInput.value = "";
-    if (stockInfo) stockInfo.innerHTML = "Selecciona un accesorio para verificar el stock disponible en bodega.";
+
+    this.clearSelectedEntregaAccesorio();
 
     if (this.entregaSignaturePad) {
       this.entregaSignaturePad.clear();
@@ -5191,7 +5420,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.8.0",
+  currentAppVersion: "1.8.1",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
