@@ -42,6 +42,13 @@ const app = {
   estantesSummary: [],
   estanteMap: {},
 
+  // Estado para Escáner de Código de Barras
+  html5QrCodeScanner: null,
+  scannerActiveMode: "search",
+  scannerCameras: [],
+  scannerCurrentCameraIndex: 0,
+  scannerTorchActive: false,
+
   pautasPorCategoria: {
     "GENERAL": [
       "Chasis / Carcasa", "Ruedas / Frenos", "Cables alimentación", "Interruptores / Fusibles", 
@@ -230,10 +237,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.8.4";
+        this.currentAppVersion = "1.9.0";
       }
     } else {
-      this.currentAppVersion = "1.8.4";
+      this.currentAppVersion = "1.9.0";
     }
 
     setTimeout(() => {
@@ -4444,7 +4451,7 @@ const app = {
     });
   },
 
-  openNewInsumoModal(defaultEstante = null, defaultRepisa = null) {
+  openNewInsumoModal(defaultEstante = null, defaultRepisa = null, defaultBarcode = null) {
     const form = document.getElementById("form-insumo");
     if (form) form.reset();
 
@@ -4463,10 +4470,15 @@ const app = {
 
     document.getElementById("insumo-cantidad").value = "1";
     document.getElementById("insumo-estado").value = "OK";
-    document.getElementById("insumo-barcode").value = "";
+    document.getElementById("insumo-barcode").value = defaultBarcode || "";
 
     const modal = document.getElementById("modal-form-insumo");
     if (modal) modal.classList.add("active");
+
+    setTimeout(() => {
+      const nombreInput = document.getElementById("insumo-nombre");
+      if (nombreInput) nombreInput.focus();
+    }, 200);
   },
 
   closeInsumoModal() {
@@ -4704,6 +4716,445 @@ const app = {
 
     this.showToast("Generando y descargando reporte Excel de bodega...", "info");
     window.location.href = url;
+  },
+
+  /* ==========================================================================
+     SISTEMA DE ESCÁNER DE CÓDIGOS DE BARRA CON CÁMARA (BODEGA & ENTREGAS)
+     ========================================================================== */
+  async openBarcodeScanner(mode = "search") {
+    this.scannerActiveMode = mode;
+    this.scannerTorchActive = false;
+
+    // Actualizar títulos según modo
+    const title = document.getElementById("scanner-modal-title");
+    const subtitle = document.getElementById("scanner-modal-subtitle");
+    const manualInput = document.getElementById("scanner-manual-input");
+
+    if (title && subtitle) {
+      if (mode === "form-insumo") {
+        title.textContent = "Asignar Código al Insumo";
+        subtitle.textContent = "Escanea el código para asociarlo al producto que estás editando";
+      } else if (mode === "ingreso-stock") {
+        title.textContent = "Escanear para Ingreso de Stock";
+        subtitle.textContent = "Escanea el código para seleccionar el producto a reabastecer";
+      } else if (mode === "entrega-accesorio") {
+        title.textContent = "Escanear Accesorio para Entrega";
+        subtitle.textContent = "Escanea el código del accesorio que se va a despachar";
+      } else {
+        title.textContent = "Escáner de Código de Barras";
+        subtitle.textContent = "Apunta la cámara al código del insumo o producto";
+      }
+    }
+
+    if (manualInput) {
+      manualInput.value = "";
+    }
+
+    // Resetear overlay y contenedor de resultados
+    const resBox = document.getElementById("scanner-result-container");
+    if (resBox) {
+      resBox.style.display = "none";
+      resBox.innerHTML = "";
+    }
+    const guide = document.getElementById("scanner-overlay-guide");
+    if (guide) guide.style.display = "flex";
+
+    const modal = document.getElementById("modal-barcode-scanner");
+    if (modal) modal.classList.add("active");
+
+    // Iniciar cámara
+    await this.startBarcodeCamera();
+  },
+
+  async startBarcodeCamera(deviceId = null) {
+    if (typeof Html5Qrcode === "undefined") {
+      this.showToast("La biblioteca de escaneo de cámara no está disponible.", "error");
+      return;
+    }
+
+    const view = document.getElementById("barcode-scanner-view");
+    if (!view) return;
+
+    try {
+      // Si ya hay un escáner activo, detenerlo limpiamente
+      if (this.html5QrCodeScanner) {
+        try {
+          if (this.html5QrCodeScanner.isScanning) {
+            await this.html5QrCodeScanner.stop();
+          }
+          this.html5QrCodeScanner.clear();
+        } catch (e) {
+          console.warn("Limpiando escáner previo:", e);
+        }
+        this.html5QrCodeScanner = null;
+      }
+
+      this.html5QrCodeScanner = new Html5Qrcode("barcode-scanner-view");
+
+      // Listar cámaras disponibles para botón de cambio
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        this.scannerCameras = cameras || [];
+        const btnSwitch = document.getElementById("btn-scanner-switch-cam");
+        if (btnSwitch) {
+          btnSwitch.style.display = this.scannerCameras.length > 1 ? "flex" : "none";
+        }
+      } catch (errCam) {
+        console.warn("No se pudieron listar cámaras:", errCam);
+      }
+
+      const cameraConfig = deviceId
+        ? { deviceId: { exact: deviceId } }
+        : { facingMode: "environment" };
+
+      const scanConfig = {
+        fps: 15,
+        qrbox: (viewWidth, viewHeight) => {
+          const w = Math.min(320, Math.floor(viewWidth * 0.85));
+          const h = Math.min(160, Math.floor(viewHeight * 0.55));
+          return { width: Math.max(w, 200), height: Math.max(h, 100) };
+        },
+        aspectRatio: 1.333333,
+        disableFlip: false
+      };
+
+      await this.html5QrCodeScanner.start(
+        cameraConfig,
+        scanConfig,
+        (decodedText, decodedResult) => {
+          this.onBarcodeScanSuccess(decodedText, decodedResult);
+        },
+        (errorMessage) => {
+          // Frame sin código detectado, continuar normalmente
+        }
+      );
+
+      // Verificar soporte de linterna
+      this.checkScannerTorchSupport();
+
+    } catch (err) {
+      console.error("Error iniciando cámara para escaneo:", err);
+      const hint = document.getElementById("scanner-hint-text");
+      if (hint) {
+        hint.textContent = "Permiso de cámara no concedido. Usa el campo manual.";
+      }
+      this.showToast("No se pudo acceder a la cámara. Revisa los permisos o ingresa el código manual.", "warning");
+    }
+  },
+
+  checkScannerTorchSupport() {
+    const btnTorch = document.getElementById("btn-scanner-torch");
+    if (!btnTorch || !this.html5QrCodeScanner) return;
+    btnTorch.style.display = "none";
+
+    try {
+      const videoElem = document.querySelector("#barcode-scanner-view video");
+      if (videoElem && videoElem.srcObject) {
+        const tracks = videoElem.srcObject.getVideoTracks();
+        if (tracks && tracks.length > 0) {
+          const track = tracks[0];
+          const caps = track.getCapabilities ? track.getCapabilities() : {};
+          if (caps.torch) {
+            btnTorch.style.display = "flex";
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo consultar capacidades de linterna:", e);
+    }
+  },
+
+  async toggleScannerTorch() {
+    try {
+      const videoElem = document.querySelector("#barcode-scanner-view video");
+      if (videoElem && videoElem.srcObject) {
+        const tracks = videoElem.srcObject.getVideoTracks();
+        if (tracks && tracks.length > 0) {
+          const track = tracks[0];
+          this.scannerTorchActive = !this.scannerTorchActive;
+          await track.applyConstraints({
+            advanced: [{ torch: this.scannerTorchActive }]
+          });
+          const btnTorch = document.getElementById("btn-scanner-torch");
+          if (btnTorch) {
+            btnTorch.style.background = this.scannerTorchActive ? "rgba(245, 158, 11, 0.9)" : "rgba(15, 23, 42, 0.75)";
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Error alternando linterna:", e);
+    }
+  },
+
+  async switchScannerCamera() {
+    if (!this.scannerCameras || this.scannerCameras.length < 2) return;
+    this.scannerCurrentCameraIndex = (this.scannerCurrentCameraIndex + 1) % this.scannerCameras.length;
+    const nextCam = this.scannerCameras[this.scannerCurrentCameraIndex];
+    if (nextCam) {
+      await this.startBarcodeCamera(nextCam.id);
+    }
+  },
+
+  async scanBarcodeFromFile(file) {
+    if (!file || !this.html5QrCodeScanner) return;
+    try {
+      this.showToast("Analizando código en la imagen...", "info");
+      const decodedText = await this.html5QrCodeScanner.scanFile(file, true);
+      if (decodedText) {
+        this.onBarcodeScanSuccess(decodedText);
+      }
+    } catch (err) {
+      console.warn("Error escaneando archivo de imagen:", err);
+      this.showToast("No se detectó ningún código de barras legible en la foto.", "warning");
+    }
+  },
+
+  onBarcodeScanSuccess(decodedText, decodedResult) {
+    if (!decodedText) return;
+    const cleanCode = String(decodedText).trim();
+    if (!cleanCode) return;
+
+    // Vibración háptica de confirmación si está soportada
+    if (navigator.vibrate) {
+      try { navigator.vibrate(120); } catch (e) {}
+    }
+
+    // Pausar el flujo de escaneo
+    try {
+      if (this.html5QrCodeScanner && this.html5QrCodeScanner.isScanning) {
+        this.html5QrCodeScanner.pause(true);
+      }
+    } catch (e) {
+      console.warn("Pausando escáner:", e);
+    }
+
+    this.processScannedBarcode(cleanCode);
+  },
+
+  processScannedBarcode(rawCode) {
+    if (!rawCode) {
+      this.showToast("Por favor ingresa o escanea un código válido", "warning");
+      return;
+    }
+    const code = String(rawCode).trim();
+    const mode = this.scannerActiveMode;
+
+    // Modo 1: Asignar al formulario de crear/editar insumo
+    if (mode === "form-insumo") {
+      const barcodeInput = document.getElementById("insumo-barcode");
+      if (barcodeInput) {
+        barcodeInput.value = code;
+      }
+      this.closeBarcodeScanner();
+      this.showToast(`Código ${code} asignado al insumo`, "success");
+      return;
+    }
+
+    // Modo 2: Selección directa en catálogo de entrega de accesorios
+    if (mode === "entrega-accesorio") {
+      const found = this.inventarioData.find(item => 
+        (item.barcode && String(item.barcode).trim().toLowerCase() === code.toLowerCase()) ||
+        (item.id_caja && String(item.id_caja).trim().toLowerCase() === code.toLowerCase())
+      );
+
+      if (found) {
+        this.selectAccesorioEntrega(found);
+        this.closeBarcodeScanner();
+        this.showToast(`Accesorio "${found.nombre_caja}" seleccionado para entrega`, "success");
+      } else {
+        const searchInput = document.getElementById("buscar-accesorio-input");
+        if (searchInput) {
+          searchInput.value = code;
+          this.filterBuscarAccesorioModal();
+        }
+        this.closeBarcodeScanner();
+        this.showToast(`Código "${code}" no encontrado directamente. Se aplicó en el filtro.`, "info");
+      }
+      return;
+    }
+
+    // Modo 3: Ingreso de stock rápido
+    if (mode === "ingreso-stock") {
+      const found = this.inventarioData.find(item => 
+        (item.barcode && String(item.barcode).trim().toLowerCase() === code.toLowerCase()) ||
+        (item.id_caja && String(item.id_caja).trim().toLowerCase() === code.toLowerCase())
+      );
+
+      if (found) {
+        const select = document.getElementById("ingreso-select-caja");
+        if (select) {
+          select.value = found.id_caja;
+        }
+        const cantInput = document.getElementById("ingreso-cantidad");
+        if (cantInput) {
+          cantInput.focus();
+        }
+        this.closeBarcodeScanner();
+        this.showToast(`Insumo "${found.nombre_caja}" seleccionado para ingreso de stock`, "success");
+        return;
+      }
+    }
+
+    // Modo 4: Búsqueda general en Bodega (Detecta si existe o si es nuevo para dar opciones inmediatas)
+    const found = this.inventarioData.find(item => 
+      (item.barcode && String(item.barcode).trim().toLowerCase() === code.toLowerCase()) ||
+      (item.id_caja && String(item.id_caja).trim().toLowerCase() === code.toLowerCase())
+    );
+
+    const guide = document.getElementById("scanner-overlay-guide");
+    if (guide) guide.style.display = "none";
+
+    const resBox = document.getElementById("scanner-result-container");
+    if (!resBox) return;
+    resBox.style.display = "block";
+
+    if (found) {
+      // Insumo ya registrado en bodega
+      const shelfInfo = this.estanteMap[found.estanteria_id] || { numero: "?", nombre: `Estante #${found.estanteria_id}` };
+      let repisaNum = 1;
+      if (found.seccion_id && found.seccion_id.includes("_sec_")) {
+        repisaNum = parseInt(found.seccion_id.split("_sec_")[1], 10) || 1;
+      }
+      const safeId = String(found.id_caja).replace(/'/g, "\\'");
+      const isOk = found.estado === "OK";
+
+      resBox.innerHTML = `
+        <div class="scanner-success-card">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <div>
+              <span class="badge ${isOk ? 'badge-success' : ''}" style="${!isOk ? 'background: var(--warning-subtle); color: var(--warning);' : ''} font-size: 0.72rem; margin-bottom: 0.35rem; display: inline-block;">
+                ${isOk ? '✓ Insumo Registrado' : '⚠️ Stock Bajo'}
+              </span>
+              <h4 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); line-height: 1.3;">
+                ${found.nombre_caja}
+              </h4>
+              <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.3rem;">
+                📍 <strong>${shelfInfo.nombre}</strong> · Repisa ${repisaNum} · Código: <code style="font-family: var(--font-mono); color: var(--primary);">${code}</code>
+              </div>
+            </div>
+            <div style="text-align: right; background: var(--bg-subtle); padding: 0.4rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); min-width: 75px;">
+              <div style="font-size: 1.3rem; font-weight: 800; color: var(--primary); line-height: 1;">${found.cantidad}</div>
+              <div style="font-size: 0.68rem; color: var(--text-tertiary); margin-top: 2px;">en stock</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="app.handleScannedAction('view', '${safeId}')" style="flex: 1; font-weight: 600;">
+              🔍 Ver Ficha / Salida
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="app.handleScannedAction('stock', '${safeId}')" style="flex: 1;">
+              ➕ Sumar Stock
+            </button>
+            <button type="button" class="btn btn-subtle btn-sm" onclick="app.handleScannedAction('filter', '${code}')" title="Filtrar en la bodega">
+              Filtro Bodega
+            </button>
+            <button type="button" class="btn btn-subtle btn-sm" onclick="app.resumeBarcodeScanner()" title="Escanear otro código">
+              🔄 Otro
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      // Insumo NO registrado -> opción directa de darlo de alta
+      const safeCode = code.replace(/'/g, "\\'");
+      resBox.innerHTML = `
+        <div class="scanner-new-card">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+            <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #d97706; font-size: 0.72rem; font-weight: 700;">
+              Código No Registrado en Bodega
+            </span>
+          </div>
+          <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">
+            Código detectado: <code style="font-family: var(--font-mono); font-size: 1.05rem; color: var(--primary);">${code}</code>
+          </h4>
+          <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.35rem 0 0.85rem 0; line-height: 1.4;">
+            Este código de barras no coincide con ningún producto existente. Puedes crear e ingresar este nuevo insumo al inventario ahora mismo.
+          </p>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="app.handleScannedNewAction('create', '${safeCode}')" style="flex: 1.4; font-weight: 600;">
+              ➕ Crear Nuevo Insumo con este Código
+            </button>
+            <button type="button" class="btn btn-subtle btn-sm" onclick="app.resumeBarcodeScanner()">
+              🔄 Reintentar
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  handleScannedAction(action, param) {
+    this.closeBarcodeScanner();
+    if (action === "view") {
+      const box = this.inventarioData.find(b => b.id_caja === param);
+      if (box) this.openBoxModal(box);
+    } else if (action === "stock") {
+      this.openIngresoStockModal(param);
+    } else if (action === "filter") {
+      const input = document.getElementById("inventario-search");
+      if (input) {
+        input.value = param;
+        this.filterInventario();
+      }
+    }
+  },
+
+  handleScannedNewAction(action, code) {
+    this.closeBarcodeScanner();
+    if (action === "create") {
+      // Abre el modal para crear nuevo insumo con el código de barra ya asignado
+      this.openNewInsumoModal(null, null, code);
+      this.showToast(`Completa los datos para registrar el nuevo insumo con código ${code}`, "info");
+    }
+  },
+
+  resumeBarcodeScanner() {
+    const resBox = document.getElementById("scanner-result-container");
+    if (resBox) {
+      resBox.style.display = "none";
+      resBox.innerHTML = "";
+    }
+    const guide = document.getElementById("scanner-overlay-guide");
+    if (guide) guide.style.display = "flex";
+
+    const manualInput = document.getElementById("scanner-manual-input");
+    if (manualInput) manualInput.value = "";
+
+    try {
+      if (this.html5QrCodeScanner) {
+        this.html5QrCodeScanner.resume();
+      } else {
+        this.startBarcodeCamera();
+      }
+    } catch (e) {
+      console.warn("Reanudando escáner:", e);
+      this.startBarcodeCamera();
+    }
+  },
+
+  closeBarcodeScanner() {
+    const modal = document.getElementById("modal-barcode-scanner");
+    if (modal) modal.classList.remove("active");
+
+    if (this.html5QrCodeScanner) {
+      const scanner = this.html5QrCodeScanner;
+      this.html5QrCodeScanner = null;
+      try {
+        if (scanner.isScanning) {
+          scanner.stop().then(() => {
+            scanner.clear();
+          }).catch(err => {
+            console.warn("Error deteniendo escáner:", err);
+            scanner.clear();
+          });
+        } else {
+          scanner.clear();
+        }
+      } catch (e) {
+        console.warn("Error al cerrar escáner:", e);
+      }
+    }
   },
 
   /* ==========================================================================
@@ -5420,7 +5871,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.8.4",
+  currentAppVersion: "1.9.0",
   pendingUpdateInfo: null,
   updateDownloading: false,
 

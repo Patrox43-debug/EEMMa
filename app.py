@@ -340,13 +340,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.8.4",
-        "version_code": 21,
-        "release_tag": "v1.8.4",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.8.4/EEMM.apk",
+        "version_name": "1.9.0",
+        "version_code": 22,
+        "release_tag": "v1.9.0",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.9.0/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Firma criptográfica permanente con keystore dedicado para permitir actualizaciones continuas automáticas sin fallas de instalación.\n• Mejoras en el flujo de descarga y cierre de descriptores previo a la instalación.",
-        "published_at": "2026-10-26T20:00:00-03:00"
+        "notes": "• Escaneo de códigos de barra con la cámara integrado en Bodega (búsqueda rápida de insumos registrados y alta de nuevos productos).\n• Botón de escaneo rápido en formularios de bodega y entregas.\n• Compatibilidad WebRTC y permisos de cámara optimizados.",
+        "published_at": "2026-10-28T09:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:

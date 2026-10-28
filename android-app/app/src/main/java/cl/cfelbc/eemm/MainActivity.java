@@ -31,6 +31,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -84,6 +85,7 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<String[]> permissionsLauncher;
     private ActivityResultLauncher<Intent> manageUnknownSourcesLauncher;
     private File pendingInstallApk = null;
+    private PermissionRequest pendingPermissionRequest = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -156,8 +158,22 @@ public class MainActivity extends AppCompatActivity {
         permissionsLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestMultiplePermissions(),
                 permissions -> {
-                    // Once permissions granted, launch file chooser intent
-                    launchFileChooserIntent();
+                    Boolean cameraGranted = permissions.get(Manifest.permission.CAMERA);
+                    if (cameraGranted != null && cameraGranted) {
+                        if (pendingPermissionRequest != null) {
+                            pendingPermissionRequest.grant(pendingPermissionRequest.getResources());
+                            pendingPermissionRequest = null;
+                        }
+                    } else {
+                        if (pendingPermissionRequest != null) {
+                            pendingPermissionRequest.deny();
+                            pendingPermissionRequest = null;
+                        }
+                    }
+
+                    if (fileUploadCallback != null) {
+                        launchFileChooserIntent();
+                    }
                 }
         );
 
@@ -188,6 +204,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setDisplayZoomControls(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        settings.setMediaPlaybackRequiresUserGesture(false);
 
         webView.setBackgroundColor(ContextCompat.getColor(this, R.color.app_bg_dark));
         swipeRefreshLayout.setBackgroundColor(ContextCompat.getColor(this, R.color.app_bg_dark));
@@ -351,6 +368,30 @@ public class MainActivity extends AppCompatActivity {
                         progressBar.setVisibility(View.GONE);
                     }
                 }
+            }
+
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(() -> {
+                    boolean requiresCamera = false;
+                    for (String res : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) {
+                            requiresCamera = true;
+                            break;
+                        }
+                    }
+
+                    if (requiresCamera) {
+                        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                            request.grant(request.getResources());
+                        } else {
+                            pendingPermissionRequest = request;
+                            permissionsLauncher.launch(new String[]{Manifest.permission.CAMERA});
+                        }
+                    } else {
+                        request.grant(request.getResources());
+                    }
+                });
             }
 
             @Override
@@ -702,7 +743,7 @@ public class MainActivity extends AppCompatActivity {
                     return pInfo.versionCode;
                 }
             } catch (Exception e) {
-                return 21;
+                return 22;
             }
         }
 

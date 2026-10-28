@@ -186,7 +186,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>EEMM Hospital · <strong>v1.8.4</strong></span>
+              <span>EEMM Hospital · <strong>v1.9.0</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -288,7 +288,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            EEMM Hospital · Versión <strong>1.8.4</strong>
+            EEMM Hospital · Versión <strong>1.9.0</strong>
           </div>
         </form>
       </section>
@@ -1348,8 +1348,21 @@
           <!-- Barra de Control y Búsqueda -->
           <div class="bodega-toolbar">
             <div class="bodega-controls-left">
-              <div style="position: relative; flex: 1; min-width: 200px;">
+              <div class="bodega-search-wrap">
                 <input type="text" id="inventario-search" class="form-control" placeholder="Buscar insumo, código de barras o caja..." oninput="app.filterInventarioDebounced()">
+                <button type="button" class="btn btn-primary btn-scan-barcode" id="btn-scan-bodega" onclick="app.openBarcodeScanner('search')" title="Escanear código de barras con la cámara">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                    <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                    <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                    <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                    <line x1="7" y1="8" x2="7" y2="16"></line>
+                    <line x1="10" y1="8" x2="10" y2="16"></line>
+                    <line x1="14" y1="8" x2="14" y2="16"></line>
+                    <line x1="17" y1="8" x2="17" y2="16"></line>
+                  </svg>
+                  <span class="btn-scan-text">Escanear</span>
+                </button>
               </div>
 
               <select id="inventario-filtro-estado" class="form-control" style="max-width: 170px;" onchange="app.filterInventario()">
@@ -1816,7 +1829,22 @@
 
           <div class="form-group">
             <label class="form-label" for="insumo-barcode">Código de Barras (Opcional):</label>
-            <input type="text" id="insumo-barcode" class="form-control" placeholder="Escanear o escribir código EAN...">
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="insumo-barcode" class="form-control" placeholder="Escanear o escribir código EAN...">
+              <button type="button" class="btn btn-outline" onclick="app.openBarcodeScanner('form-insumo')" title="Escanear con la cámara" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; padding: 0.4rem 0.75rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                  <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                  <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                  <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                  <line x1="7" y1="8" x2="7" y2="16"></line>
+                  <line x1="10" y1="8" x2="10" y2="16"></line>
+                  <line x1="14" y1="8" x2="14" y2="16"></line>
+                  <line x1="17" y1="8" x2="17" y2="16"></line>
+                </svg>
+                <span>Escanear</span>
+              </button>
+            </div>
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid var(--border-subtle);">
@@ -1842,7 +1870,12 @@
 
         <form id="form-ingreso-stock" onsubmit="app.submitIngresoStock(event)">
           <div class="form-group">
-            <label class="form-label" for="ingreso-select-caja">Seleccionar Insumo / Caja <span class="req">*</span>:</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label class="form-label" for="ingreso-select-caja" style="margin-bottom: 0;">Seleccionar Insumo / Caja <span class="req">*</span>:</label>
+              <button type="button" class="btn btn-outline btn-xs" onclick="app.openBarcodeScanner('ingreso-stock')" style="font-size: 0.72rem; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Escanear código de barra para seleccionar">
+                📷 Escanear
+              </button>
+            </div>
             <select id="ingreso-select-caja" class="form-control" required style="width: 100%;">
               <!-- Rellenado dinámicamente por JS -->
             </select>
@@ -2118,11 +2151,16 @@
 
         <!-- Buscador y Filtros -->
         <div style="margin-bottom: 0.85rem;">
-          <div style="position: relative; margin-bottom: 0.65rem;">
-            <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none;">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            </span>
-            <input type="text" id="buscar-accesorio-input" class="form-control" placeholder="Buscar por nombre, código de caja, estante, sección..." oninput="app.filterBuscarAccesorioModal()" style="padding-left: 2.3rem; height: 42px; font-size: 0.9rem;" autocomplete="off">
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.65rem;">
+            <div style="position: relative; flex: 1;">
+              <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </span>
+              <input type="text" id="buscar-accesorio-input" class="form-control" placeholder="Buscar por nombre, código de caja, estante, sección..." oninput="app.filterBuscarAccesorioModal()" style="padding-left: 2.3rem; height: 42px; font-size: 0.9rem;" autocomplete="off">
+            </div>
+            <button type="button" class="btn btn-outline" onclick="app.openBarcodeScanner('entrega-accesorio')" title="Escanear código de barra con la cámara" style="white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; height: 42px; padding: 0 0.85rem; font-size: 0.85rem;">
+              📷 Escanear
+            </button>
           </div>
 
           <!-- Filtros de Estado de Stock -->
@@ -2206,6 +2244,94 @@
       </div>
     </div>
 
+    <!-- ====================================================================
+         MODAL ESCÁNER DE CÓDIGO DE BARRAS CON CÁMARA
+         ==================================================================== -->
+    <div id="modal-barcode-scanner" class="modal-overlay" onclick="if(event.target === this) app.closeBarcodeScanner();">
+      <div class="modal-card scanner-modal-card" style="max-width: 520px; width: 95%; padding: 0; overflow: hidden; border-radius: var(--radius-xl);">
+        
+        <!-- Header -->
+        <div class="scanner-header" style="padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface);">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="width: 36px; height: 36px; border-radius: var(--radius-md); background: rgba(59, 130, 246, 0.12); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                <line x1="7" y1="8" x2="7" y2="16"></line>
+                <line x1="10" y1="8" x2="10" y2="16"></line>
+                <line x1="14" y1="8" x2="14" y2="16"></line>
+                <line x1="17" y1="8" x2="17" y2="16"></line>
+              </svg>
+            </div>
+            <div>
+              <h3 style="font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--text-primary);" id="scanner-modal-title">Escáner de Código de Barras</h3>
+              <p style="font-size: 0.75rem; color: var(--text-secondary); margin: 2px 0 0 0;" id="scanner-modal-subtitle">Apunta la cámara al código del insumo clínico</p>
+            </div>
+          </div>
+          <button type="button" class="btn-icon" onclick="app.closeBarcodeScanner()" title="Cerrar escáner" style="width: 32px; height: 32px; border-radius: 50%; font-size: 1.1rem; line-height: 1;">✕</button>
+        </div>
+
+        <!-- Viewport de la Cámara con Laser Guía -->
+        <div class="scanner-viewport-wrapper" style="position: relative; background: #000; min-height: 280px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+          <div id="barcode-scanner-view" style="width: 100%; min-height: 280px;"></div>
+          
+          <!-- Overlay con marco y línea láser animada -->
+          <div class="scanner-overlay-guide" id="scanner-overlay-guide">
+            <div class="scanner-reticle">
+              <span class="reticle-corner corner-tl"></span>
+              <span class="reticle-corner corner-tr"></span>
+              <span class="reticle-corner corner-bl"></span>
+              <span class="reticle-corner corner-br"></span>
+              <div class="scanner-laser-line"></div>
+            </div>
+            <div class="scanner-hint-text" id="scanner-hint-text">
+              Centra el código de barras en el recuadro
+            </div>
+          </div>
+
+          <!-- Controles flotantes en la cámara: Cambiar cámara / Linterna -->
+          <div class="scanner-floating-controls">
+            <button type="button" class="btn-scanner-ctrl" id="btn-scanner-switch-cam" onclick="app.switchScannerCamera()" title="Cambiar cámara">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"></path>
+                <path d="M4 8V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"></path>
+                <path d="m16 12 4-4-4-4"></path>
+                <path d="m8 12-4 4 4 4"></path>
+              </svg>
+            </button>
+            <button type="button" class="btn-scanner-ctrl" id="btn-scanner-torch" onclick="app.toggleScannerTorch()" title="Activar/Desactivar Linterna" style="display: none;">
+              🔦
+            </button>
+          </div>
+        </div>
+
+        <!-- Tarjeta de Resultado Dinámica (Aparece al detectar código) -->
+        <div id="scanner-result-container" class="scanner-result-box" style="display: none; padding: 1.15rem 1.25rem; background: var(--bg-surface); border-top: 1px solid var(--border-subtle);">
+          <!-- Inyectado dinámicamente por JS -->
+        </div>
+
+        <!-- Barra inferior: Opción manual y cargar foto -->
+        <div class="scanner-footer" style="padding: 0.85rem 1.25rem; background: var(--bg-subtle); border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.65rem;">
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="scanner-manual-input" class="form-control" placeholder="O escribir código manualmente..." style="font-size: 0.85rem; height: 38px;" onkeydown="if(event.key==='Enter'){event.preventDefault(); app.processScannedBarcode(this.value.trim());}">
+            <button type="button" class="btn btn-primary btn-sm" onclick="app.processScannedBarcode(document.getElementById('scanner-manual-input').value.trim())" style="height: 38px; padding: 0 1rem; font-weight: 600;">
+              Buscar
+            </button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <label class="btn btn-subtle btn-xs" style="cursor: pointer; margin: 0; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px;">
+              📁 Subir foto con código
+              <input type="file" id="scanner-file-input" accept="image/*" style="display: none;" onchange="app.scanBarcodeFromFile(this.files[0])">
+            </label>
+            <span style="font-size: 0.7rem; color: var(--text-tertiary);">Soporta EAN-13, EAN-8, Code 128, QR</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -2215,6 +2341,7 @@
   <script src="/static/js/offline-manager.js?v=3.3"></script>
   <script src="/static/js/signature.js?v=3.3"></script>
   <script src="/static/js/photos.js?v=3.3"></script>
+  <script src="/static/js/html5-qrcode.min.js"></script>
   <script src="/static/js/app.js?v=3.3"></script>
 </body>
 </html>

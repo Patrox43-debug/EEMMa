@@ -3127,5 +3127,229 @@ select.form-control {
   border-color: var(--color-primary-hover, #1d4ed8);
 }
 
+/* ==========================================================================
+   ESCÁNER DE CÓDIGOS DE BARRA CON CÁMARA (BODEGA & ENTREGAS)
+   ========================================================================== */
+.bodega-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 220px;
+}
+
+.btn-scan-barcode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  transition: all 0.2s ease;
+}
+
+.btn-scan-barcode:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 480px) {
+  .btn-scan-text {
+    display: none;
+  }
+  .btn-scan-barcode {
+    padding: 0.5rem;
+  }
+}
+
+/* Modal Escáner Viewport */
+.scanner-viewport-wrapper {
+  position: relative;
+  width: 100%;
+  height: 290px;
+  background: #090d16;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#barcode-scanner-view {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+}
+
+#barcode-scanner-view video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+#barcode-scanner-view img {
+  display: none !important;
+}
+
+/* Ocultar elementos nativos de html5-qrcode para mantener diseño moderno */
+#barcode-scanner-view div[style*="text-align: center"] {
+  display: none !important;
+}
+
+/* Retícula y láser de escaneo */
+.scanner-overlay-guide {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.scanner-reticle {
+  position: relative;
+  width: 78%;
+  max-width: 320px;
+  height: 160px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  border-radius: 12px;
+}
+
+.reticle-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: #38bdf8;
+  border-style: solid;
+}
+
+.corner-tl {
+  top: 0;
+  left: 0;
+  border-width: 3.5px 0 0 3.5px;
+  border-top-left-radius: 12px;
+}
+
+.corner-tr {
+  top: 0;
+  right: 0;
+  border-width: 3.5px 3.5px 0 0;
+  border-top-right-radius: 12px;
+}
+
+.corner-bl {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 3.5px 3.5px;
+  border-bottom-left-radius: 12px;
+}
+
+.corner-br {
+  bottom: 0;
+  right: 0;
+  border-width: 0 3.5px 3.5px 0;
+  border-bottom-right-radius: 12px;
+}
+
+.scanner-laser-line {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2.5px;
+  background: linear-gradient(90deg, transparent, #ef4444, #f87171, #ef4444, transparent);
+  box-shadow: 0 0 8px #ef4444;
+  animation: scannerLaser 2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+@keyframes scannerLaser {
+  0% {
+    top: 8px;
+    opacity: 0.8;
+  }
+  100% {
+    top: calc(100% - 10px);
+    opacity: 0.95;
+  }
+}
+
+.scanner-hint-text {
+  margin-top: 1rem;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  color: #f8fafc;
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  letter-spacing: 0.02em;
+}
+
+/* Botones flotantes de cámara y linterna */
+.scanner-floating-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 20;
+}
+
+.btn-scanner-ctrl {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+
+.btn-scanner-ctrl:hover {
+  background: rgba(37, 99, 235, 0.85);
+  transform: scale(1.06);
+}
+
+/* Tarjetas de resultados de escaneo */
+.scanner-result-box {
+  animation: slideDownResult 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDownResult {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scanner-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.4rem;
+}
+
+
 
 
