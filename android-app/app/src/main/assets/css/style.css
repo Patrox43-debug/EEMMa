@@ -3128,6 +3128,137 @@ select.form-control {
 }
 
 /* ==========================================================================
+   CANASTA DE INSUMOS MÚLTIPLES (ENTREGA DE ACCESORIOS)
+   ========================================================================== */
+.entrega-basket-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 290px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-surface, #ffffff);
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+
+.entrega-basket-empty {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 0.85rem;
+}
+
+.entrega-basket-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-surface-elevated, #f8fafc);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.entrega-basket-item:hover {
+  background: rgba(37, 99, 235, 0.03);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+.entrega-basket-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.entrega-basket-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 6px;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.entrega-stepper-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--color-primary, #2563eb);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.entrega-stepper-btn:hover:not(:disabled) {
+  background: var(--color-primary, #2563eb);
+  color: #ffffff;
+}
+
+.entrega-stepper-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.entrega-basket-qty {
+  min-width: 36px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.entrega-basket-remove {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.entrega-basket-remove:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+@media (max-width: 480px) {
+  .entrega-basket-item {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .entrega-basket-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border-top: 1px dashed var(--border-subtle, #e2e8f0);
+    padding-top: 0.4rem;
+  }
+}
+
+/* ==========================================================================
    ESCÁNER DE CÓDIGOS DE BARRA CON CÁMARA (BODEGA & ENTREGAS)
    ========================================================================== */
 .bodega-search-wrap {

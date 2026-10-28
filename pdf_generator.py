@@ -19,6 +19,7 @@ from reportlab.platypus import (
 
 import base64
 import re
+import json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -1088,11 +1089,41 @@ def generate_entregas_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: s
                 Paragraph(f"<font color='#64748b'>{folio_e}</font>", tag_style)
             ]
             c_serv = Paragraph(f"<b>{serv_e}</b>", cell_txt)
-            c_acc_items = [Paragraph(f"<b>{acc_e}</b>", cell_txt_bold)]
+
+            # Desglose de ítems si es una entrega múltiple
+            items_list = []
+            if e.get("items") and isinstance(e["items"], list):
+                items_list = e["items"]
+            elif e.get("items_json"):
+                try:
+                    items_list = json.loads(e["items_json"])
+                except Exception:
+                    items_list = []
+
+            c_acc_items = []
+            if items_list and len(items_list) > 1:
+                c_acc_items.append(Paragraph(f"<b>Despacho Múltiple ({len(items_list)} insumos):</b>", cell_txt_bold))
+                for it in items_list:
+                    it_nom = it.get("nombre_accesorio") or it.get("nombre_caja") or it.get("id_caja") or "Insumo"
+                    it_cant = it.get("cantidad", 1)
+                    c_acc_items.append(Paragraph(f"• <b>{it_nom}</b> ({it_cant} un.)", cell_txt))
+            elif items_list and len(items_list) == 1:
+                it = items_list[0]
+                it_nom = it.get("nombre_accesorio") or it.get("nombre_caja") or it.get("id_caja") or acc_e
+                c_acc_items.append(Paragraph(f"<b>{it_nom}</b>", cell_txt_bold))
+            else:
+                c_acc_items.append(Paragraph(f"<b>{acc_e}</b>", cell_txt_bold))
+
             if obs_e:
                 c_acc_items.append(Paragraph(f"<i>Nota: {obs_e}</i>", tag_style))
             
-            c_cant = Paragraph(f"<b>{cant_e}</b> un.", cell_txt_center)
+            if items_list and len(items_list) > 1:
+                c_cant = [
+                    Paragraph(f"<b>{cant_e}</b> un.", cell_txt_center),
+                    Paragraph(f"<font color='#64748b'>({len(items_list)} ítems)</font>", tag_style)
+                ]
+            else:
+                c_cant = Paragraph(f"<b>{cant_e}</b> un.", cell_txt_center)
             c_rec = [
                 Paragraph(f"<b>Recibe:</b> {rec_e}", cell_txt),
                 Paragraph(f"<b>Entrega:</b> {tec_e}", tag_style)

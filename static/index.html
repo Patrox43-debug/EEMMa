@@ -186,7 +186,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>EEMM Hospital · <strong>v1.9.1</strong></span>
+              <span>EEMM Hospital · <strong>v1.10.0</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -288,7 +288,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            EEMM Hospital · Versión <strong>1.9.1</strong>
+            EEMM Hospital · Versión <strong>1.10.0</strong>
           </div>
         </form>
       </section>
@@ -513,6 +513,56 @@
               </label>
               <select id="select-unidad" class="form-control" required>
                 <option value="">-- Seleccionar Unidad / Servicio --</option>
+                <option value="ABASTECIMIENTO">ABASTECIMIENTO</option>
+                <option value="AISLAMIENTO HOSPITALIZACIÓN">AISLAMIENTO HOSPITALIZACIÓN</option>
+                <option value="ALIMENTACIÓN / SEDILE">ALIMENTACIÓN / SEDILE</option>
+                <option value="ANATOMIA PATOLÓGICA">ANATOMIA PATOLÓGICA</option>
+                <option value="ÁREAS COMUNES">ÁREAS COMUNES</option>
+                <option value="BANCO DE SANGRE">BANCO DE SANGRE</option>
+                <option value="BIOLOGÍA MOLECULAR">BIOLOGÍA MOLECULAR</option>
+                <option value="CAE">CAE</option>
+                <option value="CARDIOLOGÍA">CARDIOLOGÍA</option>
+                <option value="CIRUGÍA HOSPITALIZADOS">CIRUGÍA HOSPITALIZADOS</option>
+                <option value="CUIDADOS PALIATIVOS">CUIDADOS PALIATIVOS</option>
+                <option value="DIÁLISIS">DIÁLISIS</option>
+                <option value="EEMM - OPERACIONES">EEMM - OPERACIONES</option>
+                <option value="ENDOSCOPIA">ENDOSCOPIA</option>
+                <option value="ESTERILIZACIÓN">ESTERILIZACIÓN</option>
+                <option value="FARMACIA">FARMACIA</option>
+                <option value="GINECOLOGÍA Y OBSTETRICIA">GINECOLOGÍA Y OBSTETRICIA</option>
+                <option value="HOSPITAL DE DÍA">HOSPITAL DE DÍA</option>
+                <option value="HOSPITALIZACIÓN DOMICILIARIA">HOSPITALIZACIÓN DOMICILIARIA</option>
+                <option value="IMAGENOLOGIA">IMAGENOLOGIA</option>
+                <option value="ITS">ITS</option>
+                <option value="LABORATORIO">LABORATORIO</option>
+                <option value="LAVANDERIA">LAVANDERIA</option>
+                <option value="MATERNIDAD HOSPITALIZACIÓN">MATERNIDAD HOSPITALIZACIÓN</option>
+                <option value="MEDICINA FÍSICA Y REHABILITACIÓN">MEDICINA FÍSICA Y REHABILITACIÓN</option>
+                <option value="MEDICINA HOSPITALIZACIÓN">MEDICINA HOSPITALIZACIÓN</option>
+                <option value="MÉDICO QUIRÚRGICO HOSPITALIZACIÓN">MÉDICO QUIRÚRGICO HOSPITALIZACIÓN</option>
+                <option value="MORGUE">MORGUE</option>
+                <option value="NEONATOLOGÍA">NEONATOLOGÍA</option>
+                <option value="NEUROLOGÍA">NEUROLOGÍA</option>
+                <option value="ODONTOLOGÍA">ODONTOLOGÍA</option>
+                <option value="OFTALMOLOGÍA">OFTALMOLOGÍA</option>
+                <option value="OIRS">OIRS</option>
+                <option value="OTORRINO/ AUDIOLOGÍA">OTORRINO/ AUDIOLOGÍA</option>
+                <option value="PABELLONES">PABELLONES</option>
+                <option value="PARTO INTEGRAL SAIP">PARTO INTEGRAL SAIP</option>
+                <option value="PEDIATRÍA HOSPITALIZACIÓN">PEDIATRÍA HOSPITALIZACIÓN</option>
+                <option value="PRE ALTA HCV">PRE ALTA HCV</option>
+                <option value="SALUD MENTAL">SALUD MENTAL</option>
+                <option value="SALUD OCUPACIONAL">SALUD OCUPACIONAL</option>
+                <option value="SAMU">SAMU</option>
+                <option value="TRABAJO SOCIAL">TRABAJO SOCIAL</option>
+                <option value="TRAUMATOLOGÍA">TRAUMATOLOGÍA</option>
+                <option value="UCI">UCI</option>
+                <option value="URGENCIA ADULTO">URGENCIA ADULTO</option>
+                <option value="URGENCIA GINECO-OBSTETRA">URGENCIA GINECO-OBSTETRA</option>
+                <option value="URGENCIA PEDIÁTRICA">URGENCIA PEDIÁTRICA</option>
+                <option value="UROLOGÍA">UROLOGÍA</option>
+                <option value="UTI">UTI</option>
+                <option value="UTI NEO PEDIATRICA">UTI NEO PEDIATRICA</option>
               </select>
             </div>
 
@@ -616,6 +666,56 @@
                 </label>
                 <select id="select-servicio-clinico" class="form-control" onchange="app.onServicioClinicoChange()" style="font-weight: 500; font-size: 0.95rem;">
                   <option value="">-- Selecciona el Servicio Clínico --</option>
+                  <option value="ABASTECIMIENTO">ABASTECIMIENTO</option>
+                  <option value="AISLAMIENTO HOSPITALIZACIÓN">AISLAMIENTO HOSPITALIZACIÓN</option>
+                  <option value="ALIMENTACIÓN / SEDILE">ALIMENTACIÓN / SEDILE</option>
+                  <option value="ANATOMIA PATOLÓGICA">ANATOMIA PATOLÓGICA</option>
+                  <option value="ÁREAS COMUNES">ÁREAS COMUNES</option>
+                  <option value="BANCO DE SANGRE">BANCO DE SANGRE</option>
+                  <option value="BIOLOGÍA MOLECULAR">BIOLOGÍA MOLECULAR</option>
+                  <option value="CAE">CAE</option>
+                  <option value="CARDIOLOGÍA">CARDIOLOGÍA</option>
+                  <option value="CIRUGÍA HOSPITALIZADOS">CIRUGÍA HOSPITALIZADOS</option>
+                  <option value="CUIDADOS PALIATIVOS">CUIDADOS PALIATIVOS</option>
+                  <option value="DIÁLISIS">DIÁLISIS</option>
+                  <option value="EEMM - OPERACIONES">EEMM - OPERACIONES</option>
+                  <option value="ENDOSCOPIA">ENDOSCOPIA</option>
+                  <option value="ESTERILIZACIÓN">ESTERILIZACIÓN</option>
+                  <option value="FARMACIA">FARMACIA</option>
+                  <option value="GINECOLOGÍA Y OBSTETRICIA">GINECOLOGÍA Y OBSTETRICIA</option>
+                  <option value="HOSPITAL DE DÍA">HOSPITAL DE DÍA</option>
+                  <option value="HOSPITALIZACIÓN DOMICILIARIA">HOSPITALIZACIÓN DOMICILIARIA</option>
+                  <option value="IMAGENOLOGIA">IMAGENOLOGIA</option>
+                  <option value="ITS">ITS</option>
+                  <option value="LABORATORIO">LABORATORIO</option>
+                  <option value="LAVANDERIA">LAVANDERIA</option>
+                  <option value="MATERNIDAD HOSPITALIZACIÓN">MATERNIDAD HOSPITALIZACIÓN</option>
+                  <option value="MEDICINA FÍSICA Y REHABILITACIÓN">MEDICINA FÍSICA Y REHABILITACIÓN</option>
+                  <option value="MEDICINA HOSPITALIZACIÓN">MEDICINA HOSPITALIZACIÓN</option>
+                  <option value="MÉDICO QUIRÚRGICO HOSPITALIZACIÓN">MÉDICO QUIRÚRGICO HOSPITALIZACIÓN</option>
+                  <option value="MORGUE">MORGUE</option>
+                  <option value="NEONATOLOGÍA">NEONATOLOGÍA</option>
+                  <option value="NEUROLOGÍA">NEUROLOGÍA</option>
+                  <option value="ODONTOLOGÍA">ODONTOLOGÍA</option>
+                  <option value="OFTALMOLOGÍA">OFTALMOLOGÍA</option>
+                  <option value="OIRS">OIRS</option>
+                  <option value="OTORRINO/ AUDIOLOGÍA">OTORRINO/ AUDIOLOGÍA</option>
+                  <option value="PABELLONES">PABELLONES</option>
+                  <option value="PARTO INTEGRAL SAIP">PARTO INTEGRAL SAIP</option>
+                  <option value="PEDIATRÍA HOSPITALIZACIÓN">PEDIATRÍA HOSPITALIZACIÓN</option>
+                  <option value="PRE ALTA HCV">PRE ALTA HCV</option>
+                  <option value="SALUD MENTAL">SALUD MENTAL</option>
+                  <option value="SALUD OCUPACIONAL">SALUD OCUPACIONAL</option>
+                  <option value="SAMU">SAMU</option>
+                  <option value="TRABAJO SOCIAL">TRABAJO SOCIAL</option>
+                  <option value="TRAUMATOLOGÍA">TRAUMATOLOGÍA</option>
+                  <option value="UCI">UCI</option>
+                  <option value="URGENCIA ADULTO">URGENCIA ADULTO</option>
+                  <option value="URGENCIA GINECO-OBSTETRA">URGENCIA GINECO-OBSTETRA</option>
+                  <option value="URGENCIA PEDIÁTRICA">URGENCIA PEDIÁTRICA</option>
+                  <option value="UROLOGÍA">UROLOGÍA</option>
+                  <option value="UTI">UTI</option>
+                  <option value="UTI NEO PEDIATRICA">UTI NEO PEDIATRICA</option>
                 </select>
               </div>
             </div>
@@ -870,6 +970,56 @@
               <input type="text" id="filtro-historial-query" class="form-control" placeholder="Filtrar por equipo, serie u observaciones..." oninput="app.filterHistorialDebounced()">
               <select id="filtro-historial-unidad" class="form-control" onchange="app.loadHistorial()">
                 <option value="">Todas las Unidades Hospitalarias</option>
+                <option value="ABASTECIMIENTO">ABASTECIMIENTO</option>
+                <option value="AISLAMIENTO HOSPITALIZACIÓN">AISLAMIENTO HOSPITALIZACIÓN</option>
+                <option value="ALIMENTACIÓN / SEDILE">ALIMENTACIÓN / SEDILE</option>
+                <option value="ANATOMIA PATOLÓGICA">ANATOMIA PATOLÓGICA</option>
+                <option value="ÁREAS COMUNES">ÁREAS COMUNES</option>
+                <option value="BANCO DE SANGRE">BANCO DE SANGRE</option>
+                <option value="BIOLOGÍA MOLECULAR">BIOLOGÍA MOLECULAR</option>
+                <option value="CAE">CAE</option>
+                <option value="CARDIOLOGÍA">CARDIOLOGÍA</option>
+                <option value="CIRUGÍA HOSPITALIZADOS">CIRUGÍA HOSPITALIZADOS</option>
+                <option value="CUIDADOS PALIATIVOS">CUIDADOS PALIATIVOS</option>
+                <option value="DIÁLISIS">DIÁLISIS</option>
+                <option value="EEMM - OPERACIONES">EEMM - OPERACIONES</option>
+                <option value="ENDOSCOPIA">ENDOSCOPIA</option>
+                <option value="ESTERILIZACIÓN">ESTERILIZACIÓN</option>
+                <option value="FARMACIA">FARMACIA</option>
+                <option value="GINECOLOGÍA Y OBSTETRICIA">GINECOLOGÍA Y OBSTETRICIA</option>
+                <option value="HOSPITAL DE DÍA">HOSPITAL DE DÍA</option>
+                <option value="HOSPITALIZACIÓN DOMICILIARIA">HOSPITALIZACIÓN DOMICILIARIA</option>
+                <option value="IMAGENOLOGIA">IMAGENOLOGIA</option>
+                <option value="ITS">ITS</option>
+                <option value="LABORATORIO">LABORATORIO</option>
+                <option value="LAVANDERIA">LAVANDERIA</option>
+                <option value="MATERNIDAD HOSPITALIZACIÓN">MATERNIDAD HOSPITALIZACIÓN</option>
+                <option value="MEDICINA FÍSICA Y REHABILITACIÓN">MEDICINA FÍSICA Y REHABILITACIÓN</option>
+                <option value="MEDICINA HOSPITALIZACIÓN">MEDICINA HOSPITALIZACIÓN</option>
+                <option value="MÉDICO QUIRÚRGICO HOSPITALIZACIÓN">MÉDICO QUIRÚRGICO HOSPITALIZACIÓN</option>
+                <option value="MORGUE">MORGUE</option>
+                <option value="NEONATOLOGÍA">NEONATOLOGÍA</option>
+                <option value="NEUROLOGÍA">NEUROLOGÍA</option>
+                <option value="ODONTOLOGÍA">ODONTOLOGÍA</option>
+                <option value="OFTALMOLOGÍA">OFTALMOLOGÍA</option>
+                <option value="OIRS">OIRS</option>
+                <option value="OTORRINO/ AUDIOLOGÍA">OTORRINO/ AUDIOLOGÍA</option>
+                <option value="PABELLONES">PABELLONES</option>
+                <option value="PARTO INTEGRAL SAIP">PARTO INTEGRAL SAIP</option>
+                <option value="PEDIATRÍA HOSPITALIZACIÓN">PEDIATRÍA HOSPITALIZACIÓN</option>
+                <option value="PRE ALTA HCV">PRE ALTA HCV</option>
+                <option value="SALUD MENTAL">SALUD MENTAL</option>
+                <option value="SALUD OCUPACIONAL">SALUD OCUPACIONAL</option>
+                <option value="SAMU">SAMU</option>
+                <option value="TRABAJO SOCIAL">TRABAJO SOCIAL</option>
+                <option value="TRAUMATOLOGÍA">TRAUMATOLOGÍA</option>
+                <option value="UCI">UCI</option>
+                <option value="URGENCIA ADULTO">URGENCIA ADULTO</option>
+                <option value="URGENCIA GINECO-OBSTETRA">URGENCIA GINECO-OBSTETRA</option>
+                <option value="URGENCIA PEDIÁTRICA">URGENCIA PEDIÁTRICA</option>
+                <option value="UROLOGÍA">UROLOGÍA</option>
+                <option value="UTI">UTI</option>
+                <option value="UTI NEO PEDIATRICA">UTI NEO PEDIATRICA</option>
               </select>
             </div>
 
@@ -901,6 +1051,56 @@
               <input type="text" id="filtro-historial-servicio-query" class="form-control" placeholder="Buscar por folio, técnico, supervisor o notas..." oninput="app.filterHistorialServiciosDebounced()">
               <select id="filtro-historial-servicio-unidad" class="form-control" onchange="app.loadHistorialServicios()">
                 <option value="">Todos los Servicios Clínicos</option>
+                <option value="ABASTECIMIENTO">ABASTECIMIENTO</option>
+                <option value="AISLAMIENTO HOSPITALIZACIÓN">AISLAMIENTO HOSPITALIZACIÓN</option>
+                <option value="ALIMENTACIÓN / SEDILE">ALIMENTACIÓN / SEDILE</option>
+                <option value="ANATOMIA PATOLÓGICA">ANATOMIA PATOLÓGICA</option>
+                <option value="ÁREAS COMUNES">ÁREAS COMUNES</option>
+                <option value="BANCO DE SANGRE">BANCO DE SANGRE</option>
+                <option value="BIOLOGÍA MOLECULAR">BIOLOGÍA MOLECULAR</option>
+                <option value="CAE">CAE</option>
+                <option value="CARDIOLOGÍA">CARDIOLOGÍA</option>
+                <option value="CIRUGÍA HOSPITALIZADOS">CIRUGÍA HOSPITALIZADOS</option>
+                <option value="CUIDADOS PALIATIVOS">CUIDADOS PALIATIVOS</option>
+                <option value="DIÁLISIS">DIÁLISIS</option>
+                <option value="EEMM - OPERACIONES">EEMM - OPERACIONES</option>
+                <option value="ENDOSCOPIA">ENDOSCOPIA</option>
+                <option value="ESTERILIZACIÓN">ESTERILIZACIÓN</option>
+                <option value="FARMACIA">FARMACIA</option>
+                <option value="GINECOLOGÍA Y OBSTETRICIA">GINECOLOGÍA Y OBSTETRICIA</option>
+                <option value="HOSPITAL DE DÍA">HOSPITAL DE DÍA</option>
+                <option value="HOSPITALIZACIÓN DOMICILIARIA">HOSPITALIZACIÓN DOMICILIARIA</option>
+                <option value="IMAGENOLOGIA">IMAGENOLOGIA</option>
+                <option value="ITS">ITS</option>
+                <option value="LABORATORIO">LABORATORIO</option>
+                <option value="LAVANDERIA">LAVANDERIA</option>
+                <option value="MATERNIDAD HOSPITALIZACIÓN">MATERNIDAD HOSPITALIZACIÓN</option>
+                <option value="MEDICINA FÍSICA Y REHABILITACIÓN">MEDICINA FÍSICA Y REHABILITACIÓN</option>
+                <option value="MEDICINA HOSPITALIZACIÓN">MEDICINA HOSPITALIZACIÓN</option>
+                <option value="MÉDICO QUIRÚRGICO HOSPITALIZACIÓN">MÉDICO QUIRÚRGICO HOSPITALIZACIÓN</option>
+                <option value="MORGUE">MORGUE</option>
+                <option value="NEONATOLOGÍA">NEONATOLOGÍA</option>
+                <option value="NEUROLOGÍA">NEUROLOGÍA</option>
+                <option value="ODONTOLOGÍA">ODONTOLOGÍA</option>
+                <option value="OFTALMOLOGÍA">OFTALMOLOGÍA</option>
+                <option value="OIRS">OIRS</option>
+                <option value="OTORRINO/ AUDIOLOGÍA">OTORRINO/ AUDIOLOGÍA</option>
+                <option value="PABELLONES">PABELLONES</option>
+                <option value="PARTO INTEGRAL SAIP">PARTO INTEGRAL SAIP</option>
+                <option value="PEDIATRÍA HOSPITALIZACIÓN">PEDIATRÍA HOSPITALIZACIÓN</option>
+                <option value="PRE ALTA HCV">PRE ALTA HCV</option>
+                <option value="SALUD MENTAL">SALUD MENTAL</option>
+                <option value="SALUD OCUPACIONAL">SALUD OCUPACIONAL</option>
+                <option value="SAMU">SAMU</option>
+                <option value="TRABAJO SOCIAL">TRABAJO SOCIAL</option>
+                <option value="TRAUMATOLOGÍA">TRAUMATOLOGÍA</option>
+                <option value="UCI">UCI</option>
+                <option value="URGENCIA ADULTO">URGENCIA ADULTO</option>
+                <option value="URGENCIA GINECO-OBSTETRA">URGENCIA GINECO-OBSTETRA</option>
+                <option value="URGENCIA PEDIÁTRICA">URGENCIA PEDIÁTRICA</option>
+                <option value="UROLOGÍA">UROLOGÍA</option>
+                <option value="UTI">UTI</option>
+                <option value="UTI NEO PEDIATRICA">UTI NEO PEDIATRICA</option>
               </select>
             </div>
 
@@ -1492,44 +1692,100 @@
                 </label>
                 <select id="entrega-servicio" class="form-control" required>
                   <option value="">-- Selecciona el Servicio Clínico --</option>
+                  <option value="ABASTECIMIENTO">ABASTECIMIENTO</option>
+                  <option value="AISLAMIENTO HOSPITALIZACIÓN">AISLAMIENTO HOSPITALIZACIÓN</option>
+                  <option value="ALIMENTACIÓN / SEDILE">ALIMENTACIÓN / SEDILE</option>
+                  <option value="ANATOMIA PATOLÓGICA">ANATOMIA PATOLÓGICA</option>
+                  <option value="ÁREAS COMUNES">ÁREAS COMUNES</option>
+                  <option value="BANCO DE SANGRE">BANCO DE SANGRE</option>
+                  <option value="BIOLOGÍA MOLECULAR">BIOLOGÍA MOLECULAR</option>
+                  <option value="CAE">CAE</option>
+                  <option value="CARDIOLOGÍA">CARDIOLOGÍA</option>
+                  <option value="CIRUGÍA HOSPITALIZADOS">CIRUGÍA HOSPITALIZADOS</option>
+                  <option value="CUIDADOS PALIATIVOS">CUIDADOS PALIATIVOS</option>
+                  <option value="DIÁLISIS">DIÁLISIS</option>
+                  <option value="EEMM - OPERACIONES">EEMM - OPERACIONES</option>
+                  <option value="ENDOSCOPIA">ENDOSCOPIA</option>
+                  <option value="ESTERILIZACIÓN">ESTERILIZACIÓN</option>
+                  <option value="FARMACIA">FARMACIA</option>
+                  <option value="GINECOLOGÍA Y OBSTETRICIA">GINECOLOGÍA Y OBSTETRICIA</option>
+                  <option value="HOSPITAL DE DÍA">HOSPITAL DE DÍA</option>
+                  <option value="HOSPITALIZACIÓN DOMICILIARIA">HOSPITALIZACIÓN DOMICILIARIA</option>
+                  <option value="IMAGENOLOGIA">IMAGENOLOGIA</option>
+                  <option value="ITS">ITS</option>
+                  <option value="LABORATORIO">LABORATORIO</option>
+                  <option value="LAVANDERIA">LAVANDERIA</option>
+                  <option value="MATERNIDAD HOSPITALIZACIÓN">MATERNIDAD HOSPITALIZACIÓN</option>
+                  <option value="MEDICINA FÍSICA Y REHABILITACIÓN">MEDICINA FÍSICA Y REHABILITACIÓN</option>
+                  <option value="MEDICINA HOSPITALIZACIÓN">MEDICINA HOSPITALIZACIÓN</option>
+                  <option value="MÉDICO QUIRÚRGICO HOSPITALIZACIÓN">MÉDICO QUIRÚRGICO HOSPITALIZACIÓN</option>
+                  <option value="MORGUE">MORGUE</option>
+                  <option value="NEONATOLOGÍA">NEONATOLOGÍA</option>
+                  <option value="NEUROLOGÍA">NEUROLOGÍA</option>
+                  <option value="ODONTOLOGÍA">ODONTOLOGÍA</option>
+                  <option value="OFTALMOLOGÍA">OFTALMOLOGÍA</option>
+                  <option value="OIRS">OIRS</option>
+                  <option value="OTORRINO/ AUDIOLOGÍA">OTORRINO/ AUDIOLOGÍA</option>
+                  <option value="PABELLONES">PABELLONES</option>
+                  <option value="PARTO INTEGRAL SAIP">PARTO INTEGRAL SAIP</option>
+                  <option value="PEDIATRÍA HOSPITALIZACIÓN">PEDIATRÍA HOSPITALIZACIÓN</option>
+                  <option value="PRE ALTA HCV">PRE ALTA HCV</option>
+                  <option value="SALUD MENTAL">SALUD MENTAL</option>
+                  <option value="SALUD OCUPACIONAL">SALUD OCUPACIONAL</option>
+                  <option value="SAMU">SAMU</option>
+                  <option value="TRABAJO SOCIAL">TRABAJO SOCIAL</option>
+                  <option value="TRAUMATOLOGÍA">TRAUMATOLOGÍA</option>
+                  <option value="UCI">UCI</option>
+                  <option value="URGENCIA ADULTO">URGENCIA ADULTO</option>
+                  <option value="URGENCIA GINECO-OBSTETRA">URGENCIA GINECO-OBSTETRA</option>
+                  <option value="URGENCIA PEDIÁTRICA">URGENCIA PEDIÁTRICA</option>
+                  <option value="UROLOGÍA">UROLOGÍA</option>
+                  <option value="UTI">UTI</option>
+                  <option value="UTI NEO PEDIATRICA">UTI NEO PEDIATRICA</option>
                 </select>
               </div>
             </div>
 
-            <div class="entrega-form-grid">
-              <div class="form-group" style="margin-bottom: 0; min-width: 0; width: 100%;">
-                <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                  <span>Accesorio / Insumo (Bodega): <span style="color: var(--danger, #ef4444);">*</span></span>
-                  <button type="button" onclick="app.openBuscarAccesorioModal()" style="background: none; border: none; color: var(--color-primary, #2563eb); font-size: 0.75rem; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0;">
-                    🔍 Abrir Catálogo
-                  </button>
-                </label>
+            <!-- SECCIÓN: INSUMOS Y ACCESORIOS A ENTREGAR (MULTIPLE ITEMS) -->
+            <div style="background: var(--bg-surface-elevated, #f8fafc); border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                  <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                    <span>📦</span> Insumos y Accesorios a Despachar
+                  </h4>
+                  <p style="margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-secondary);">
+                    Puedes agregar uno o más insumos para entregarlos juntos a este servicio.
+                  </p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" onclick="app.openBuscarAccesorioModal()" style="display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 0.8rem;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  🔍 Buscar en Catálogo
+                </button>
+              </div>
 
-                <!-- Input oculto para validación y submit del formulario -->
-                <input type="hidden" id="entrega-accesorio" required>
-                <select id="entrega-accesorio-select" style="display: none;"></select>
-
-                <!-- Caja disparadora cuando aún no hay accesorio seleccionado -->
-                <div id="entrega-accesorio-trigger" class="entrega-trigger-box" onclick="app.openBuscarAccesorioModal()">
+              <!-- Selector temporal / Picker del insumo a agregar -->
+              <div id="entrega-picker-container" style="background: var(--bg-surface, #ffffff); border: 1px solid var(--border, #cbd5e1); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.85rem;">
+                <!-- Trigger cuando aún no se ha seleccionado un accesorio en el picker -->
+                <div id="entrega-accesorio-trigger" class="entrega-trigger-box" onclick="app.openBuscarAccesorioModal()" style="cursor: pointer;">
                   <div style="display: flex; align-items: center; gap: 0.65rem; min-width: 0; flex: 1;">
                     <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(37,99,235,0.12); color: var(--color-primary, #2563eb); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </div>
                     <div style="min-width: 0; flex: 1;">
-                      <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); word-break: break-word;">Toca para buscar accesorio</div>
-                      <div style="font-size: 0.72rem; color: var(--text-tertiary); word-break: break-word;">Ver catálogo y stock en bodega</div>
+                      <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); word-break: break-word;">Toca para seleccionar un accesorio de bodega</div>
+                      <div style="font-size: 0.72rem; color: var(--text-tertiary); word-break: break-word;">Buscar por nombre, código de caja o escaneo con cámara</div>
                     </div>
                   </div>
-                  <button type="button" class="btn btn-primary btn-sm" style="pointer-events: none; white-space: nowrap; font-size: 0.75rem; padding: 0.3rem 0.65rem; flex-shrink: 0;">
+                  <button type="button" class="btn btn-outline btn-sm" style="pointer-events: none; white-space: nowrap; font-size: 0.75rem; padding: 0.3rem 0.65rem; flex-shrink: 0;">
                     Buscar
                   </button>
                 </div>
 
-                <!-- Tarjeta que se muestra cuando un accesorio está seleccionado -->
+                <!-- Tarjeta que se muestra cuando un accesorio está seleccionado en el picker -->
                 <div id="entrega-accesorio-selected-card" class="entrega-selected-card" style="display: none;">
-                  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; width: 100%;">
+                  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; width: 100%; margin-bottom: 0.65rem;">
                     <div style="display: flex; align-items: flex-start; gap: 0.6rem; min-width: 0; flex: 1;">
-                      <div style="width: 34px; height: 34px; border-radius: 6px; background: var(--color-primary, #2563eb); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex-shrink: 0; margin-top: 1px;">
+                      <div style="width: 34px; height: 34px; border-radius: 6px; background: var(--color-primary, #2563eb); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex-shrink: 0;">
                         📦
                       </div>
                       <div style="min-width: 0; flex: 1;">
@@ -1541,29 +1797,50 @@
                         </div>
                       </div>
                     </div>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="app.openBuscarAccesorioModal()" style="font-size: 0.72rem; padding: 0.25rem 0.55rem; flex-shrink: 0;" title="Cambiar por otro accesorio">
-                      Cambiar
+                    <button type="button" class="btn btn-subtle btn-sm" onclick="app.clearCurrentPickerItem()" style="font-size: 0.72rem; padding: 0.25rem 0.5rem; flex-shrink: 0;" title="Cancelar selección">
+                      ✕ Cancelar
                     </button>
                   </div>
 
-                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px dashed rgba(37,99,235,0.2); width: 100%; flex-wrap: wrap;">
-                    <span style="font-size: 0.7rem; color: var(--text-tertiary);">Stock en bodega:</span>
-                    <span id="entrega-selected-stock-badge" style="font-size: 0.78rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 6px; background: rgba(16,185,129,0.15); color: #10b981; max-width: 100%; word-break: break-word;">
-                      -- un. disp.
-                    </span>
+                  <!-- Fila de cantidad y botón Agregar a la Lista -->
+                  <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; background: rgba(37,99,235,0.04); border: 1px dashed rgba(37,99,235,0.25); border-radius: 6px; padding: 0.5rem 0.75rem;">
+                    <div style="flex: 1; min-width: 130px;">
+                      <span style="font-size: 0.7rem; color: var(--text-tertiary); display: block;">Stock disponible:</span>
+                      <span id="entrega-selected-stock-badge" style="font-size: 0.8rem; font-weight: 700; color: #10b981;">
+                        -- un. disp.
+                      </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                      <label for="entrega-cantidad" style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin: 0; white-space: nowrap;">
+                        Cantidad:
+                      </label>
+                      <input type="number" id="entrega-cantidad" class="form-control" min="1" value="1" style="width: 80px; height: 36px; text-align: center; font-weight: 700; font-size: 0.95rem; padding: 0 0.5rem;">
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="app.addItemToEntregaList()" style="height: 36px; padding: 0 1rem; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                      ➕ Agregar a la Entrega
+                    </button>
                   </div>
-                </div>
-
-                <div id="entrega-stock-info" style="margin-top: 0.4rem; font-size: 0.75rem; color: var(--text-tertiary); word-break: break-word;">
-                  Selecciona un accesorio para verificar el stock disponible en bodega.
                 </div>
               </div>
 
-              <div class="form-group" style="margin-bottom: 0; width: 100%; box-sizing: border-box;">
-                <label for="entrega-cantidad" class="form-label">
-                  Cantidad a Entregar: <span style="color: var(--danger, #ef4444);">*</span>
-                </label>
-                <input type="number" id="entrega-cantidad" class="form-control" min="1" value="1" style="font-size: 1.05rem; font-weight: 700; text-align: center; height: 42px; width: 100%; box-sizing: border-box;" required>
+              <!-- Lista / Canasta de insumos agregados -->
+              <div id="entrega-items-container">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+                  <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">
+                    Insumos en esta Entrega (<span id="entrega-items-count">0</span>):
+                  </span>
+                  <span id="entrega-items-total-units" style="font-size: 0.75rem; font-weight: 700; color: var(--color-primary, #2563eb);">
+                    Total: 0 unidades
+                  </span>
+                </div>
+
+                <!-- Tabla / lista dinámica de items -->
+                <div id="entrega-items-list" class="entrega-basket-container">
+                  <div class="entrega-basket-empty">
+                    📦 Aún no has agregado insumos a esta entrega.<br>
+                    <span style="font-size: 0.75rem; color: var(--text-tertiary);">Selecciona uno o más accesorios arriba y pulsa "Agregar a la Entrega".</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2020,6 +2297,56 @@
               <label class="form-label" for="ne-ubicacion">Ubicación / Servicio:</label>
               <select id="ne-ubicacion" class="form-control">
                 <option value="">Seleccionar Unidad Hospitalaria...</option>
+                <option value="ABASTECIMIENTO">ABASTECIMIENTO</option>
+                <option value="AISLAMIENTO HOSPITALIZACIÓN">AISLAMIENTO HOSPITALIZACIÓN</option>
+                <option value="ALIMENTACIÓN / SEDILE">ALIMENTACIÓN / SEDILE</option>
+                <option value="ANATOMIA PATOLÓGICA">ANATOMIA PATOLÓGICA</option>
+                <option value="ÁREAS COMUNES">ÁREAS COMUNES</option>
+                <option value="BANCO DE SANGRE">BANCO DE SANGRE</option>
+                <option value="BIOLOGÍA MOLECULAR">BIOLOGÍA MOLECULAR</option>
+                <option value="CAE">CAE</option>
+                <option value="CARDIOLOGÍA">CARDIOLOGÍA</option>
+                <option value="CIRUGÍA HOSPITALIZADOS">CIRUGÍA HOSPITALIZADOS</option>
+                <option value="CUIDADOS PALIATIVOS">CUIDADOS PALIATIVOS</option>
+                <option value="DIÁLISIS">DIÁLISIS</option>
+                <option value="EEMM - OPERACIONES">EEMM - OPERACIONES</option>
+                <option value="ENDOSCOPIA">ENDOSCOPIA</option>
+                <option value="ESTERILIZACIÓN">ESTERILIZACIÓN</option>
+                <option value="FARMACIA">FARMACIA</option>
+                <option value="GINECOLOGÍA Y OBSTETRICIA">GINECOLOGÍA Y OBSTETRICIA</option>
+                <option value="HOSPITAL DE DÍA">HOSPITAL DE DÍA</option>
+                <option value="HOSPITALIZACIÓN DOMICILIARIA">HOSPITALIZACIÓN DOMICILIARIA</option>
+                <option value="IMAGENOLOGIA">IMAGENOLOGIA</option>
+                <option value="ITS">ITS</option>
+                <option value="LABORATORIO">LABORATORIO</option>
+                <option value="LAVANDERIA">LAVANDERIA</option>
+                <option value="MATERNIDAD HOSPITALIZACIÓN">MATERNIDAD HOSPITALIZACIÓN</option>
+                <option value="MEDICINA FÍSICA Y REHABILITACIÓN">MEDICINA FÍSICA Y REHABILITACIÓN</option>
+                <option value="MEDICINA HOSPITALIZACIÓN">MEDICINA HOSPITALIZACIÓN</option>
+                <option value="MÉDICO QUIRÚRGICO HOSPITALIZACIÓN">MÉDICO QUIRÚRGICO HOSPITALIZACIÓN</option>
+                <option value="MORGUE">MORGUE</option>
+                <option value="NEONATOLOGÍA">NEONATOLOGÍA</option>
+                <option value="NEUROLOGÍA">NEUROLOGÍA</option>
+                <option value="ODONTOLOGÍA">ODONTOLOGÍA</option>
+                <option value="OFTALMOLOGÍA">OFTALMOLOGÍA</option>
+                <option value="OIRS">OIRS</option>
+                <option value="OTORRINO/ AUDIOLOGÍA">OTORRINO/ AUDIOLOGÍA</option>
+                <option value="PABELLONES">PABELLONES</option>
+                <option value="PARTO INTEGRAL SAIP">PARTO INTEGRAL SAIP</option>
+                <option value="PEDIATRÍA HOSPITALIZACIÓN">PEDIATRÍA HOSPITALIZACIÓN</option>
+                <option value="PRE ALTA HCV">PRE ALTA HCV</option>
+                <option value="SALUD MENTAL">SALUD MENTAL</option>
+                <option value="SALUD OCUPACIONAL">SALUD OCUPACIONAL</option>
+                <option value="SAMU">SAMU</option>
+                <option value="TRABAJO SOCIAL">TRABAJO SOCIAL</option>
+                <option value="TRAUMATOLOGÍA">TRAUMATOLOGÍA</option>
+                <option value="UCI">UCI</option>
+                <option value="URGENCIA ADULTO">URGENCIA ADULTO</option>
+                <option value="URGENCIA GINECO-OBSTETRA">URGENCIA GINECO-OBSTETRA</option>
+                <option value="URGENCIA PEDIÁTRICA">URGENCIA PEDIÁTRICA</option>
+                <option value="UROLOGÍA">UROLOGÍA</option>
+                <option value="UTI">UTI</option>
+                <option value="UTI NEO PEDIATRICA">UTI NEO PEDIATRICA</option>
               </select>
             </div>
 

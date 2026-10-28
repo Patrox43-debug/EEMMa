@@ -30,7 +30,63 @@ const app = {
   entregasData: [],
   entregasInsumosList: [],
   selectedEntregaAccesorio: null,
+  entregaItemsList: [],
+  entregaCurrentPickerItem: null,
   buscarAccesorioFilter: "all",
+
+  // Catálogo Oficial de 50 Servicios Clínicos y Unidades Hospitalarias
+  serviciosClinicosOficiales: [
+    "ABASTECIMIENTO",
+    "AISLAMIENTO HOSPITALIZACIÓN",
+    "ALIMENTACIÓN / SEDILE",
+    "ANATOMIA PATOLÓGICA",
+    "ÁREAS COMUNES",
+    "BANCO DE SANGRE",
+    "BIOLOGÍA MOLECULAR",
+    "CAE",
+    "CARDIOLOGÍA",
+    "CIRUGÍA HOSPITALIZADOS",
+    "CUIDADOS PALIATIVOS",
+    "DIÁLISIS",
+    "EEMM - OPERACIONES",
+    "ENDOSCOPIA",
+    "ESTERILIZACIÓN",
+    "FARMACIA",
+    "GINECOLOGÍA Y OBSTETRICIA",
+    "HOSPITAL DE DÍA",
+    "HOSPITALIZACIÓN DOMICILIARIA",
+    "IMAGENOLOGIA",
+    "ITS",
+    "LABORATORIO",
+    "LAVANDERIA",
+    "MATERNIDAD HOSPITALIZACIÓN",
+    "MEDICINA FÍSICA Y REHABILITACIÓN",
+    "MEDICINA HOSPITALIZACIÓN",
+    "MÉDICO QUIRÚRGICO HOSPITALIZACIÓN",
+    "MORGUE",
+    "NEONATOLOGÍA",
+    "NEUROLOGÍA",
+    "ODONTOLOGÍA",
+    "OFTALMOLOGÍA",
+    "OIRS",
+    "OTORRINO/ AUDIOLOGÍA",
+    "PABELLONES",
+    "PARTO INTEGRAL SAIP",
+    "PEDIATRÍA HOSPITALIZACIÓN",
+    "PRE ALTA HCV",
+    "SALUD MENTAL",
+    "SALUD OCUPACIONAL",
+    "SAMU",
+    "TRABAJO SOCIAL",
+    "TRAUMATOLOGÍA",
+    "UCI",
+    "URGENCIA ADULTO",
+    "URGENCIA GINECO-OBSTETRA",
+    "URGENCIA PEDIÁTRICA",
+    "UROLOGÍA",
+    "UTI",
+    "UTI NEO PEDIATRICA"
+  ],
 
   currentCategory: "GENERAL",
   currentChecklistItems: [],
@@ -239,10 +295,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.9.1";
+        this.currentAppVersion = "1.10.0";
       }
     } else {
-      this.currentAppVersion = "1.9.1";
+      this.currentAppVersion = "1.10.0";
     }
 
     setTimeout(() => {
@@ -1015,15 +1071,13 @@ const app = {
         }
       }
 
-      // Si aún está vacío (primera carga sin red), usar catálogo hospitalario de respaldo
+      // Si aún está vacío (primera carga sin red), usar catálogo oficial de 50 servicios
       if (!unidades || unidades.length === 0) {
-        unidades = [
-          "URGENCIA", "PABELLONES-QUIRURGICOS", "UPC", "ATENCION-OBSTETRICA",
-          "GINECOLOGIA-Y-OBSTETRICIA", "LABORATORIO", "AISLAMIENTO",
-          "MEDICO-QUIRURGICA-ADULTO", "MEDICO-QUIRURGICA-PEDIATRICA",
-          "DIALISIS", "KINESIOTERAPIA-Y-REHABILITACION", "PARTOS",
-          "PATOLOGICA(MORGUE)", "SOCIO-SANITARIO", "CIRUGIA-MENOR", "GES"
-        ];
+        unidades = [...this.serviciosClinicosOficiales];
+      } else {
+        // Asegurar que todos los servicios oficiales estén presentes y ordenados
+        const setUnidades = new Set([...unidades, ...this.serviciosClinicosOficiales]);
+        unidades = Array.from(setUnidades).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
       }
       
       const select = document.getElementById("select-unidad");
@@ -2454,12 +2508,7 @@ const app = {
   populateServiciosUnidadesFilter() {
     const select = document.getElementById("filtro-historial-servicio-unidad");
     if (!select || select.options.length > 1) return;
-    const unidades = [
-      "URGENCIA ADULTO", "URGENCIA PEDIATRIA", "PABELLONES QUIRURGICOS", "UPC (UCI / UTI)", 
-      "CIRUGIA ADULTO", "MEDICINA ADULTO", "PEDIATRIA", "GINECOLOGIA Y OBSTETRICIA", 
-      "NEONATOLOGIA", "DIALISIS", "LABORATORIO CLINICO", "IMAGENOLOGIA (RAYOS X / TAC)", 
-      "ANESTESIA Y RECUPERACION", "FARMACIA CLINICA", "CONSULTA EXTERNA (CAE)", "CENTRAL DE ESTERILIZACION"
-    ];
+    const unidades = this.serviciosClinicosOficiales || [];
     unidades.forEach(u => {
       const opt = document.createElement("option");
       opt.value = u;
@@ -3040,16 +3089,11 @@ const app = {
     const form = document.getElementById("form-nuevo-equipo");
     if (form) form.reset();
 
-    // Rellenar selector de ubicación con las unidades hospitalarias
+    // Rellenar selector de ubicación con las unidades hospitalarias oficiales
     const selUbicacion = document.getElementById("ne-ubicacion");
     if (selUbicacion && selUbicacion.options.length <= 1) {
       selUbicacion.innerHTML = '<option value="">Seleccionar Unidad Hospitalaria...</option>';
-      const unidades = [
-        "Pabellón Central", "UCI Adulto", "UTI Adulto", "Urgencias / Reanimador", "Maternidad", 
-        "Pediatría", "Neonatología", "Laboratorio Clínico", "Imagenología / RX", 
-        "Diálisis", "Endoscopía", "Banco de Sangre", "Esterilización", "Farmacia",
-        "Kinesiterapia", "Policlínico / CAE", "Oftalmología", "Dental", "Bodega Equipos"
-      ];
+      const unidades = this.serviciosClinicosOficiales || [];
       unidades.forEach((u) => {
         const opt = document.createElement("option");
         opt.value = u;
@@ -5377,12 +5421,10 @@ const app = {
     }
 
     if (!servicios || servicios.length === 0) {
-      servicios = [
-        "PABELLÓN CENTRAL", "URGENCIAS ADULTO", "URGENCIAS PEDIÁTRICA", "UCI ADULTO", "UCI PEDIÁTRICA",
-        "UTI ADULTO", "MEDICINA", "CIRUGÍA", "PEDIATRÍA", "MATERNIDAD", "LABORATORIO", "IMAGENOLOGÍA",
-        "DIÁLISIS", "ENDOSCOPÍA", "CONSULTA EXTERNA", "ESTERILIZACIÓN", "ONCOLOGÍA", "ANATOMÍA PATOLÓGICA",
-        "ALIVIO DEL DOLOR", "CARDIOVASCULAR", "NEONATOLOGÍA", "KINESIOLOGÍA", "OFTALMOLOGÍA", "DENTAL"
-      ];
+      servicios = [...this.serviciosClinicosOficiales];
+    } else {
+      const setServicios = new Set([...servicios, ...this.serviciosClinicosOficiales]);
+      servicios = Array.from(setServicios).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
     }
 
     select.innerHTML = '<option value="">-- Selecciona el Servicio Clínico --</option>';
@@ -5615,39 +5657,36 @@ const app = {
     listCont.innerHTML = html;
   },
 
-  selectEntregaAccesorio(id_caja) {
-    if (!id_caja) return;
-    const item = (this.entregasInsumosList || []).find(i => i.id_caja === id_caja);
+  selectEntregaAccesorio(itemOrId) {
+    if (!itemOrId) return;
+    let item = null;
+    if (typeof itemOrId === "object" && itemOrId !== null) {
+      item = itemOrId;
+    } else {
+      item = (this.entregasInsumosList || []).find(i => i.id_caja === itemOrId);
+    }
     if (!item) return;
 
-    const stock = item.cantidad || 0;
+    const stock = parseInt(item.cantidad, 10) || 0;
     if (stock <= 0) {
-      this.showToast(`El accesorio "${item.nombre_caja}" no tiene stock disponible en bodega`, "warning");
+      this.showToast(`El accesorio "${item.nombre_caja || item.id_caja}" no tiene stock disponible en bodega`, "warning");
       return;
     }
 
-    this.selectedEntregaAccesorio = item;
+    this.entregaCurrentPickerItem = item;
 
-    // Actualizar input oculto y select
-    const inputOculto = document.getElementById("entrega-accesorio");
-    if (inputOculto) inputOculto.value = item.id_caja;
-
-    const selectOculto = document.getElementById("entrega-accesorio-select");
-    if (selectOculto) selectOculto.value = item.id_caja;
-
-    // Cambiar caja disparadora por tarjeta de accesorio seleccionado
+    // Cambiar caja disparadora por tarjeta del insumo en el picker
     const triggerBox = document.getElementById("entrega-accesorio-trigger");
-    const selectedCard = document.getElementById("entrega-accesorio-selected-card");
+    const pickerCard = document.getElementById("entrega-accesorio-selected-card");
     const nombreEl = document.getElementById("entrega-selected-nombre");
     const idEl = document.getElementById("entrega-selected-id");
     const estanteEl = document.getElementById("entrega-selected-estante");
     const seccionEl = document.getElementById("entrega-selected-seccion");
     const stockBadge = document.getElementById("entrega-selected-stock-badge");
-    const infoDiv = document.getElementById("entrega-stock-info");
     const cantInput = document.getElementById("entrega-cantidad");
 
     if (triggerBox) triggerBox.style.display = "none";
-    if (selectedCard) selectedCard.style.display = "flex";
+    if (pickerCard) pickerCard.style.display = "block";
 
     if (nombreEl) nombreEl.textContent = item.nombre_caja || item.id_caja;
     if (idEl) idEl.textContent = item.id_caja;
@@ -5655,52 +5694,186 @@ const app = {
     if (seccionEl) seccionEl.textContent = item.seccion_id || "S/S";
 
     const isCritical = stock < 5;
-    const badgeBg = isCritical ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
     const badgeColor = isCritical ? '#f59e0b' : '#10b981';
 
     if (stockBadge) {
-      stockBadge.style.background = badgeBg;
       stockBadge.style.color = badgeColor;
       stockBadge.innerHTML = `🟢 <strong>${stock}</strong> un. disp.`;
     }
 
-    if (infoDiv) {
-      infoDiv.innerHTML = `
-        <div style="font-size: 0.74rem; font-weight: 600; color: ${badgeColor}; padding: 0.3rem 0.55rem; background: ${badgeBg}; border-radius: 6px; word-break: break-word; line-height: 1.35; max-width: 100%; box-sizing: border-box; margin-top: 0.35rem;">
-          ✓ Stock en bodega: <strong>${stock} un.</strong> (Estante: ${item.estanteria_id || 'S/E'} / Sección: ${item.seccion_id || 'S/S'})
-        </div>
-      `;
-    }
-
     if (cantInput) {
       cantInput.setAttribute("max", stock);
-      const curVal = parseInt(cantInput.value, 10);
-      if (isNaN(curVal) || curVal <= 0 || curVal > stock) {
-        cantInput.value = 1;
-      }
+      cantInput.value = 1;
+      setTimeout(() => cantInput.focus(), 100);
     }
 
     this.closeBuscarAccesorioModal();
-    this.showToast(`Accesorio "${item.nombre_caja}" seleccionado (${stock} un. disponibles)`, "success");
+    this.showToast(`Insumo "${item.nombre_caja}" seleccionado. Indica cantidad y pulsa "Agregar a la Entrega".`, "info");
   },
 
-  clearSelectedEntregaAccesorio() {
-    this.selectedEntregaAccesorio = null;
-    const inputOculto = document.getElementById("entrega-accesorio");
-    if (inputOculto) inputOculto.value = "";
+  selectAccesorioEntrega(itemOrId) {
+    this.selectEntregaAccesorio(itemOrId);
+  },
 
+  clearCurrentPickerItem() {
+    this.entregaCurrentPickerItem = null;
     const triggerBox = document.getElementById("entrega-accesorio-trigger");
-    const selectedCard = document.getElementById("entrega-accesorio-selected-card");
-    const infoDiv = document.getElementById("entrega-stock-info");
+    const pickerCard = document.getElementById("entrega-accesorio-selected-card");
     const cantInput = document.getElementById("entrega-cantidad");
 
     if (triggerBox) triggerBox.style.display = "flex";
-    if (selectedCard) selectedCard.style.display = "none";
-    if (infoDiv) infoDiv.innerHTML = "Selecciona un accesorio para verificar el stock disponible en bodega.";
+    if (pickerCard) pickerCard.style.display = "none";
     if (cantInput) {
       cantInput.removeAttribute("max");
       cantInput.value = 1;
     }
+  },
+
+  clearSelectedEntregaAccesorio() {
+    this.clearCurrentPickerItem();
+  },
+
+  addItemToEntregaList() {
+    if (!this.entregaCurrentPickerItem) {
+      this.showToast("Primero selecciona un accesorio de la bodega", "warning");
+      this.openBuscarAccesorioModal();
+      return;
+    }
+
+    const item = this.entregaCurrentPickerItem;
+    const cantInput = document.getElementById("entrega-cantidad");
+    const qtyToAdd = parseInt(cantInput ? cantInput.value : 1, 10);
+    const stockMax = parseInt(item.cantidad, 10) || 0;
+
+    if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
+      this.showToast("La cantidad debe ser mayor a 0", "warning");
+      if (cantInput) cantInput.focus();
+      return;
+    }
+
+    if (!this.entregaItemsList) this.entregaItemsList = [];
+
+    const existingIdx = this.entregaItemsList.findIndex(i => i.id_caja === item.id_caja);
+    if (existingIdx !== -1) {
+      const existingItem = this.entregaItemsList[existingIdx];
+      const totalRequested = existingItem.cantidad + qtyToAdd;
+      if (totalRequested > stockMax) {
+        this.showToast(`No puedes superar el stock disponible de ${stockMax} un. (ya agregaste ${existingItem.cantidad} un.)`, "error");
+        if (cantInput) cantInput.focus();
+        return;
+      }
+      existingItem.cantidad = totalRequested;
+      this.showToast(`Se agregaron ${qtyToAdd} un. más de "${item.nombre_caja}" (total: ${existingItem.cantidad} un.)`, "success");
+    } else {
+      if (qtyToAdd > stockMax) {
+        this.showToast(`No puedes superar el stock disponible (${stockMax} un.)`, "error");
+        if (cantInput) cantInput.focus();
+        return;
+      }
+      this.entregaItemsList.push({
+        id_caja: item.id_caja,
+        nombre_caja: item.nombre_caja || item.id_caja,
+        estanteria_id: item.estanteria_id || "S/E",
+        seccion_id: item.seccion_id || "S/S",
+        stock_disponible: stockMax,
+        cantidad: qtyToAdd
+      });
+      this.showToast(`"${item.nombre_caja}" (${qtyToAdd} un.) agregado a la entrega`, "success");
+    }
+
+    this.clearCurrentPickerItem();
+    this.renderEntregaItemsList();
+  },
+
+  updateEntregaItemQty(idx, delta) {
+    if (!this.entregaItemsList || !this.entregaItemsList[idx]) return;
+    const it = this.entregaItemsList[idx];
+    const newQty = it.cantidad + delta;
+    if (newQty <= 0) {
+      this.removeEntregaItem(idx);
+      return;
+    }
+    if (newQty > it.stock_disponible) {
+      this.showToast(`Stock máximo disponible para este insumo: ${it.stock_disponible} un.`, "warning");
+      return;
+    }
+    it.cantidad = newQty;
+    this.renderEntregaItemsList();
+  },
+
+  removeEntregaItem(idx) {
+    if (!this.entregaItemsList || !this.entregaItemsList[idx]) return;
+    const removed = this.entregaItemsList.splice(idx, 1)[0];
+    this.renderEntregaItemsList();
+    this.showToast(`Insumo "${removed.nombre_caja}" removido de la entrega`, "info");
+  },
+
+  renderEntregaItemsList() {
+    const listEl = document.getElementById("entrega-items-list");
+    const countEl = document.getElementById("entrega-items-count");
+    const totalUnitsEl = document.getElementById("entrega-items-total-units");
+
+    const items = this.entregaItemsList || [];
+    const totalUnits = items.reduce((acc, it) => acc + (parseInt(it.cantidad, 10) || 0), 0);
+
+    if (countEl) countEl.textContent = items.length;
+    if (totalUnitsEl) totalUnitsEl.textContent = `Total: ${totalUnits} unidad${totalUnits === 1 ? '' : 'es'}`;
+
+    if (!listEl) return;
+
+    if (items.length === 0) {
+      listEl.innerHTML = `
+        <div class="entrega-basket-empty">
+          📦 Aún no has agregado insumos a esta entrega.<br>
+          <span style="font-size: 0.75rem; color: var(--text-tertiary);">Selecciona uno o más accesorios arriba y pulsa "Agregar a la Entrega".</span>
+        </div>
+      `;
+      return;
+    }
+
+    let html = "";
+    items.forEach((it, idx) => {
+      const isMax = it.cantidad >= it.stock_disponible;
+      html += `
+        <div class="entrega-basket-item">
+          <div class="entrega-basket-info">
+            <div style="width: 28px; height: 28px; border-radius: 6px; background: rgba(37,99,235,0.1); color: var(--color-primary, #2563eb); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+              📦
+            </div>
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); word-break: break-word;">
+                ${this.escapeHtml(it.nombre_caja)}
+              </div>
+              <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 1px;">
+                <span class="badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; background: var(--bg-surface-elevated, #f1f5f9); color: var(--text-secondary); border: 1px solid var(--border-subtle, #e2e8f0); margin-right: 4px;">
+                  ${this.escapeHtml(it.id_caja)}
+                </span>
+                Est: <strong>${this.escapeHtml(it.estanteria_id)}</strong> · Sec: <strong>${this.escapeHtml(it.seccion_id)}</strong> · Disp: <strong style="color: #10b981;">${it.stock_disponible} un.</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="entrega-basket-actions" style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+            <div class="entrega-basket-stepper">
+              <button type="button" class="entrega-stepper-btn" onclick="app.updateEntregaItemQty(${idx}, -1)" title="Disminuir cantidad">
+                −
+              </button>
+              <span class="entrega-basket-qty">
+                ${it.cantidad}
+              </span>
+              <button type="button" class="entrega-stepper-btn" onclick="app.updateEntregaItemQty(${idx}, 1)" ${isMax ? 'disabled' : ''} title="${isMax ? 'Stock máximo alcanzado' : 'Aumentar cantidad'}">
+                +
+              </button>
+            </div>
+            <button type="button" class="entrega-basket-remove" onclick="app.removeEntregaItem(${idx})" title="Quitar de la entrega">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+        </div>
+      `;
+    });
+
+    listEl.innerHTML = html;
   },
 
   clearEntregaSignature() {
@@ -5719,7 +5892,9 @@ const app = {
     if (servicioSelect) servicioSelect.value = "";
     if (obsInput) obsInput.value = "";
 
-    this.clearSelectedEntregaAccesorio();
+    this.entregaItemsList = [];
+    this.clearCurrentPickerItem();
+    this.renderEntregaItemsList();
 
     if (this.entregaSignaturePad) {
       this.entregaSignaturePad.clear();
@@ -5729,21 +5904,17 @@ const app = {
   async submitEntregaAccesorio() {
     const receptorInput = document.getElementById("entrega-receptor");
     const servicioSelect = document.getElementById("entrega-servicio");
-    const accesorioSelect = document.getElementById("entrega-accesorio");
-    const cantInput = document.getElementById("entrega-cantidad");
     const obsInput = document.getElementById("entrega-observaciones");
     const submitBtn = document.getElementById("btn-submit-entrega");
 
-    if (!receptorInput || !servicioSelect || !accesorioSelect || !cantInput) return;
+    if (!receptorInput || !servicioSelect) return;
 
     const receptor = receptorInput.value.trim();
     const servicio = servicioSelect.value.trim();
-    const idCaja = accesorioSelect.value.trim();
-    const cantidad = parseInt(cantInput.value, 10);
     const obs = obsInput ? obsInput.value.trim() : "";
 
     if (!receptor) {
-      this.showToast("Ingresa el nombre de quien recibe el accesorio", "warning");
+      this.showToast("Ingresa el nombre de quien recibe los insumos", "warning");
       receptorInput.focus();
       return;
     }
@@ -5754,36 +5925,34 @@ const app = {
       return;
     }
 
-    if (!idCaja) {
-      this.showToast("Selecciona el accesorio que vas a despachar de bodega", "warning");
-      accesorioSelect.focus();
-      return;
+    // Si el usuario tiene un insumo seleccionado en el picker pero no presionó "Agregar", agregarlo automáticamente
+    if (this.entregaCurrentPickerItem) {
+      this.addItemToEntregaList();
     }
 
-    if (isNaN(cantidad) || cantidad <= 0) {
-      this.showToast("La cantidad a entregar debe ser mayor a 0", "warning");
-      cantInput.focus();
-      return;
-    }
-
-    const maxStock = parseInt(cantInput.getAttribute("max") || "999999", 10);
-    if (cantidad > maxStock) {
-      this.showToast(`No puedes entregar más del stock disponible (${maxStock} un.)`, "error");
-      cantInput.focus();
+    if (!this.entregaItemsList || this.entregaItemsList.length === 0) {
+      this.showToast("Debes agregar al menos un insumo a la entrega antes de confirmar", "warning");
+      this.openBuscarAccesorioModal();
       return;
     }
 
     if (!this.entregaSignaturePad || this.entregaSignaturePad.isEmpty()) {
-      this.showToast("Debe registrar la firma digital de recepción antes de continuar", "warning");
+      this.showToast("Debe registrar la firma digital de recepción conforme antes de continuar", "warning");
       return;
     }
 
     const firmaData = this.entregaSignaturePad.toDataURL();
     const usuarioEntrega = (this.currentUser && (this.currentUser.nombre || this.currentUser.username)) || "Técnico EEMM";
 
+    const payloadItems = this.entregaItemsList.map(it => ({
+      id_caja: it.id_caja,
+      nombre_accesorio: it.nombre_caja,
+      cantidad: it.cantidad
+    }));
+
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm" style="width:14px;height:14px;border-width:2px;"></span> Descontando bodega y registrando...`;
+      submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm" style="width:14px;height:14px;border-width:2px;"></span> Descontando stock de bodega y registrando...`;
     }
 
     try {
@@ -5793,8 +5962,7 @@ const app = {
         body: JSON.stringify({
           nombre_receptor: receptor,
           servicio: servicio,
-          id_caja: idCaja,
-          cantidad: cantidad,
+          items: payloadItems,
           firma_data: firmaData,
           observaciones: obs,
           usuario_entrega: usuarioEntrega
@@ -5813,11 +5981,13 @@ const app = {
       this.showToast(data.message || "Entrega registrada exitosamente", "success");
 
       // Actualizar datos locales de bodega si están cacheados
-      if (this.inventarioData && Array.isArray(this.inventarioData) && data.caja) {
-        const idx = this.inventarioData.findIndex(i => i.id_caja === idCaja);
-        if (idx !== -1) {
-          this.inventarioData[idx] = { ...this.inventarioData[idx], ...data.caja };
-        }
+      if (data.cajas && Array.isArray(data.cajas) && this.inventarioData && Array.isArray(this.inventarioData)) {
+        data.cajas.forEach(upd => {
+          const idx = this.inventarioData.findIndex(i => i.id_caja === upd.id_caja);
+          if (idx !== -1) {
+            this.inventarioData[idx] = { ...this.inventarioData[idx], ...upd };
+          }
+        });
       }
       this.estantesSummary = [];
 
@@ -5919,6 +6089,42 @@ const app = {
           ? `<img src="${e.firma_data}" alt="Firma" style="max-height: 28px; max-width: 80px; object-fit: contain; background: white; border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px;">`
           : `<span style="font-size: 0.7rem; color: var(--text-tertiary);">(Sin firma)</span>`;
 
+        let accHtml = "";
+        let itemsArr = [];
+        if (e.items && Array.isArray(e.items) && e.items.length > 0) {
+          itemsArr = e.items;
+        } else if (e.items_json) {
+          try { itemsArr = JSON.parse(e.items_json); } catch (err) { itemsArr = []; }
+        }
+
+        if (itemsArr && itemsArr.length > 1) {
+          accHtml = `
+            <div style="font-weight: 700; font-size: 0.825rem; color: var(--color-primary, #2563eb); margin-bottom: 3px;">
+              📦 Despacho múltiple (${itemsArr.length} insumos):
+            </div>
+            <ul style="margin: 0; padding-left: 1.15rem; font-size: 0.75rem; color: var(--text-primary); line-height: 1.35;">
+              ${itemsArr.map(it => `<li><strong>${this.escapeHtml(it.nombre_accesorio || it.nombre_caja || it.id_caja)}</strong>: ${it.cantidad} un.</li>`).join('')}
+            </ul>
+          `;
+        } else if (itemsArr && itemsArr.length === 1) {
+          const single = itemsArr[0];
+          accHtml = `<div style="font-weight: 600; font-size: 0.825rem; color: var(--text-primary);">${this.escapeHtml(single.nombre_accesorio || single.nombre_caja || e.nombre_accesorio || '')}</div>`;
+        } else {
+          accHtml = `<div style="font-weight: 600; font-size: 0.825rem; color: var(--text-primary);">${this.escapeHtml(e.nombre_accesorio || '')}</div>`;
+        }
+
+        if (e.observaciones) {
+          accHtml += `
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 3px; font-style: italic;">
+              ${this.escapeHtml(e.observaciones)}
+            </div>
+          `;
+        }
+
+        const cantBadge = (itemsArr && itemsArr.length > 1)
+          ? `<span class="badge badge-primary" style="font-weight: 700; font-size: 0.825rem;" title="${itemsArr.length} insumos distintos">${e.cantidad} un.</span><div style="font-size: 0.65rem; color: var(--text-tertiary); margin-top: 2px;">(${itemsArr.length} ítems)</div>`
+          : `<span class="badge badge-primary" style="font-weight: 700; font-size: 0.825rem;">${e.cantidad} un.</span>`;
+
         return `
           <tr>
             <td>
@@ -5935,19 +6141,10 @@ const app = {
               </span>
             </td>
             <td>
-              <div style="font-weight: 600; font-size: 0.825rem; color: var(--text-primary);">
-                ${this.escapeHtml(e.nombre_accesorio || '')}
-              </div>
-              ${e.observaciones ? `
-                <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 2px; font-style: italic;">
-                  ${this.escapeHtml(e.observaciones)}
-                </div>
-              ` : ''}
+              ${accHtml}
             </td>
             <td style="text-align: center;">
-              <span class="badge badge-primary" style="font-weight: 700; font-size: 0.825rem;">
-                ${e.cantidad}
-              </span>
+              ${cantBadge}
             </td>
             <td>
               <div style="font-weight: 600; font-size: 0.825rem; color: var(--text-primary);">
@@ -6021,7 +6218,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.9.1",
+  currentAppVersion: "1.10.0",
   pendingUpdateInfo: null,
   updateDownloading: false,
 

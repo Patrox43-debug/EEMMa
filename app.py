@@ -36,6 +36,60 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 if os.path.dirname(DB_PATH):
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
+# Catálogo Oficial de 50 Servicios Clínicos y Unidades Hospitalarias
+SERVICIOS_CLINICOS_OFICIALES = [
+    "ABASTECIMIENTO",
+    "AISLAMIENTO HOSPITALIZACIÓN",
+    "ALIMENTACIÓN / SEDILE",
+    "ANATOMIA PATOLÓGICA",
+    "ÁREAS COMUNES",
+    "BANCO DE SANGRE",
+    "BIOLOGÍA MOLECULAR",
+    "CAE",
+    "CARDIOLOGÍA",
+    "CIRUGÍA HOSPITALIZADOS",
+    "CUIDADOS PALIATIVOS",
+    "DIÁLISIS",
+    "EEMM - OPERACIONES",
+    "ENDOSCOPIA",
+    "ESTERILIZACIÓN",
+    "FARMACIA",
+    "GINECOLOGÍA Y OBSTETRICIA",
+    "HOSPITAL DE DÍA",
+    "HOSPITALIZACIÓN DOMICILIARIA",
+    "IMAGENOLOGIA",
+    "ITS",
+    "LABORATORIO",
+    "LAVANDERIA",
+    "MATERNIDAD HOSPITALIZACIÓN",
+    "MEDICINA FÍSICA Y REHABILITACIÓN",
+    "MEDICINA HOSPITALIZACIÓN",
+    "MÉDICO QUIRÚRGICO HOSPITALIZACIÓN",
+    "MORGUE",
+    "NEONATOLOGÍA",
+    "NEUROLOGÍA",
+    "ODONTOLOGÍA",
+    "OFTALMOLOGÍA",
+    "OIRS",
+    "OTORRINO/ AUDIOLOGÍA",
+    "PABELLONES",
+    "PARTO INTEGRAL SAIP",
+    "PEDIATRÍA HOSPITALIZACIÓN",
+    "PRE ALTA HCV",
+    "SALUD MENTAL",
+    "SALUD OCUPACIONAL",
+    "SAMU",
+    "TRABAJO SOCIAL",
+    "TRAUMATOLOGÍA",
+    "UCI",
+    "URGENCIA ADULTO",
+    "URGENCIA GINECO-OBSTETRA",
+    "URGENCIA PEDIÁTRICA",
+    "UROLOGÍA",
+    "UTI",
+    "UTI NEO PEDIATRICA"
+]
+
 # Si se usa un volumen persistente y aún no existe la base de datos, copiar la base inicial completa
 default_db = os.path.join(BASE_DIR, "eemm.db")
 if os.path.abspath(DB_PATH) != os.path.abspath(default_db) and not os.path.exists(DB_PATH) and os.path.exists(default_db):
@@ -197,12 +251,18 @@ def ensure_db_initialized():
             usuario_entrega TEXT NOT NULL,
             firma_data TEXT,
             observaciones TEXT,
+            items_json TEXT,
             fecha DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_fecha ON entregas_accesorios(fecha);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_caja ON entregas_accesorios(id_caja);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_servicio ON entregas_accesorios(servicio);")
+
+        try:
+            cursor.execute("ALTER TABLE entregas_accesorios ADD COLUMN items_json TEXT;")
+        except Exception:
+            pass
 
         # 6. Tabla unidades
         cursor.execute("""
@@ -249,17 +309,10 @@ def ensure_db_initialized():
                 VALUES (?, ?, ?, ?, ?, ?, ?);
             """, usuarios_iniciales)
 
-        # Sembrar unidades si está vacía
-        cursor.execute("SELECT COUNT(*) FROM unidades")
-        if cursor.fetchone()[0] == 0:
-            unidades_base = [
-                "URGENCIA", "PABELLONES-QUIRURGICOS", "UPC", "ATENCION-OBSTETRICA",
-                "GINECOLOGIA-Y-OBSTETRICIA", "LABORATORIO", "AISLAMIENTO",
-                "MEDICO-QUIRURGICA-ADULTO", "MEDICO-QUIRURGICA-PEDIATRICA",
-                "DIALISIS", "KINESIOTERAPIA-Y-REHABILITACION", "PARTOS",
-                "PATOLOGICA(MORGUE)", "SOCIO-SANITARIO", "CIRUGIA-MENOR", "GES"
-            ]
-            cursor.executemany("INSERT OR IGNORE INTO unidades (nombre) VALUES (?);", [(u,) for u in unidades_base])
+        # Sembrar y sincronizar catálogo oficial de 50 servicios clínicos
+        placeholders = ",".join(["?"] * len(SERVICIOS_CLINICOS_OFICIALES))
+        cursor.execute(f"DELETE FROM unidades WHERE nombre NOT IN ({placeholders})", SERVICIOS_CLINICOS_OFICIALES)
+        cursor.executemany("INSERT OR IGNORE INTO unidades (nombre) VALUES (?);", [(u,) for u in SERVICIOS_CLINICOS_OFICIALES])
 
         # Sembrar equipos si está vacía y existe CSV
         cursor.execute("SELECT COUNT(*) FROM equipos")
@@ -340,13 +393,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.9.1",
-        "version_code": 23,
-        "release_tag": "v1.9.1",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.9.1/EEMM.apk",
+        "version_name": "1.10.0",
+        "version_code": 24,
+        "release_tag": "v1.10.0",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.10.0/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Aumento drástico de calidad y nitidez de la cámara para escaneo de códigos de barra (Full HD 1080p, autofocus continuo y balance automático).\n• Botón de zoom 1x / 2x para lectura nítida de códigos pequeños o distantes.\n• Función de toque en pantalla para enfocar (Tap-to-Focus).\n• Mayor resolución y fidelidad en captura de fotografías (1920px Full HD).",
-        "published_at": "2026-10-28T09:30:00-03:00"
+        "notes": "• Catálogo oficial de 50 servicios clínicos disponible en todos los módulos y selectores de la aplicación.\n• Entrega múltiple de insumos: permite agregar y despachar varios accesorios a la vez para un mismo servicio con una sola firma.\n• Detalle pormenorizado de ítems y reporte PDF oficial de entregas actualizado.",
+        "published_at": "2026-10-28T20:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -905,10 +958,12 @@ def create_equipo(eq: EquipoCreate):
 def get_unidades():
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nombre FROM unidades ORDER BY nombre ASC")
-    unidades = [row["nombre"] for row in cursor.fetchall()]
+    cursor.execute("SELECT nombre FROM unidades ORDER BY nombre COLLATE NOCASE ASC")
+    rows = cursor.fetchall()
     conn.close()
-    return unidades
+    if rows:
+        return [row["nombre"] for row in rows]
+    return SERVICIOS_CLINICOS_OFICIALES
 
 # Rutas de Chequeos Preventivos
 @app.post("/api/chequeos")
@@ -2122,11 +2177,17 @@ def delete_insumo(id_caja: str):
 # MÓDULO ENTREGA DE ACCESORIOS E INSUMOS CLÍNICOS
 # ==============================================================================
 
+class EntregaItemDetail(BaseModel):
+    id_caja: str
+    nombre_accesorio: Optional[str] = None
+    cantidad: int
+
 class EntregaAccesorioCreate(BaseModel):
     nombre_receptor: str
     servicio: str
-    id_caja: str
-    cantidad: int
+    items: Optional[List[EntregaItemDetail]] = None
+    id_caja: Optional[str] = None
+    cantidad: Optional[int] = None
     firma_data: Optional[str] = None
     observaciones: Optional[str] = None
     usuario_entrega: Optional[str] = None
@@ -2141,8 +2202,27 @@ def create_entrega_accesorio(item: EntregaAccesorioCreate):
     if not servicio:
         raise HTTPException(status_code=400, detail="Debe indicar el servicio clínico de destino")
     
-    if item.cantidad <= 0:
-        raise HTTPException(status_code=400, detail="La cantidad a entregar debe ser mayor a 0")
+    # Normalizar lista de insumos a despachar (soporta entrega múltiple y retrocompatibilidad de un solo item)
+    items_to_deliver = []
+    if item.items and len(item.items) > 0:
+        for it in item.items:
+            c_id = (it.id_caja or "").strip()
+            c_cant = it.cantidad
+            if c_id and c_cant > 0:
+                items_to_deliver.append({
+                    "id_caja": c_id,
+                    "nombre_accesorio": (it.nombre_accesorio or "").strip(),
+                    "cantidad": int(c_cant)
+                })
+    elif item.id_caja and item.cantidad and item.cantidad > 0:
+        items_to_deliver.append({
+            "id_caja": item.id_caja.strip(),
+            "nombre_accesorio": "",
+            "cantidad": int(item.cantidad)
+        })
+    
+    if not items_to_deliver:
+        raise HTTPException(status_code=400, detail="Debe agregar al menos un insumo con cantidad válida")
     
     conn = get_db()
     cursor = conn.cursor()
@@ -2160,9 +2240,15 @@ def create_entrega_accesorio(item: EntregaAccesorioCreate):
         usuario_entrega TEXT NOT NULL,
         firma_data TEXT,
         observaciones TEXT,
+        items_json TEXT,
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    try:
+        cursor.execute("ALTER TABLE entregas_accesorios ADD COLUMN items_json TEXT;")
+    except Exception:
+        pass
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS inventario_movimientos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2177,41 +2263,59 @@ def create_entrega_accesorio(item: EntregaAccesorioCreate):
     );
     """)
 
-    # Verificar stock en bodega
-    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (item.id_caja,))
-    curr_caja = cursor.fetchone()
-    if not curr_caja:
-        conn.close()
-        raise HTTPException(status_code=404, detail="El accesorio seleccionado no existe en bodega")
-    
-    curr_cant = curr_caja["cantidad"] or 0
-    if curr_cant < item.cantidad:
-        conn.close()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Stock insuficiente en bodega. Stock actual: {curr_cant} un., solicitado: {item.cantidad} un."
-        )
-    
-    # 1. Descontar stock en inventario
-    nueva_cant = curr_cant - item.cantidad
-    nuevo_estado = "Agotado" if nueva_cant == 0 else ("Stock Bajo" if nueva_cant < 5 else "OK")
-    cursor.execute("""
-        UPDATE inventario
-        SET cantidad = ?, estado = ?
-        WHERE id_caja = ?
-    """, (nueva_cant, nuevo_estado, item.id_caja))
+    # 1. Validar existencia y stock de TODOS los insumos antes de efectuar cambios
+    for it in items_to_deliver:
+        cursor.execute("SELECT id_caja, nombre_caja, cantidad FROM inventario WHERE id_caja = ?", (it["id_caja"],))
+        caja_row = cursor.fetchone()
+        if not caja_row:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"El accesorio con ID '{it['id_caja']}' no existe en bodega")
+        
+        stock_act = caja_row["cantidad"] or 0
+        if not it["nombre_accesorio"]:
+            it["nombre_accesorio"] = caja_row["nombre_caja"] or it["id_caja"]
+        
+        if stock_act < it["cantidad"]:
+            conn.close()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Stock insuficiente para '{caja_row['nombre_caja']}'. Stock disponible: {stock_act} un., solicitado: {it['cantidad']} un."
+            )
 
-    # 2. Registrar movimiento en inventario_movimientos
+    # 2. Descontar stock y registrar movimientos para cada insumo
     usuario_ent = (item.usuario_entrega or "Técnico EEMM").strip()
-    nombre_accesorio = curr_caja["nombre_caja"]
-    razon_mov = f"Entrega a {nombre_rec} ({servicio})"
-    if item.observaciones and item.observaciones.strip():
-        razon_mov += f" - {item.observaciones.strip()}"
-    
-    cursor.execute("""
-        INSERT INTO inventario_movimientos (id_caja, tipo, cantidad, razon, usuario, stock_anterior, stock_nuevo, fecha)
-        VALUES (?, 'ENTREGA', ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-    """, (item.id_caja, item.cantidad, razon_mov, usuario_ent, curr_cant, nueva_cant))
+    obs_txt = (item.observaciones or "").strip()
+    total_unidades = 0
+    resumen_items = []
+    updated_cajas = []
+
+    for it in items_to_deliver:
+        cursor.execute("SELECT id_caja, nombre_caja, cantidad FROM inventario WHERE id_caja = ?", (it["id_caja"],))
+        caja_row = cursor.fetchone()
+        curr_cant = caja_row["cantidad"] or 0
+        nueva_cant = curr_cant - it["cantidad"]
+        nuevo_estado = "Agotado" if nueva_cant == 0 else ("Stock Bajo" if nueva_cant < 5 else "OK")
+
+        cursor.execute("""
+            UPDATE inventario
+            SET cantidad = ?, estado = ?
+            WHERE id_caja = ?
+        """, (nueva_cant, nuevo_estado, it["id_caja"]))
+
+        razon_mov = f"Entrega a {nombre_rec} ({servicio})"
+        if obs_txt:
+            razon_mov += f" - {obs_txt}"
+
+        cursor.execute("""
+            INSERT INTO inventario_movimientos (id_caja, tipo, cantidad, razon, usuario, stock_anterior, stock_nuevo, fecha)
+            VALUES (?, 'ENTREGA', ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+        """, (it["id_caja"], it["cantidad"], razon_mov, usuario_ent, curr_cant, nueva_cant))
+
+        total_unidades += it["cantidad"]
+        resumen_items.append(f"{it['nombre_accesorio']} ({it['cantidad']} un.)")
+
+        cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (it["id_caja"],))
+        updated_cajas.append(dict(cursor.fetchone()))
 
     # 3. Generar folio oficial de entrega (ENT-YYYYMMDD-XXXX)
     date_prefix = datetime.now().strftime("%Y%m%d")
@@ -2219,22 +2323,33 @@ def create_entrega_accesorio(item: EntregaAccesorioCreate):
     seq = (cursor.fetchone()[0] or 0) + 1
     folio = f"ENT-{date_prefix}-{seq:04d}"
 
-    # 4. Insertar registro de entrega
+    # 4. Formatear datos de cabecera y serializar items_json
+    if len(items_to_deliver) == 1:
+        id_caja_principal = items_to_deliver[0]["id_caja"]
+        nombre_accesorio_desc = items_to_deliver[0]["nombre_accesorio"]
+    else:
+        id_caja_principal = ", ".join(it["id_caja"] for it in items_to_deliver)
+        nombre_accesorio_desc = f"{len(items_to_deliver)} insumos: " + ", ".join(resumen_items)
+
+    items_json_str = json.dumps(items_to_deliver, ensure_ascii=False)
+
+    # 5. Insertar acta de entrega
     cursor.execute("""
         INSERT INTO entregas_accesorios (
             folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
-            cantidad, usuario_entrega, firma_data, observaciones, fecha
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+            cantidad, usuario_entrega, firma_data, observaciones, items_json, fecha
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     """, (
         folio,
         nombre_rec,
         servicio,
-        item.id_caja,
-        nombre_accesorio,
-        item.cantidad,
+        id_caja_principal,
+        nombre_accesorio_desc,
+        total_unidades,
         usuario_ent,
         item.firma_data,
-        (item.observaciones or "").strip(),
+        obs_txt,
+        items_json_str
     ))
     entrega_id = cursor.lastrowid
     conn.commit()
@@ -2242,22 +2357,22 @@ def create_entrega_accesorio(item: EntregaAccesorioCreate):
     # Obtener el registro creado
     cursor.execute("""
         SELECT id, folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
-               cantidad, usuario_entrega, firma_data, observaciones,
+               cantidad, usuario_entrega, firma_data, observaciones, items_json,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_accesorios
         WHERE id = ?
     """, (entrega_id,))
-    entrega_row = cursor.fetchone()
-
-    cursor.execute("SELECT * FROM inventario WHERE id_caja = ?", (item.id_caja,))
-    updated_caja = cursor.fetchone()
+    entrega_row = dict(cursor.fetchone())
+    entrega_row["items"] = items_to_deliver
     conn.close()
 
+    cant_desc = f"{total_unidades} unidades" if len(items_to_deliver) > 1 else f"{total_unidades} un."
     return {
         "ok": True,
-        "entrega": dict(entrega_row),
-        "caja": dict(updated_caja),
-        "message": f"Entrega {folio} registrada exitosamente. Se descontaron {item.cantidad} un. de bodega."
+        "entrega": entrega_row,
+        "cajas": updated_cajas,
+        "caja": updated_cajas[0] if updated_cajas else None,
+        "message": f"Entrega {folio} ({len(items_to_deliver)} insumos, {cant_desc}) registrada exitosamente en bodega."
     }
 
 @app.get("/api/entregas-accesorios")
@@ -2265,7 +2380,7 @@ def list_entregas_accesorios(
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
     q: Optional[str] = None,
-    limit: int = 100
+    limit: int = 150
 ):
     conn = get_db()
     cursor = conn.cursor()
@@ -2281,6 +2396,7 @@ def list_entregas_accesorios(
         usuario_entrega TEXT NOT NULL,
         firma_data TEXT,
         observaciones TEXT,
+        items_json TEXT,
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     """)
@@ -2304,7 +2420,7 @@ def list_entregas_accesorios(
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
         SELECT id, folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
-               cantidad, usuario_entrega, firma_data, observaciones,
+               cantidad, usuario_entrega, firma_data, observaciones, items_json,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_accesorios
         {where_sql}
@@ -2313,7 +2429,17 @@ def list_entregas_accesorios(
     """
     params.append(limit)
     cursor.execute(sql, tuple(params))
-    rows = [dict(r) for r in cursor.fetchall()]
+    rows = []
+    for r in cursor.fetchall():
+        d = dict(r)
+        if d.get("items_json"):
+            try:
+                d["items"] = json.loads(d["items_json"])
+            except Exception:
+                d["items"] = []
+        else:
+            d["items"] = []
+        rows.append(d)
     conn.close()
     return rows
 
@@ -2338,6 +2464,7 @@ def export_entregas_pdf(
         usuario_entrega TEXT NOT NULL,
         firma_data TEXT,
         observaciones TEXT,
+        items_json TEXT,
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     """)
@@ -2361,14 +2488,24 @@ def export_entregas_pdf(
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
         SELECT id, folio, nombre_receptor, servicio, id_caja, nombre_accesorio,
-               cantidad, usuario_entrega, firma_data, observaciones,
+               cantidad, usuario_entrega, firma_data, observaciones, items_json,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_accesorios
         {where_sql}
         ORDER BY fecha ASC, id ASC
     """
     cursor.execute(sql, tuple(params))
-    entregas = [dict(r) for r in cursor.fetchall()]
+    entregas = []
+    for r in cursor.fetchall():
+        d = dict(r)
+        if d.get("items_json"):
+            try:
+                d["items"] = json.loads(d["items_json"])
+            except Exception:
+                d["items"] = []
+        else:
+            d["items"] = []
+        entregas.append(d)
     conn.close()
 
     try:
