@@ -3166,16 +3166,21 @@ select.form-control {
   }
 }
 
-/* Modal Escáner Viewport */
+/* Modal Escáner Viewport - Alta Definición y Gran Enfoque */
 .scanner-viewport-wrapper {
   position: relative;
   width: 100%;
-  height: 290px;
+  min-height: 350px;
+  height: 50vh;
+  max-height: 480px;
   background: #090d16;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #barcode-scanner-view {
@@ -3188,6 +3193,8 @@ select.form-control {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 #barcode-scanner-view img {
@@ -3218,6 +3225,21 @@ select.form-control {
   height: 160px;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
   border-radius: 12px;
+  transition: transform 0.2s ease;
+}
+
+.scanner-reticle.focus-pulse {
+  animation: reticlePulse 0.35s ease;
+}
+
+.scanner-reticle.focus-pulse .reticle-corner {
+  border-color: #10b981 !important;
+}
+
+@keyframes reticlePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.96); }
+  100% { transform: scale(1); }
 }
 
 .reticle-corner {

@@ -96,11 +96,11 @@ class PhotoManager {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Redimensionar para optimizar peso (máximo 1280px de ancho/alto)
+        // Redimensionar para optimizar peso (máximo 1920px Full HD de ancho/alto)
         const canvas = document.createElement("canvas");
         let width = img.width;
         let height = img.height;
-        const maxDim = 1280;
+        const maxDim = 1920;
 
         if (width > height && width > maxDim) {
           height = Math.round((height * maxDim) / width);
@@ -115,7 +115,7 @@ class PhotoManager {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
-        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.92);
         this.photos[index] = compressedDataUrl;
 
         previewImg.src = compressedDataUrl;

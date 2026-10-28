@@ -186,7 +186,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>EEMM Hospital · <strong>v1.9.0</strong></span>
+              <span>EEMM Hospital · <strong>v1.9.1</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -288,7 +288,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            EEMM Hospital · Versión <strong>1.9.0</strong>
+            EEMM Hospital · Versión <strong>1.9.1</strong>
           </div>
         </form>
       </section>
@@ -2273,9 +2273,9 @@
           <button type="button" class="btn-icon" onclick="app.closeBarcodeScanner()" title="Cerrar escáner" style="width: 32px; height: 32px; border-radius: 50%; font-size: 1.1rem; line-height: 1;">✕</button>
         </div>
 
-        <!-- Viewport de la Cámara con Laser Guía -->
-        <div class="scanner-viewport-wrapper" style="position: relative; background: #000; min-height: 280px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-          <div id="barcode-scanner-view" style="width: 100%; min-height: 280px;"></div>
+        <!-- Viewport de la Cámara con Laser Guía y Enfoque al Toque -->
+        <div class="scanner-viewport-wrapper" onclick="app.refocusCamera()" style="position: relative; background: #000; overflow: hidden;" title="Toca la pantalla para re-enfocar la cámara">
+          <div id="barcode-scanner-view" style="width: 100%; height: 100%;"></div>
           
           <!-- Overlay con marco y línea láser animada -->
           <div class="scanner-overlay-guide" id="scanner-overlay-guide">
@@ -2287,12 +2287,15 @@
               <div class="scanner-laser-line"></div>
             </div>
             <div class="scanner-hint-text" id="scanner-hint-text">
-              Centra el código de barras en el recuadro
+              Centra el código en el recuadro · Toca para enfocar
             </div>
           </div>
 
-          <!-- Controles flotantes en la cámara: Cambiar cámara / Linterna -->
-          <div class="scanner-floating-controls">
+          <!-- Controles flotantes en la cámara: Zoom / Cambiar cámara / Linterna -->
+          <div class="scanner-floating-controls" onclick="event.stopPropagation()">
+            <button type="button" class="btn-scanner-ctrl" id="btn-scanner-zoom" onclick="app.toggleScannerZoom()" title="Alternar Zoom 1x / 2x para códigos pequeños" style="font-weight: 700; font-size: 0.8rem;">
+              1x
+            </button>
             <button type="button" class="btn-scanner-ctrl" id="btn-scanner-switch-cam" onclick="app.switchScannerCamera()" title="Cambiar cámara">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"></path>

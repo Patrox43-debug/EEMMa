@@ -48,6 +48,8 @@ const app = {
   scannerCameras: [],
   scannerCurrentCameraIndex: 0,
   scannerTorchActive: false,
+  scannerZoomLevel: 1,
+  scannerZoomCapabilities: null,
 
   pautasPorCategoria: {
     "GENERAL": [
@@ -237,10 +239,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.9.0";
+        this.currentAppVersion = "1.9.1";
       }
     } else {
-      this.currentAppVersion = "1.9.0";
+      this.currentAppVersion = "1.9.1";
     }
 
     setTimeout(() => {
@@ -4724,6 +4726,13 @@ const app = {
   async openBarcodeScanner(mode = "search") {
     this.scannerActiveMode = mode;
     this.scannerTorchActive = false;
+    this.scannerZoomLevel = 1;
+
+    const btnZoom = document.getElementById("btn-scanner-zoom");
+    if (btnZoom) {
+      btnZoom.textContent = "1x";
+      btnZoom.style.background = "rgba(15, 23, 42, 0.75)";
+    }
 
     // Actualizar títulos según modo
     const title = document.getElementById("scanner-modal-title");
@@ -4762,7 +4771,7 @@ const app = {
     const modal = document.getElementById("modal-barcode-scanner");
     if (modal) modal.classList.add("active");
 
-    // Iniciar cámara
+    // Iniciar cámara con alta definición y autofocus
     await this.startBarcodeCamera();
   },
 
@@ -4803,19 +4812,37 @@ const app = {
         console.warn("No se pudieron listar cámaras:", errCam);
       }
 
+      // Configuración de Alta Definición (Full HD 1080p / 720p) y Enfoque Continuo
+      const videoConstraints = deviceId
+        ? {
+            deviceId: { exact: deviceId },
+            width: { min: 1280, ideal: 1920, max: 3840 },
+            height: { min: 720, ideal: 1080, max: 2160 },
+            frameRate: { ideal: 30, min: 15 },
+            focusMode: { ideal: "continuous" }
+          }
+        : {
+            facingMode: { ideal: "environment" },
+            width: { min: 1280, ideal: 1920, max: 3840 },
+            height: { min: 720, ideal: 1080, max: 2160 },
+            frameRate: { ideal: 30, min: 15 },
+            focusMode: { ideal: "continuous" }
+          };
+
       const cameraConfig = deviceId
         ? { deviceId: { exact: deviceId } }
         : { facingMode: "environment" };
 
       const scanConfig = {
-        fps: 15,
+        fps: 25,
         qrbox: (viewWidth, viewHeight) => {
-          const w = Math.min(320, Math.floor(viewWidth * 0.85));
-          const h = Math.min(160, Math.floor(viewHeight * 0.55));
-          return { width: Math.max(w, 200), height: Math.max(h, 100) };
+          const w = Math.min(340, Math.floor(viewWidth * 0.88));
+          const h = Math.min(180, Math.floor(viewHeight * 0.55));
+          return { width: Math.max(w, 220), height: Math.max(h, 110) };
         },
         aspectRatio: 1.333333,
-        disableFlip: false
+        disableFlip: false,
+        videoConstraints: videoConstraints
       };
 
       await this.html5QrCodeScanner.start(
@@ -4829,8 +4856,8 @@ const app = {
         }
       );
 
-      // Verificar soporte de linterna
-      this.checkScannerTorchSupport();
+      // Optimizar track de cámara activa: Autofocus continuo, balance de blancos y zoom
+      await this.optimizeActiveCameraTrack();
 
     } catch (err) {
       console.error("Error iniciando cámara para escaneo:", err);
@@ -4838,7 +4865,130 @@ const app = {
       if (hint) {
         hint.textContent = "Permiso de cámara no concedido. Usa el campo manual.";
       }
-      this.showToast("No se pudo acceder a la cámara. Revisa los permisos o ingresa el código manual.", "warning");
+      this.showToast("No se pudo acceder a la cámara en alta resolución. Revisa permisos o ingresa manual.", "warning");
+    }
+  },
+
+  async optimizeActiveCameraTrack() {
+    try {
+      const videoElem = document.querySelector("#barcode-scanner-view video");
+      if (!videoElem || !videoElem.srcObject) return;
+
+      const tracks = videoElem.srcObject.getVideoTracks();
+      if (!tracks || tracks.length === 0) return;
+
+      const track = tracks[0];
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      const settings = track.getSettings ? track.getSettings() : {};
+
+      console.log("Cámara activa optimizada:", settings.width, "x", settings.height, capabilities);
+
+      const advanced = [];
+
+      // 1. Autofocus continuo de máxima nitidez
+      if (capabilities.focusMode && capabilities.focusMode.includes("continuous")) {
+        advanced.push({ focusMode: "continuous" });
+      }
+
+      // 2. Control de exposición continuo automático
+      if (capabilities.exposureMode && capabilities.exposureMode.includes("continuous")) {
+        advanced.push({ exposureMode: "continuous" });
+      }
+
+      // 3. Balance de blancos continuo para mayor nitidez y contraste de códigos
+      if (capabilities.whiteBalanceMode && capabilities.whiteBalanceMode.includes("continuous")) {
+        advanced.push({ whiteBalanceMode: "continuous" });
+      }
+
+      // 4. Zoom de hardware si está disponible
+      this.scannerZoomCapabilities = capabilities.zoom || null;
+      const btnZoom = document.getElementById("btn-scanner-zoom");
+      if (btnZoom) {
+        btnZoom.style.display = "flex";
+      }
+
+      if (advanced.length > 0) {
+        await track.applyConstraints({ advanced }).catch(err => {
+          console.warn("Aviso al aplicar constraints avanzadas de enfoque:", err);
+        });
+      }
+
+      // 5. Linterna / flash
+      const btnTorch = document.getElementById("btn-scanner-torch");
+      if (btnTorch) {
+        btnTorch.style.display = capabilities.torch ? "flex" : "none";
+      }
+
+    } catch (e) {
+      console.warn("Optimizando track de cámara:", e);
+    }
+  },
+
+  async toggleScannerZoom() {
+    try {
+      const videoElem = document.querySelector("#barcode-scanner-view video");
+      if (!videoElem || !videoElem.srcObject) return;
+
+      const tracks = videoElem.srcObject.getVideoTracks();
+      if (!tracks || tracks.length === 0) return;
+
+      const track = tracks[0];
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      const btnZoom = document.getElementById("btn-scanner-zoom");
+
+      if (capabilities.zoom) {
+        const minZ = capabilities.zoom.min || 1;
+        const maxZ = capabilities.zoom.max || 3;
+        // Alternar entre zoom normal 1x y zoom óptico/digital 2x
+        const targetZoom = this.scannerZoomLevel === 1 ? Math.min(2.0, maxZ) : minZ;
+        this.scannerZoomLevel = targetZoom === minZ ? 1 : 2;
+
+        await track.applyConstraints({
+          advanced: [{ zoom: targetZoom }]
+        });
+
+        if (btnZoom) {
+          btnZoom.textContent = `${this.scannerZoomLevel}x`;
+          btnZoom.style.background = this.scannerZoomLevel > 1 ? "rgba(37, 99, 235, 0.9)" : "rgba(15, 23, 42, 0.75)";
+        }
+      } else {
+        // Fallback de ampliación digital CSS de alta calidad
+        this.scannerZoomLevel = this.scannerZoomLevel === 1 ? 1.5 : 1;
+        videoElem.style.transform = this.scannerZoomLevel > 1 ? "scale(1.4)" : "scale(1)";
+        videoElem.style.transition = "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)";
+        if (btnZoom) {
+          btnZoom.textContent = `${this.scannerZoomLevel === 1 ? '1x' : '1.5x'}`;
+          btnZoom.style.background = this.scannerZoomLevel > 1 ? "rgba(37, 99, 235, 0.9)" : "rgba(15, 23, 42, 0.75)";
+        }
+      }
+    } catch (e) {
+      console.warn("Error alternando zoom:", e);
+    }
+  },
+
+  async refocusCamera() {
+    try {
+      const videoElem = document.querySelector("#barcode-scanner-view video");
+      if (!videoElem || !videoElem.srcObject) return;
+
+      const tracks = videoElem.srcObject.getVideoTracks();
+      if (!tracks || tracks.length === 0) return;
+
+      const track = tracks[0];
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+
+      // Mostrar breve pulso visual en la retícula indicando intento de enfoque
+      const reticle = document.querySelector(".scanner-reticle");
+      if (reticle) {
+        reticle.classList.add("focus-pulse");
+        setTimeout(() => reticle.classList.remove("focus-pulse"), 400);
+      }
+
+      if (capabilities.focusMode && capabilities.focusMode.includes("continuous")) {
+        await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+      }
+    } catch (e) {
+      console.warn("Re-enfoque al tocar:", e);
     }
   },
 
@@ -5871,7 +6021,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.9.0",
+  currentAppVersion: "1.9.1",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
