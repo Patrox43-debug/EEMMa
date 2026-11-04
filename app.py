@@ -393,13 +393,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.10.1",
-        "version_code": 25,
-        "release_tag": "v1.10.1",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.10.1/EEMM.apk",
+        "version_name": "1.10.2",
+        "version_code": 26,
+        "release_tag": "v1.10.2",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.10.2/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Escáner de código de barras en pantalla completa: todo el visor de la cámara está activo para detectar códigos sin recuadros restrictivos.\n• Detección mejorada a distancia y en ángulos difíciles con aceleración de hardware nativa (BarcodeDetector).\n• Zoom dinámico de 3 niveles (1x, 2x, 3x) para escanear etiquetas pequeñas o lejanas.\n• Re-enfoque táctil interactivo con indicador visual en el punto exacto de la pantalla.",
-        "published_at": "2026-11-03T22:30:00-03:00"
+        "notes": "• Corrección crítica: solucionado bloqueo en inicio de sesión y conmutador de tema claro/oscuro.\n• Escáner de código de barras en pantalla completa y zoom multinivel (1x, 2x, 3x) 100% operativo.",
+        "published_at": "2026-11-03T23:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:

@@ -295,10 +295,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.10.1";
+        this.currentAppVersion = "1.10.2";
       }
     } else {
-      this.currentAppVersion = "1.10.1";
+      this.currentAppVersion = "1.10.2";
     }
 
     setTimeout(() => {
@@ -4771,6 +4771,7 @@ const app = {
     this.scannerActiveMode = mode;
     this.scannerTorchActive = false;
     this.scannerZoomLevel = 1;
+    this.scannerZoomStage = 1;
 
     const btnZoom = document.getElementById("btn-scanner-zoom");
     if (btnZoom) {
@@ -4804,12 +4805,6 @@ const app = {
     }
 
     // Resetear overlay y contenedor de resultados
-    this.scannerZoomStage = 1;
-    const btnZoom = document.getElementById("btn-scanner-zoom");
-    if (btnZoom) {
-      btnZoom.textContent = "1x";
-      btnZoom.style.background = "rgba(15, 23, 42, 0.75)";
-    }
     const resBox = document.getElementById("scanner-result-container");
     if (resBox) {
       resBox.style.display = "none";
@@ -6277,7 +6272,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.10.1",
+  currentAppVersion: "1.10.2",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
