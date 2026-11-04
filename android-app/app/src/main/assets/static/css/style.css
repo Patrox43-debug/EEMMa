@@ -3297,13 +3297,13 @@ select.form-control {
   }
 }
 
-/* Modal Escáner Viewport - Alta Definición y Gran Enfoque */
+/* Modal Escáner Viewport - Pantalla Completa y Alta Definición */
 .scanner-viewport-wrapper {
   position: relative;
   width: 100%;
-  min-height: 350px;
-  height: 50vh;
-  max-height: 480px;
+  min-height: 360px;
+  height: 52vh;
+  max-height: 520px;
   background: #090d16;
   overflow: hidden;
   display: flex;
@@ -3337,13 +3337,12 @@ select.form-control {
   display: none !important;
 }
 
-/* Retícula y láser de escaneo */
+/* Retícula y láser de escaneo en toda el área asignada */
 .scanner-overlay-guide {
   position: absolute;
   inset: 0;
   pointer-events: none;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 10;
@@ -3351,16 +3350,21 @@ select.form-control {
 
 .scanner-reticle {
   position: relative;
-  width: 78%;
-  max-width: 320px;
-  height: 160px;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-  border-radius: 12px;
-  transition: transform 0.2s ease;
+  width: calc(100% - 24px);
+  height: calc(100% - 28px);
+  max-width: none;
+  max-height: none;
+  border-radius: 14px;
+  border: 1.5px dashed rgba(56, 189, 248, 0.45);
+  box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  pointer-events: none;
 }
 
 .scanner-reticle.focus-pulse {
   animation: reticlePulse 0.35s ease;
+  border-color: #10b981 !important;
+  box-shadow: inset 0 0 25px rgba(16, 185, 129, 0.25) !important;
 }
 
 .scanner-reticle.focus-pulse .reticle-corner {
@@ -3369,14 +3373,14 @@ select.form-control {
 
 @keyframes reticlePulse {
   0% { transform: scale(1); }
-  50% { transform: scale(0.96); }
+  50% { transform: scale(0.98); }
   100% { transform: scale(1); }
 }
 
 .reticle-corner {
   position: absolute;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-color: #38bdf8;
   border-style: solid;
 }
@@ -3384,28 +3388,28 @@ select.form-control {
 .corner-tl {
   top: 0;
   left: 0;
-  border-width: 3.5px 0 0 3.5px;
+  border-width: 4px 0 0 4px;
   border-top-left-radius: 12px;
 }
 
 .corner-tr {
   top: 0;
   right: 0;
-  border-width: 3.5px 3.5px 0 0;
+  border-width: 4px 4px 0 0;
   border-top-right-radius: 12px;
 }
 
 .corner-bl {
   bottom: 0;
   left: 0;
-  border-width: 0 0 3.5px 3.5px;
+  border-width: 0 0 4px 4px;
   border-bottom-left-radius: 12px;
 }
 
 .corner-br {
   bottom: 0;
   right: 0;
-  border-width: 0 3.5px 3.5px 0;
+  border-width: 0 4px 4px 0;
   border-bottom-right-radius: 12px;
 }
 
@@ -3414,33 +3418,71 @@ select.form-control {
   left: 6px;
   right: 6px;
   height: 2.5px;
-  background: linear-gradient(90deg, transparent, #ef4444, #f87171, #ef4444, transparent);
-  box-shadow: 0 0 8px #ef4444;
-  animation: scannerLaser 2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  background: linear-gradient(90deg, transparent, #38bdf8, #ef4444, #38bdf8, transparent);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.85);
+  animation: scannerLaser 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
 }
 
 @keyframes scannerLaser {
   0% {
     top: 8px;
-    opacity: 0.8;
+    opacity: 0.6;
   }
   100% {
-    top: calc(100% - 10px);
+    top: calc(100% - 12px);
     opacity: 0.95;
   }
 }
 
 .scanner-hint-text {
-  margin-top: 1rem;
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(4px);
+  position: absolute;
+  bottom: 12px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(6px);
   color: #f8fafc;
-  font-size: 0.76rem;
-  font-weight: 500;
+  font-size: 0.74rem;
+  font-weight: 600;
   padding: 0.35rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  z-index: 12;
+}
+
+/* Indicador animado de toque para enfocar */
+.scanner-tap-focus-ring {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  margin-left: -25px;
+  margin-top: -25px;
+  border: 2px solid #38bdf8;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: tapFocusAnim 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  z-index: 25;
+}
+
+@keyframes tapFocusAnim {
+  0% {
+    transform: scale(1.6);
+    opacity: 0.9;
+    border-color: #38bdf8;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+    border-color: #10b981;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0;
+    border-color: #10b981;
+  }
 }
 
 /* Botones flotantes de cámara y linterna */

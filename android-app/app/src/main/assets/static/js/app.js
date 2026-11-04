@@ -295,10 +295,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.10.0";
+        this.currentAppVersion = "1.10.1";
       }
     } else {
-      this.currentAppVersion = "1.10.0";
+      this.currentAppVersion = "1.10.1";
     }
 
     setTimeout(() => {
@@ -4804,6 +4804,12 @@ const app = {
     }
 
     // Resetear overlay y contenedor de resultados
+    this.scannerZoomStage = 1;
+    const btnZoom = document.getElementById("btn-scanner-zoom");
+    if (btnZoom) {
+      btnZoom.textContent = "1x";
+      btnZoom.style.background = "rgba(15, 23, 42, 0.75)";
+    }
     const resBox = document.getElementById("scanner-result-container");
     if (resBox) {
       resBox.style.display = "none";
@@ -4842,7 +4848,31 @@ const app = {
         this.html5QrCodeScanner = null;
       }
 
-      this.html5QrCodeScanner = new Html5Qrcode("barcode-scanner-view");
+      // Soporte completo de formatos de códigos de barras (1D clínicos/bodega y 2D)
+      const formatsToSupport = typeof Html5QrcodeSupportedFormats !== "undefined"
+        ? [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.DATA_MATRIX
+          ]
+        : undefined;
+
+      // Instanciar con aceleración de hardware BarcodeDetector nativo de Chromium/Android si está disponible
+      this.html5QrCodeScanner = new Html5Qrcode("barcode-scanner-view", {
+        formatsToSupport: formatsToSupport,
+        verbose: false,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      });
 
       // Listar cámaras disponibles para botón de cambio
       try {
@@ -4860,15 +4890,15 @@ const app = {
       const videoConstraints = deviceId
         ? {
             deviceId: { exact: deviceId },
-            width: { min: 1280, ideal: 1920, max: 3840 },
-            height: { min: 720, ideal: 1080, max: 2160 },
+            width: { min: 640, ideal: 1920, max: 3840 },
+            height: { min: 480, ideal: 1080, max: 2160 },
             frameRate: { ideal: 30, min: 15 },
             focusMode: { ideal: "continuous" }
           }
         : {
             facingMode: { ideal: "environment" },
-            width: { min: 1280, ideal: 1920, max: 3840 },
-            height: { min: 720, ideal: 1080, max: 2160 },
+            width: { min: 640, ideal: 1920, max: 3840 },
+            height: { min: 480, ideal: 1080, max: 2160 },
             frameRate: { ideal: 30, min: 15 },
             focusMode: { ideal: "continuous" }
           };
@@ -4877,14 +4907,9 @@ const app = {
         ? { deviceId: { exact: deviceId } }
         : { facingMode: "environment" };
 
+      // Escaneo en pantalla completa: SIN qrbox restrictivo para abarcar el 100% del visor de la cámara
       const scanConfig = {
         fps: 25,
-        qrbox: (viewWidth, viewHeight) => {
-          const w = Math.min(340, Math.floor(viewWidth * 0.88));
-          const h = Math.min(180, Math.floor(viewHeight * 0.55));
-          return { width: Math.max(w, 220), height: Math.max(h, 110) };
-        },
-        aspectRatio: 1.333333,
         disableFlip: false,
         videoConstraints: videoConstraints
       };
@@ -4980,29 +5005,38 @@ const app = {
       const capabilities = track.getCapabilities ? track.getCapabilities() : {};
       const btnZoom = document.getElementById("btn-scanner-zoom");
 
+      // Niveles de zoom cíclicos: 1x -> 2x -> 3x -> 1x para captar códigos lejanos o pequeños
+      if (!this.scannerZoomStage) {
+        this.scannerZoomStage = 1;
+      }
+      this.scannerZoomStage = (this.scannerZoomStage % 3) + 1;
+
       if (capabilities.zoom) {
         const minZ = capabilities.zoom.min || 1;
         const maxZ = capabilities.zoom.max || 3;
-        // Alternar entre zoom normal 1x y zoom óptico/digital 2x
-        const targetZoom = this.scannerZoomLevel === 1 ? Math.min(2.0, maxZ) : minZ;
-        this.scannerZoomLevel = targetZoom === minZ ? 1 : 2;
+        let targetZoom = minZ;
+        if (this.scannerZoomStage === 2) {
+          targetZoom = Math.min(2.0, maxZ);
+        } else if (this.scannerZoomStage === 3) {
+          targetZoom = Math.min(3.0, maxZ);
+        }
 
         await track.applyConstraints({
           advanced: [{ zoom: targetZoom }]
-        });
+        }).catch(err => console.warn("Zoom constraint error:", err));
 
         if (btnZoom) {
-          btnZoom.textContent = `${this.scannerZoomLevel}x`;
-          btnZoom.style.background = this.scannerZoomLevel > 1 ? "rgba(37, 99, 235, 0.9)" : "rgba(15, 23, 42, 0.75)";
+          btnZoom.textContent = `${this.scannerZoomStage}x`;
+          btnZoom.style.background = this.scannerZoomStage > 1 ? "rgba(37, 99, 235, 0.9)" : "rgba(15, 23, 42, 0.75)";
         }
       } else {
-        // Fallback de ampliación digital CSS de alta calidad
-        this.scannerZoomLevel = this.scannerZoomLevel === 1 ? 1.5 : 1;
-        videoElem.style.transform = this.scannerZoomLevel > 1 ? "scale(1.4)" : "scale(1)";
+        // Fallback de ampliación digital CSS
+        const scaleVal = this.scannerZoomStage === 1 ? 1 : (this.scannerZoomStage === 2 ? 1.5 : 2.0);
+        videoElem.style.transform = `scale(${scaleVal})`;
         videoElem.style.transition = "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)";
         if (btnZoom) {
-          btnZoom.textContent = `${this.scannerZoomLevel === 1 ? '1x' : '1.5x'}`;
-          btnZoom.style.background = this.scannerZoomLevel > 1 ? "rgba(37, 99, 235, 0.9)" : "rgba(15, 23, 42, 0.75)";
+          btnZoom.textContent = `${this.scannerZoomStage}x`;
+          btnZoom.style.background = this.scannerZoomStage > 1 ? "rgba(37, 99, 235, 0.9)" : "rgba(15, 23, 42, 0.75)";
         }
       }
     } catch (e) {
@@ -5010,8 +5044,27 @@ const app = {
     }
   },
 
-  async refocusCamera() {
+  async refocusCamera(e = null) {
     try {
+      // Si el usuario toca la pantalla, mostrar indicador visual de enfoque en las coordenadas exactas del toque
+      if (e && e.clientX && e.clientY) {
+        const wrapper = document.querySelector(".scanner-viewport-wrapper");
+        if (wrapper) {
+          const rect = wrapper.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
+
+          const ring = document.createElement("div");
+          ring.className = "scanner-tap-focus-ring";
+          ring.style.left = `${clickX}px`;
+          ring.style.top = `${clickY}px`;
+          wrapper.appendChild(ring);
+          setTimeout(() => {
+            if (ring.parentNode) ring.parentNode.removeChild(ring);
+          }, 650);
+        }
+      }
+
       const videoElem = document.querySelector("#barcode-scanner-view video");
       if (!videoElem || !videoElem.srcObject) return;
 
@@ -5029,7 +5082,7 @@ const app = {
       }
 
       if (capabilities.focusMode && capabilities.focusMode.includes("continuous")) {
-        await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+        await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => {});
       }
     } catch (e) {
       console.warn("Re-enfoque al tocar:", e);
@@ -5328,6 +5381,12 @@ const app = {
   },
 
   closeBarcodeScanner() {
+    this.scannerZoomStage = 1;
+    const btnZoom = document.getElementById("btn-scanner-zoom");
+    if (btnZoom) {
+      btnZoom.textContent = "1x";
+      btnZoom.style.background = "rgba(15, 23, 42, 0.75)";
+    }
     const modal = document.getElementById("modal-barcode-scanner");
     if (modal) modal.classList.remove("active");
 
@@ -6218,7 +6277,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.10.0",
+  currentAppVersion: "1.10.1",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
