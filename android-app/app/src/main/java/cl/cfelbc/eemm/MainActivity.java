@@ -727,9 +727,9 @@ public class MainActivity extends AppCompatActivity {
         public String getAppVersionName() {
             try {
                 android.content.pm.PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
-                return pInfo.versionName != null ? pInfo.versionName : "1.10.2";
+                return pInfo.versionName != null ? pInfo.versionName : "1.11.0";
             } catch (Exception e) {
-                return "1.10.2";
+                return "1.11.0";
             }
         }
 
@@ -743,7 +743,7 @@ public class MainActivity extends AppCompatActivity {
                     return pInfo.versionCode;
                 }
             } catch (Exception e) {
-                return 26;
+                return 27;
             }
         }
 

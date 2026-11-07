@@ -34,6 +34,10 @@ const app = {
   entregaCurrentPickerItem: null,
   buscarAccesorioFilter: "all",
 
+  // Estado para Entrega de Equipos
+  entregaEquipoSignaturePad: null,
+  entregasEquiposData: [],
+
   // Catálogo Oficial de 50 Servicios Clínicos y Unidades Hospitalarias
   serviciosClinicosOficiales: [
     "ABASTECIMIENTO",
@@ -246,9 +250,13 @@ const app = {
     // Inicializar manejador de firma para Entrega de Accesorios
     this.entregaSignaturePad = new SignaturePad("entrega-signature-canvas");
 
+    // Inicializar manejador de firma para Entrega de Equipos
+    this.entregaEquipoSignaturePad = new SignaturePad("entrega-equipo-signature-canvas");
+
     // Configurar buscadores con autocompletado
     this.initAutocomplete();
     this.initServicioAutocomplete();
+    this.initEntregaEquipoAutocomplete();
     this.renderPlaceholderServicioChecklist();
 
     // Verificar sesión previa guardada
@@ -295,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.10.2";
+        this.currentAppVersion = "1.11.0";
       }
     } else {
-      this.currentAppVersion = "1.10.2";
+      this.currentAppVersion = "1.11.0";
     }
 
     setTimeout(() => {
@@ -511,6 +519,9 @@ const app = {
     if (this.entregaSignaturePad) {
       this.entregaSignaturePad.updateStrokeStyle();
     }
+    if (this.entregaEquipoSignaturePad) {
+      this.entregaEquipoSignaturePad.updateStrokeStyle();
+    }
 
     if (window.AndroidBridge && typeof window.AndroidBridge.updateStatusBarTheme === "function") {
       try {
@@ -549,7 +560,7 @@ const app = {
     this.activeTab = tabName;
 
     // Ocultar todas las vistas
-    const views = ["login", "modulo-selector", "dashboard", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario", "entregas"];
+    const views = ["login", "modulo-selector", "dashboard", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario", "entregas", "entrega-equipos"];
     views.forEach((v) => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = v === tabName ? "block" : "none";
@@ -565,6 +576,8 @@ const app = {
         this.currentModule = "bodega";
       } else if (tabName === "entregas") {
         this.currentModule = "entregas";
+      } else if (tabName === "entrega-equipos") {
+        this.currentModule = "entrega-equipos";
       } else if (tabName === "chequeo" || tabName === "chequeo-servicio" || tabName === "historial" || tabName === "equipos" || tabName === "dashboard") {
         this.currentModule = "chequeo";
       }
@@ -595,6 +608,11 @@ const app = {
       this.loadEntregasView();
       if (this.entregaSignaturePad) {
         setTimeout(() => this.entregaSignaturePad.initCanvas(), 100);
+      }
+    } else if (tabName === "entrega-equipos") {
+      this.loadEntregaEquiposView();
+      if (this.entregaEquipoSignaturePad) {
+        setTimeout(() => this.entregaEquipoSignaturePad.initCanvas(), 100);
       }
     } else if (tabName === "chequeo" && this.signaturePad) {
       // Reajustar canvas para tamaño correcto
@@ -964,6 +982,8 @@ const app = {
         this.navigate("inventario");
       } else if (moduleName === "entregas") {
         this.navigate("entregas");
+      } else if (moduleName === "entrega-equipos") {
+        this.navigate("entrega-equipos");
       } else {
         if (this.currentUser && this.currentUser.rol === "ingeniero") {
           this.navigate("dashboard");
@@ -6251,6 +6271,438 @@ const app = {
   },
 
   /* ==========================================================================
+     MÓDULO OFICIAL DE ENTREGA DE EQUIPOS MÉDICOS (FORMULARIO, FIRMA, PDF E HISTORIAL)
+     ========================================================================== */
+  switchEntregaEquiposSubTab(subTab) {
+    const vNueva = document.getElementById("entrega-equipos-subview-nueva");
+    const vHist = document.getElementById("entrega-equipos-subview-historial");
+    const btnNueva = document.getElementById("btn-tab-nueva-entrega-eq");
+    const btnHist = document.getElementById("btn-tab-historial-entregas-eq");
+
+    if (subTab === "nueva") {
+      if (vNueva) vNueva.style.display = "block";
+      if (vHist) vHist.style.display = "none";
+      if (btnNueva) {
+        btnNueva.className = "btn btn-primary btn-sm";
+      }
+      if (btnHist) {
+        btnHist.className = "btn btn-outline btn-sm";
+      }
+      if (this.entregaEquipoSignaturePad) {
+        setTimeout(() => this.entregaEquipoSignaturePad.initCanvas(), 100);
+      }
+    } else {
+      if (vNueva) vNueva.style.display = "none";
+      if (vHist) vHist.style.display = "block";
+      if (btnNueva) {
+        btnNueva.className = "btn btn-outline btn-sm";
+      }
+      if (btnHist) {
+        btnHist.className = "btn btn-primary btn-sm";
+      }
+      this.loadHistorialEntregasEquipos();
+    }
+  },
+
+  async loadEntregaEquiposView() {
+    const fDesde = document.getElementById("filtro-entrega-eq-desde");
+    const fHasta = document.getElementById("filtro-entrega-eq-hasta");
+    const now = new Date();
+    const hoyStr = now.toISOString().slice(0, 10);
+    const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+
+    if (fDesde && !fDesde.value) fDesde.value = primerDiaMes;
+    if (fHasta && !fHasta.value) fHasta.value = hoyStr;
+
+    this.initEntregaEquipoAutocomplete();
+
+    if (this.entregaEquipoSignaturePad) {
+      setTimeout(() => this.entregaEquipoSignaturePad.initCanvas(), 120);
+    }
+  },
+
+  initEntregaEquipoAutocomplete() {
+    const datalist = document.getElementById("list-equipos-entrega-autocomplete");
+    if (!datalist) return;
+    if (this.equiposBase && Array.isArray(this.equiposBase) && this.equiposBase.length > 0) {
+      datalist.innerHTML = "";
+      const equiposTomados = this.equiposBase.slice(0, 300);
+      equiposTomados.forEach(eq => {
+        const opt = document.createElement("option");
+        const serieText = eq.serie ? ` [Inv: ${eq.serie}]` : "";
+        opt.value = `${eq.nombre || ''} - ${eq.marca || ''} ${eq.modelo || ''}${serieText}`.trim();
+        datalist.appendChild(opt);
+      });
+    }
+  },
+
+  handleEntregaEquipoAutosearch(val) {
+    if (!val || !this.equiposBase || !Array.isArray(this.equiposBase)) return;
+    const term = val.trim().toLowerCase();
+    if (term.length < 3) return;
+
+    const matched = this.equiposBase.find(eq => {
+      const nombre = (eq.nombre || "").toLowerCase();
+      const serie = (eq.serie || "").toLowerCase();
+      const marca = (eq.marca || "").toLowerCase();
+      const modelo = (eq.modelo || "").toLowerCase();
+      const idStr = String(eq.codigo_origen || eq.id_equipo || "");
+      const fullText = `${nombre} - ${marca} ${modelo} [inv: ${serie}]`.toLowerCase();
+      return fullText.includes(term) || serie === term || (idStr && idStr === term);
+    });
+
+    if (matched) {
+      const inputNombre = document.getElementById("entrega-eq-nombre");
+      const inputMarca = document.getElementById("entrega-eq-marca");
+      const inputModelo = document.getElementById("entrega-eq-modelo");
+      const inputInv = document.getElementById("entrega-eq-inventario");
+
+      if (inputNombre && matched.nombre) inputNombre.value = matched.nombre;
+      if (inputMarca && matched.marca) inputMarca.value = matched.marca;
+      if (inputModelo && matched.modelo) inputModelo.value = matched.modelo;
+      if (inputInv && (matched.serie || matched.codigo_origen)) {
+        inputInv.value = matched.serie || `INV-${matched.codigo_origen}`;
+      }
+    }
+  },
+
+  resetEntregaEquipoForm() {
+    const form = document.getElementById("form-nueva-entrega-equipo");
+    if (form) form.reset();
+    const autoSearch = document.getElementById("entrega-eq-autosearch");
+    if (autoSearch) autoSearch.value = "";
+    this.clearEntregaEquipoSignature();
+  },
+
+  clearEntregaEquipoSignature() {
+    if (this.entregaEquipoSignaturePad) {
+      this.entregaEquipoSignaturePad.clear();
+    }
+  },
+
+  async submitEntregaEquipo() {
+    const nombreInput = document.getElementById("entrega-eq-nombre");
+    const invInput = document.getElementById("entrega-eq-inventario");
+    const marcaInput = document.getElementById("entrega-eq-marca");
+    const modeloInput = document.getElementById("entrega-eq-modelo");
+    const servicioSelect = document.getElementById("entrega-eq-servicio");
+    const receptorInput = document.getElementById("entrega-eq-receptor");
+    const obsInput = document.getElementById("entrega-eq-observaciones");
+    const submitBtn = document.getElementById("btn-submit-entrega-equipo");
+
+    const nombre = nombreInput ? nombreInput.value.trim() : "";
+    const inventario = invInput ? invInput.value.trim() : "";
+    const marca = marcaInput ? marcaInput.value.trim() : "";
+    const modelo = modeloInput ? modeloInput.value.trim() : "";
+    const servicio = servicioSelect ? servicioSelect.value.trim() : "";
+    const receptor = receptorInput ? receptorInput.value.trim() : "";
+    const obs = obsInput ? obsInput.value.trim() : "";
+
+    if (!nombre) {
+      this.showToast("Ingresa el nombre del equipo médico", "warning");
+      if (nombreInput) nombreInput.focus();
+      return;
+    }
+    if (!inventario) {
+      this.showToast("Ingresa el N° de inventario del equipo", "warning");
+      if (invInput) invInput.focus();
+      return;
+    }
+    if (!servicio) {
+      this.showToast("Selecciona el servicio clínico de destino", "warning");
+      if (servicioSelect) servicioSelect.focus();
+      return;
+    }
+    if (!receptor) {
+      this.showToast("Ingresa el nombre del funcionario que recibe el equipo", "warning");
+      if (receptorInput) receptorInput.focus();
+      return;
+    }
+
+    if (!this.entregaEquipoSignaturePad || this.entregaEquipoSignaturePad.isEmpty()) {
+      this.showToast("Debe registrar la firma digital de recepción conforme en el recuadro", "warning");
+      return;
+    }
+
+    const firmaData = this.entregaEquipoSignaturePad.toDataURL();
+    const usuarioEntrega = (this.currentUser && (this.currentUser.nombre || this.currentUser.username)) || "Técnico EEMM";
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm" style="width:14px;height:14px;border-width:2px;"></span> Guardando y generando acta PDF...`;
+    }
+
+    try {
+      const res = await fetch("/api/entregas-equipos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre_equipo: nombre,
+          marca: marca,
+          modelo: modelo,
+          inventario: inventario,
+          servicio: servicio,
+          nombre_receptor: receptor,
+          usuario_entrega: usuarioEntrega,
+          firma_data: firmaData,
+          observaciones: obs
+        })
+      });
+
+      let data = null;
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok) {
+        throw new Error((data && data.detail) || `Error ${res.status} al registrar entrega`);
+      }
+
+      this.showToast("Acta de entrega de equipo registrada con éxito", "success");
+
+      // Descargar o abrir el acta PDF generada
+      if (data && data.id) {
+        const folioClean = (data.folio || `EQ_${data.id}`).replace('/', '_');
+        this.downloadEntregaEquipoPdf(data.id, folioClean);
+      }
+
+      this.resetEntregaEquipoForm();
+      this.switchEntregaEquiposSubTab("historial");
+
+    } catch (err) {
+      console.error("Error al registrar entrega de equipo:", err);
+      this.showToast(err.message || "Error al registrar la entrega de equipo", "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          Guardar Entrega y Generar Acta PDF
+        `;
+      }
+    }
+  },
+
+  async loadHistorialEntregasEquipos() {
+    const fDesde = document.getElementById("filtro-entrega-eq-desde");
+    const fHasta = document.getElementById("filtro-entrega-eq-hasta");
+    const fServicio = document.getElementById("filtro-entrega-eq-servicio");
+    const fQ = document.getElementById("filtro-entrega-eq-q");
+    const tbody = document.getElementById("entrega-equipos-historial-tbody");
+    const kpiBar = document.getElementById("entrega-equipos-kpi-bar");
+
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
+          <span class="spinner-border spinner-border-sm" style="width:16px;height:16px;border-width:2px;"></span> Cargando historial de entregas de equipos...
+        </td>
+      </tr>
+    `;
+
+    const desde = fDesde ? fDesde.value.trim() : "";
+    const hasta = fHasta ? fHasta.value.trim() : "";
+    const servicio = fServicio ? fServicio.value.trim() : "";
+    const q = fQ ? fQ.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (desde) params.append("fecha_inicio", desde);
+    if (hasta) params.append("fecha_fin", hasta);
+    if (servicio) params.append("servicio", servicio);
+    if (q) params.append("q", q);
+    params.append("limit", 200);
+
+    try {
+      const res = await fetch(`/api/entregas-equipos?${params.toString()}`);
+      if (!res.ok) throw new Error("Error al consultar entregas de equipos");
+      const rows = await res.json();
+      this.entregasEquiposData = Array.isArray(rows) ? rows : [];
+
+      // KPIs
+      const totalActas = this.entregasEquiposData.length;
+      const equiposUnicos = new Set(this.entregasEquiposData.map(e => e.inventario || e.nombre_equipo).filter(Boolean));
+      const serviciosUnicos = new Set(this.entregasEquiposData.map(e => e.servicio).filter(Boolean));
+
+      if (kpiBar) {
+        kpiBar.innerHTML = `
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Actas de Entrega</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #0284c7; margin-top: 2px;">${totalActas}</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Equipos Entregados</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: var(--primary); margin-top: 2px;">${equiposUnicos.size}</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Servicios Receptores</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #10b981; margin-top: 2px;">${serviciosUnicos.size} áreas</div>
+          </div>
+        `;
+      }
+
+      if (totalActas === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-tertiary);">
+              <div style="font-size: 1.75rem; margin-bottom: 0.4rem;">🩺</div>
+              <div style="font-weight: 600; color: var(--text-secondary);">No se encontraron actas de entrega de equipos en este período.</div>
+              <div style="font-size: 0.78rem; margin-top: 4px;">Ajusta los filtros o registra una nueva entrega desde el formulario.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = this.entregasEquiposData.map(e => {
+        const fecha = e.fecha_fmt || e.fecha || "";
+        const folio = e.folio || `ENT-EQ-${e.id}`;
+        const firmaThumb = e.firma_data
+          ? `<img src="${e.firma_data}" alt="Firma" style="max-height: 28px; max-width: 75px; object-fit: contain; background: white; border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px; cursor: pointer;" onclick="app.showFirmaModal('${this.escapeHtml(e.firma_data)}', '${this.escapeHtml(folio)}')">`
+          : `<span style="font-size: 0.7rem; color: var(--text-tertiary);">(Sin firma)</span>`;
+
+        const marcaModelo = [e.marca, e.modelo].filter(Boolean).join(" ");
+        const eqDetails = marcaModelo ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${this.escapeHtml(marcaModelo)}</div>` : "";
+        const obsHtml = e.observaciones ? `<div style="font-size: 0.7rem; color: var(--text-tertiary); font-style: italic; margin-top: 2px;">${this.escapeHtml(e.observaciones)}</div>` : "";
+
+        return `
+          <tr>
+            <td>
+              <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; font-weight: 700; font-family: monospace;">
+                ${this.escapeHtml(folio)}
+              </span>
+            </td>
+            <td style="font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap;">
+              ${this.escapeHtml(fecha)}
+            </td>
+            <td>
+              <strong style="color: var(--text-primary); font-size: 0.825rem;">${this.escapeHtml(e.nombre_equipo || '')}</strong>
+              ${eqDetails}
+              ${obsHtml}
+            </td>
+            <td>
+              <span class="badge badge-subtle" style="font-family: monospace; font-size: 0.75rem; font-weight: 700;">
+                ${this.escapeHtml(e.inventario || 'S/I')}
+              </span>
+            </td>
+            <td>
+              <span style="font-weight: 600; color: var(--text-primary); font-size: 0.825rem;">
+                ${this.escapeHtml(e.servicio || '')}
+              </span>
+            </td>
+            <td>
+              <div style="font-weight: 600; font-size: 0.825rem; color: var(--text-primary);">
+                ${this.escapeHtml(e.nombre_receptor || '')}
+              </div>
+            </td>
+            <td style="font-size: 0.78rem; color: var(--text-secondary);">
+              ${this.escapeHtml(e.usuario_entrega || 'Técnico EEMM')}
+            </td>
+            <td style="text-align: center;">
+              ${firmaThumb}
+            </td>
+            <td style="text-align: center; white-space: nowrap;">
+              <button type="button" class="btn btn-outline btn-xs" onclick="app.downloadEntregaEquipoPdf(${e.id}, '${this.escapeHtml(folio)}')" title="Descargar acta individual oficial en PDF" style="display: inline-flex; align-items: center; gap: 3px; padding: 4px 7px; font-weight: 600;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                PDF
+              </button>
+              <button type="button" class="btn btn-danger btn-xs" onclick="app.deleteEntregaEquipo(${e.id})" title="Eliminar acta de entrega" style="padding: 4px 7px; margin-left: 3px;">
+                🗑️
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+    } catch (err) {
+      console.error("Error al cargar historial de entregas de equipos:", err);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2rem; color: var(--danger, #ef4444);">
+            No fue posible cargar el historial de entregas: ${this.escapeHtml(err.message || 'Error del servidor')}
+          </td>
+        </tr>
+      `;
+    }
+  },
+
+  downloadEntregaEquipoPdf(id, folio) {
+    const folioClean = (folio || `EQ_${id}`).replace('/', '_');
+    const filename = `Acta_Entrega_${folioClean}.pdf`;
+    this.handlePdfDownloadOrView(`/api/entregas-equipos/${id}/pdf?download=true`, filename);
+  },
+
+  exportEntregasEquiposPdf() {
+    const fDesde = document.getElementById("filtro-entrega-eq-desde");
+    const fHasta = document.getElementById("filtro-entrega-eq-hasta");
+    const fServicio = document.getElementById("filtro-entrega-eq-servicio");
+    const fQ = document.getElementById("filtro-entrega-eq-q");
+
+    const desde = fDesde ? fDesde.value.trim() : "";
+    const hasta = fHasta ? fHasta.value.trim() : "";
+    const servicio = fServicio ? fServicio.value.trim() : "";
+    const q = fQ ? fQ.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (desde) params.append("fecha_inicio", desde);
+    if (hasta) params.append("fecha_fin", hasta);
+    if (servicio) params.append("servicio", servicio);
+    if (q) params.append("q", q);
+    params.append("download", "true");
+
+    const url = `/api/entregas-equipos/export/pdf?${params.toString()}`;
+    const fIni = desde || "inicio";
+    const fFin = hasta || "actual";
+    const srvSlug = servicio ? `_${servicio.replace(/ /g, '_')}` : "";
+    const filename = `Reporte_Entregas_Equipos${srvSlug}_${fIni}_${fFin}.pdf`;
+
+    this.handlePdfDownloadOrView(url, filename);
+  },
+
+  async deleteEntregaEquipo(id) {
+    if (!confirm("¿Estás seguro de que deseas eliminar esta acta de entrega de equipo?")) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/entregas-equipos/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Error al eliminar");
+      }
+      this.showToast("Acta eliminada correctamente", "success");
+      this.loadHistorialEntregasEquipos();
+    } catch (err) {
+      this.showToast(err.message || "Error al eliminar acta", "error");
+    }
+  },
+
+  showFirmaModal(firmaData, folio) {
+    if (!firmaData) return;
+    const modalBody = document.getElementById("modal-body");
+    const modalTitle = document.getElementById("modal-title");
+    const modalBtnOpen = document.getElementById("modal-btn-open-pdf");
+    const modalBtnDl = document.getElementById("modal-btn-download-pdf");
+
+    if (modalBtnOpen) modalBtnOpen.style.display = "none";
+    if (modalBtnDl) modalBtnDl.style.display = "none";
+    if (modalTitle) modalTitle.textContent = `Firma de Recepción Conforme - ${folio || 'Acta'}`;
+
+    if (modalBody) {
+      modalBody.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem 1rem;">
+          <div style="display: inline-block; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+            <img src="${firmaData}" alt="Firma" style="max-width: 100%; max-height: 250px; display: block; margin: 0 auto;">
+          </div>
+          <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 1rem;">
+            Firma estampada digitalmente por el funcionario receptor en el momento de la entrega.
+          </p>
+        </div>
+      `;
+    }
+
+    const modal = document.getElementById("modal-detalle");
+    if (modal) modal.style.display = "flex";
+  },
+
+  /* ==========================================================================
      TOAST NOTIFICATIONS
      ========================================================================== */
   showToast(message, type = "info") {
@@ -6272,7 +6724,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.10.2",
+  currentAppVersion: "1.11.0",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
@@ -6506,6 +6958,8 @@ const app = {
     this.showToast("Error al descargar actualización: " + errorMsg, "error");
   }
 };
+
+window.app = app;
 
 // Arrancar cuando el DOM esté listo
 document.addEventListener("DOMContentLoaded", () => {
