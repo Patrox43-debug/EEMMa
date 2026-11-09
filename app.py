@@ -275,6 +275,7 @@ def ensure_db_initialized():
             nombre_equipo TEXT NOT NULL,
             marca TEXT,
             modelo TEXT,
+            serie TEXT,
             inventario TEXT NOT NULL,
             servicio TEXT NOT NULL,
             nombre_receptor TEXT NOT NULL,
@@ -284,6 +285,10 @@ def ensure_db_initialized():
             fecha DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        try:
+            cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
+        except Exception:
+            pass
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_fecha ON entregas_equipos(fecha);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_servicio ON entregas_equipos(servicio);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_inventario ON entregas_equipos(inventario);")
@@ -2562,7 +2567,8 @@ class EntregaEquipoCreate(BaseModel):
     nombre_equipo: str
     marca: Optional[str] = None
     modelo: Optional[str] = None
-    inventario: str
+    serie: Optional[str] = None
+    inventario: Optional[str] = None
     servicio: str
     nombre_receptor: str
     usuario_entrega: Optional[str] = None
@@ -2575,9 +2581,10 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
     if not nombre_eq:
         raise HTTPException(status_code=400, detail="Debe indicar el nombre del equipo médico")
     
-    inv = (item.inventario or "").strip()
-    if not inv:
-        raise HTTPException(status_code=400, detail="Debe indicar el N° de inventario del equipo")
+    serie = (item.serie or "").strip()
+    inv = (item.inventario or serie or "S/I").strip()
+    if not inv and not serie:
+        raise HTTPException(status_code=400, detail="Debe indicar el N° de inventario o serie del equipo")
     
     servicio = (item.servicio or "").strip()
     if not servicio:
@@ -2601,6 +2608,7 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
         nombre_equipo TEXT NOT NULL,
         marca TEXT,
         modelo TEXT,
+        serie TEXT,
         inventario TEXT NOT NULL,
         servicio TEXT NOT NULL,
         nombre_receptor TEXT NOT NULL,
@@ -2610,6 +2618,10 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    try:
+        cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
+    except Exception:
+        pass
 
     date_prefix = datetime.now().strftime("%Y%m%d")
     cursor.execute("SELECT COUNT(*) FROM entregas_equipos WHERE date(fecha) = date('now', 'localtime')")
@@ -2618,14 +2630,15 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
 
     cursor.execute("""
         INSERT INTO entregas_equipos (
-            folio, nombre_equipo, marca, modelo, inventario,
+            folio, nombre_equipo, marca, modelo, serie, inventario,
             servicio, nombre_receptor, usuario_entrega, firma_data, observaciones, fecha
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     """, (
         folio,
         nombre_eq,
         marca,
         modelo,
+        serie,
         inv,
         servicio,
         nombre_rec,
@@ -2637,7 +2650,7 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
     conn.commit()
 
     cursor.execute("""
-        SELECT id, folio, nombre_equipo, marca, modelo, inventario,
+        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
                servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_equipos
@@ -2692,12 +2705,12 @@ def list_entregas_equipos(
 
     if q and q.strip():
         term = f"%{q.strip()}%"
-        clauses.append("(folio LIKE ? OR nombre_equipo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR inventario LIKE ? OR nombre_receptor LIKE ? OR usuario_entrega LIKE ? OR servicio LIKE ?)")
-        params.extend([term, term, term, term, term, term, term, term])
+        clauses.append("(folio LIKE ? OR nombre_equipo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR inventario LIKE ? OR nombre_receptor LIKE ? OR usuario_entrega LIKE ? OR servicio LIKE ?)")
+        params.extend([term, term, term, term, term, term, term, term, term])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
-        SELECT id, folio, nombre_equipo, marca, modelo, inventario,
+        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
                servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_equipos
@@ -2723,6 +2736,7 @@ def get_entrega_equipo_pdf(id: int, download: bool = False):
         nombre_equipo TEXT NOT NULL,
         marca TEXT,
         modelo TEXT,
+        serie TEXT,
         inventario TEXT NOT NULL,
         servicio TEXT NOT NULL,
         nombre_receptor TEXT NOT NULL,
@@ -2732,8 +2746,12 @@ def get_entrega_equipo_pdf(id: int, download: bool = False):
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    try:
+        cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
+    except Exception:
+        pass
     cursor.execute("""
-        SELECT id, folio, nombre_equipo, marca, modelo, inventario,
+        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
                servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_equipos
@@ -2783,6 +2801,7 @@ def export_entregas_equipos_pdf(
         nombre_equipo TEXT NOT NULL,
         marca TEXT,
         modelo TEXT,
+        serie TEXT,
         inventario TEXT NOT NULL,
         servicio TEXT NOT NULL,
         nombre_receptor TEXT NOT NULL,
@@ -2792,6 +2811,10 @@ def export_entregas_equipos_pdf(
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    try:
+        cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
+    except Exception:
+        pass
 
     clauses = []
     params = []
@@ -2810,12 +2833,12 @@ def export_entregas_equipos_pdf(
 
     if q and q.strip():
         term = f"%{q.strip()}%"
-        clauses.append("(folio LIKE ? OR nombre_equipo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR inventario LIKE ? OR nombre_receptor LIKE ? OR usuario_entrega LIKE ? OR servicio LIKE ?)")
-        params.extend([term, term, term, term, term, term, term, term])
+        clauses.append("(folio LIKE ? OR nombre_equipo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR inventario LIKE ? OR nombre_receptor LIKE ? OR usuario_entrega LIKE ? OR servicio LIKE ?)")
+        params.extend([term, term, term, term, term, term, term, term, term])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
-        SELECT id, folio, nombre_equipo, marca, modelo, inventario,
+        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
                servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_equipos

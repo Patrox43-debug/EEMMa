@@ -43,8 +43,13 @@ def get_scaled_image(rel_path: str, max_width: float, max_height: float):
             buf.seek(0)
             return RLImage(buf, width=target_w, height=target_h)
         else:
-            clean_path = str(rel_path).lstrip("/").replace("/", os.sep)
-            abs_path = os.path.join(BASE_DIR, clean_path)
+            if os.path.isabs(str(rel_path)) and os.path.exists(str(rel_path)):
+                abs_path = str(rel_path)
+            elif os.path.exists(os.path.join(BASE_DIR, str(rel_path))):
+                abs_path = os.path.join(BASE_DIR, str(rel_path))
+            else:
+                clean_path = str(rel_path).lstrip("/").replace("/", os.sep)
+                abs_path = os.path.join(BASE_DIR, clean_path)
             if not os.path.exists(abs_path):
                 return None
             with PILImage.open(abs_path) as im:
@@ -1351,22 +1356,47 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     nombre_eq = record.get("nombre_equipo") or "No especificado"
     marca_eq = record.get("marca") or "N/A"
     modelo_eq = record.get("modelo") or "N/A"
-    inv_eq = record.get("inventario") or "S/I"
+    inv_eq = record.get("inventario") or ""
+    serie_eq = record.get("serie") or record.get("numero_serie") or ""
 
-    eq_data = [
-        [
-            Paragraph("Nombre del Equipo:", cell_lbl),
-            Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
-            Paragraph("N° de Inventario / Activo:", cell_lbl),
-            Paragraph(f"<b>{inv_eq}</b>", cell_val_bold)
-        ],
-        [
-            Paragraph("Marca:", cell_lbl),
-            Paragraph(marca_eq, cell_val),
-            Paragraph("Modelo:", cell_lbl),
-            Paragraph(modelo_eq, cell_val)
+    if serie_eq and inv_eq and serie_eq != inv_eq:
+        eq_data = [
+            [
+                Paragraph("Nombre del Equipo:", cell_lbl),
+                Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
+                Paragraph("N° de Serie:", cell_lbl),
+                Paragraph(f"<b>{serie_eq}</b>", cell_val_bold)
+            ],
+            [
+                Paragraph("Marca:", cell_lbl),
+                Paragraph(marca_eq, cell_val),
+                Paragraph("Modelo:", cell_lbl),
+                Paragraph(modelo_eq, cell_val)
+            ],
+            [
+                Paragraph("N° Inventario / Activo:", cell_lbl),
+                Paragraph(f"<b>{inv_eq}</b>", cell_val_bold),
+                Paragraph("", cell_lbl),
+                Paragraph("", cell_val)
+            ]
         ]
-    ]
+    else:
+        label_id = "N° de Serie / Inventario:" if (serie_eq or inv_eq) else "N° de Inventario / Activo:"
+        val_id = serie_eq or inv_eq or "S/I"
+        eq_data = [
+            [
+                Paragraph("Nombre del Equipo:", cell_lbl),
+                Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
+                Paragraph(label_id, cell_lbl),
+                Paragraph(f"<b>{val_id}</b>", cell_val_bold)
+            ],
+            [
+                Paragraph("Marca:", cell_lbl),
+                Paragraph(marca_eq, cell_val),
+                Paragraph("Modelo:", cell_lbl),
+                Paragraph(modelo_eq, cell_val)
+            ]
+        ]
 
     eq_table = Table(eq_data, colWidths=[120, 150, 140, 130])
     eq_table.setStyle(TableStyle([
