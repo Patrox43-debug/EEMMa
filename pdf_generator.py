@@ -1310,16 +1310,10 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     story = []
 
     # 1. ENCABEZADO INSTITUCIONAL
-    logo_hcv = get_scaled_image("static/hcv_logo.png", max_width=68, max_height=42) or \
-               get_scaled_image("static/hcv_logo.jpg", max_width=68, max_height=42)
-    logo_eemm = get_scaled_image("static/eemm_logo_clean.jpg", max_width=68, max_height=42) or \
-                get_scaled_image("static/eemm_logo.jpg", max_width=68, max_height=42)
+    logo_hcv = get_scaled_image("static/hcv_logo.png", max_width=75, max_height=45) or \
+               get_scaled_image("static/hcv_logo.jpg", max_width=75, max_height=45)
 
-    logos_cell = []
-    if logo_hcv: logos_cell.append(logo_hcv)
-    if logo_eemm: logos_cell.append(logo_eemm)
-
-    col_izq = Table([logos_cell], colWidths=[46] * len(logos_cell)) if logos_cell else Paragraph("<b>Hospital Claudio Vicuña</b>", tag_style)
+    col_izq = logo_hcv if logo_hcv else Paragraph("<b>Hospital Claudio Vicuña</b>", tag_style)
     col_centro = [
         Paragraph("HOSPITAL CLAUDIO VICUÑA", title_style),
         Paragraph("SUBDIRECCIÓN DE OPERACIONES · UNIDAD DE EQUIPOS MÉDICOS", subtitle_style),
@@ -1338,7 +1332,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         Paragraph(f"<b>Emisión:</b> {now_str}", meta_sub)
     ]
 
-    header_table = Table([[col_izq, col_centro, col_der]], colWidths=[100, 260, 180])
+    header_table = Table([[col_izq, col_centro, col_der]], colWidths=[80, 280, 180])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 0),
@@ -1468,50 +1462,60 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     story.append(obs_table)
     story.append(Spacer(1, 10))
 
-    # 5. CONSTANCIA DE CONFORMIDAD Y FIRMAS
-    closing_elements = [
-        Paragraph("4. CONSTANCIA DE RECEPCIÓN Y CONFORMIDAD TÉCNICA", sec_heading),
-        Spacer(1, 3),
-        Paragraph(
-            "Se deja constancia formal de que el equipamiento médico antes detallado ha sido entregado en el servicio clínico indicado, verificando su estado físico y operativo conforme a los protocolos institucionales de Ingeniería Clínica. A partir de este acto, el servicio receptor asume la custodia, resguardo y correcto uso del equipo.",
-            tag_style
-        ),
-        Spacer(1, 14)
-    ]
-
+    # 5. FIRMA DE RECEPCIÓN
     firma_ruta = record.get("firma_data") or record.get("firma")
-    sig_img = get_scaled_image(firma_ruta, max_width=180, max_height=65)
+    sig_img = get_scaled_image(firma_ruta, max_width=200, max_height=75)
+
+    tag_style_center = ParagraphStyle(
+        'DocTagEqCenter',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7.5,
+        leading=10,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#64748b')
+    )
 
     if sig_img:
         rec_sig_cell = [
-            sig_img,
-            Spacer(1, 2),
+            Table([[sig_img]], colWidths=[280], style=[
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]),
+            Spacer(1, 3),
+            Paragraph("__________________________________________", cell_txt_center),
+            Spacer(1, 3),
             Paragraph(f"<b>{nombre_rec}</b>", cell_txt_center),
-            Paragraph(f"Receptor / {servicio_rec}", tag_style)
+            Paragraph(f"Receptor Conforme / {servicio_rec}", tag_style_center)
         ]
     else:
         rec_sig_cell = [
-            Spacer(1, 35),
+            Spacer(1, 45),
             Paragraph("__________________________________________", cell_txt_center),
+            Spacer(1, 3),
             Paragraph(f"<b>{nombre_rec}</b>", cell_txt_center),
-            Paragraph(f"Receptor / {servicio_rec}", tag_style)
+            Paragraph(f"Receptor Conforme / {servicio_rec}", tag_style_center)
         ]
 
-    tec_sig_cell = [
-        Spacer(1, 35),
-        Paragraph("__________________________________________", cell_txt_center),
-        Paragraph(f"<b>{tecnico_ent}</b>", cell_txt_center),
-        Paragraph("Unidad de Equipos Médicos (EEMM) · Hospital Claudio Vicuña", tag_style)
-    ]
-
-    t_firmas = Table([[tec_sig_cell, rec_sig_cell]], colWidths=[270, 270])
+    # Tabla centrada para la firma de recepción (ancho total 540 pt)
+    t_firmas = Table([["", rec_sig_cell, ""]], colWidths=[130, 280, 130])
     t_firmas.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
-    closing_elements.append(t_firmas)
+
+    closing_elements = [
+        Spacer(1, 20),
+        t_firmas
+    ]
     story.append(KeepTogether(closing_elements))
 
     doc.build(story, onFirstPage=build_pdf_header_footer, onLaterPages=build_pdf_header_footer)
