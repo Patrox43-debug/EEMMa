@@ -417,13 +417,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.11.0",
-        "version_code": 27,
-        "release_tag": "v1.11.0",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.11.0/EEMM.apk",
+        "version_name": "1.11.1",
+        "version_code": 28,
+        "release_tag": "v1.11.1",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.11.1/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Nuevo módulo de Entrega de Equipos Médicos a Servicios Clínicos.\n• Formulario con datos de equipo (nombre, marca, modelo, inventario), servicio clínico oficial, receptor y firma digital.\n• Historial de entregas con generación de actas oficiales individuales en PDF y reporte consolidado con filtros.\n• Descarga y visualización directa de documentos en PDF.",
-        "published_at": "2026-11-07T13:30:00-03:00"
+        "notes": "• Actualización institucional: estandarización del nombre oficial 'Hospital Claudio Vicuña' en todos los reportes, informes técnicos, protocolos y actas PDF.\n• Optimización de membretes, firmas y pies de página oficiales.",
+        "published_at": "2026-11-09T07:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -1711,7 +1711,7 @@ def export_inventario_excel(
 
         # Encabezado corporativo
         ws.merge_cells("A1:J1")
-        ws["A1"] = "HOSPITAL CLÍNICO - REPORTE GENERAL DE BODEGA E INSUMOS"
+        ws["A1"] = "HOSPITAL CLAUDIO VICUÑA - REPORTE GENERAL DE BODEGA E INSUMOS"
         ws["A1"].font = font_title
         ws["A1"].alignment = Alignment(vertical="center")
 

@@ -71,7 +71,7 @@ def build_pdf_header_footer(canvas, doc):
     canvas.line(36, 30, 576, 30)
     
     # Texto pie de página
-    canvas.drawString(36, 20, "EEMM · Sistema de Gestión de Equipos Médicos | Documento Oficial de Inspección")
+    canvas.drawString(36, 20, "Hospital Claudio Vicuña · Unidad de Equipos Médicos (EEMM)")
     canvas.drawRightString(576, 20, f"Pág. {doc.page}")
     canvas.restoreState()
 
@@ -184,11 +184,11 @@ def generate_chequeo_pdf(record: dict) -> bytes:
     logo_img = get_scaled_image("static/hcv_logo.png", max_width=44, max_height=44)
 
     header_left = [
-        Paragraph("HOSPITAL CLÍNICO · INGENIERÍA CLÍNICA", title_style),
+        Paragraph("HOSPITAL CLAUDIO VICUÑA", title_style),
         Spacer(1, 2),
         Paragraph("REPORTE OFICIAL DE CHEQUEO PREVENTIVO", subtitle_style),
         Spacer(1, 1),
-        Paragraph("Control Técnico y Recepción de Equipos Médicos", tag_style)
+        Paragraph("Unidad de Equipos Médicos · Control Técnico Oficial", tag_style)
     ]
 
     id_reg = record.get("id_registro", 0)
@@ -608,11 +608,11 @@ def generate_servicio_pdf(record: dict) -> bytes:
     logo_img = get_scaled_image("static/hcv_logo.png", max_width=44, max_height=44)
 
     header_left = [
-        Paragraph("HOSPITAL CLÍNICO · INGENIERÍA CLÍNICA", title_style),
+        Paragraph("HOSPITAL CLAUDIO VICUÑA", title_style),
         Spacer(1, 2),
         Paragraph("INFORME OFICIAL DE REVISIÓN CLÍNICA POR SERVICIO", subtitle_style),
         Spacer(1, 1),
-        Paragraph("Inspección Consolidada y Control Preventivo de Equipamiento", tag_style)
+        Paragraph("Unidad de Equipos Médicos · Control Preventivo Consolidado", tag_style)
     ]
 
     header_right = [
@@ -869,7 +869,7 @@ def generate_servicio_pdf(record: dict) -> bytes:
 def generate_entregas_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: str = None) -> bytes:
     """
     Genera un informe PDF oficial consolidado de entregas de accesorios e insumos clínicos
-    por rango de fechas para el Hospital de Curicó (Ingeniería Clínica EEMM).
+    por rango de fechas para el Hospital Claudio Vicuña (Ingeniería Clínica EEMM).
     """
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -979,10 +979,10 @@ def generate_entregas_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: s
     if logo_hcv:
         col_izq.append(logo_hcv)
     else:
-        col_izq.append(Paragraph("<b>HOSPITAL DE CURICÓ</b>", subtitle_style))
+        col_izq.append(Paragraph("<b>HOSPITAL CLAUDIO VICUÑA</b>", subtitle_style))
     
     col_centro = [
-        Paragraph("HOSPITAL DE CURICÓ — EEMM", title_style),
+        Paragraph("HOSPITAL CLAUDIO VICUÑA — EEMM", title_style),
         Spacer(1, 1),
         Paragraph("CONTROL DE ENTREGA Y DESPACHO DE ACCESORIOS E INSUMOS", subtitle_style),
         Spacer(1, 1),
@@ -1182,7 +1182,7 @@ def generate_entregas_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: s
     firmas_cierre = [
         [
             Paragraph("__________________________________________<br/><b>Responsable de Bodega / Ingeniería Clínica</b><br/>Unidad de Equipos Médicos", cell_txt_center),
-            Paragraph("__________________________________________<br/><b>Supervisión / Jefatura de Servicio</b><br/>Hospital de Curicó", cell_txt_center)
+            Paragraph("__________________________________________<br/><b>Supervisión / Jefatura de Servicio</b><br/>Hospital Claudio Vicuña", cell_txt_center)
         ]
     ]
     t_firmas = Table(firmas_cierre, colWidths=[270, 270])
@@ -1202,7 +1202,7 @@ def generate_entregas_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: s
 
 def generate_entrega_equipo_pdf(record: dict) -> bytes:
     """
-    Genera el acta oficial de entrega individual de equipo médico para el Hospital de Curicó.
+    Genera el acta oficial de entrega individual de equipo médico para el Hospital Claudio Vicuña.
     Incluye datos del equipo (nombre, marca, modelo, inventario), servicio de destino,
     funcionario receptor, técnico responsable de EEMM, firma digital y condiciones de entrega.
     """
@@ -1314,9 +1314,9 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     if logo_hcv: logos_cell.append(logo_hcv)
     if logo_eemm: logos_cell.append(logo_eemm)
 
-    col_izq = Table([logos_cell], colWidths=[46] * len(logos_cell)) if logos_cell else Paragraph("<b>HCV / EEMM</b>", tag_style)
+    col_izq = Table([logos_cell], colWidths=[46] * len(logos_cell)) if logos_cell else Paragraph("<b>Hospital Claudio Vicuña</b>", tag_style)
     col_centro = [
-        Paragraph("HOSPITAL DE CURICÓ SAN JUAN DE DIOS", title_style),
+        Paragraph("HOSPITAL CLAUDIO VICUÑA", title_style),
         Paragraph("SUBDIRECCIÓN DE OPERACIONES · UNIDAD DE EQUIPOS MÉDICOS", subtitle_style),
         Paragraph("Ingeniería Clínica & Gestión de Tecnología Sanitaria", tag_style)
     ]
@@ -1471,7 +1471,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         Spacer(1, 35),
         Paragraph("__________________________________________", cell_txt_center),
         Paragraph(f"<b>{tecnico_ent}</b>", cell_txt_center),
-        Paragraph("Unidad de Equipos Médicos (EEMM) · Hospital de Curicó", tag_style)
+        Paragraph("Unidad de Equipos Médicos (EEMM) · Hospital Claudio Vicuña", tag_style)
     ]
 
     t_firmas = Table([[tec_sig_cell, rec_sig_cell]], colWidths=[270, 270])
@@ -1492,7 +1492,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
 def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: str = None, servicio: str = None) -> bytes:
     """
     Genera un informe PDF oficial consolidado de entregas de equipos médicos
-    por rango de fechas y/o servicio clínico para el Hospital de Curicó.
+    por rango de fechas y/o servicio clínico para el Hospital Claudio Vicuña.
     """
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -1595,9 +1595,9 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
     if logo_hcv: logos_cell.append(logo_hcv)
     if logo_eemm: logos_cell.append(logo_eemm)
 
-    col_izq = Table([logos_cell], colWidths=[46] * len(logos_cell)) if logos_cell else Paragraph("<b>HCV / EEMM</b>", tag_style)
+    col_izq = Table([logos_cell], colWidths=[46] * len(logos_cell)) if logos_cell else Paragraph("<b>Hospital Claudio Vicuña</b>", tag_style)
     col_centro = [
-        Paragraph("HOSPITAL DE CURICÓ SAN JUAN DE DIOS", title_style),
+        Paragraph("HOSPITAL CLAUDIO VICUÑA", title_style),
         Paragraph("SUBDIRECCIÓN DE OPERACIONES · UNIDAD DE EQUIPOS MÉDICOS", subtitle_style),
         Paragraph("Historial Oficial de Entregas y Asignaciones de Equipamiento Médico", tag_style)
     ]
@@ -1755,7 +1755,7 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
     # 4. CIERRE INSTITUCIONAL Y DECLARACIÓN
     closing_elements = [
         Paragraph(
-            "<b>Nota Legal e Institucional:</b> La presente acta certifica la entrega técnica y recepción conforme del equipamiento médico detallado para el servicio hospitalario correspondiente, de acuerdo a las normativas de Ingeniería Clínica y gestión de activos del Hospital de Curicó.",
+            "<b>Nota Legal e Institucional:</b> La presente acta certifica la entrega técnica y recepción conforme del equipamiento médico detallado para el servicio hospitalario correspondiente, de acuerdo a las normativas de Ingeniería Clínica y gestión de activos del Hospital Claudio Vicuña.",
             tag_style
         ),
         Spacer(1, 12)
@@ -1763,8 +1763,8 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
 
     firmas_cierre = [
         [
-            Paragraph("__________________________________________<br/><b>Ingeniería Clínica / Unidad de Equipos Médicos</b><br/>Hospital de Curicó", cell_txt_center),
-            Paragraph("__________________________________________<br/><b>Jefatura / Supervisión de Servicio Clínico</b><br/>Hospital de Curicó", cell_txt_center)
+            Paragraph("__________________________________________<br/><b>Ingeniería Clínica / Unidad de Equipos Médicos</b><br/>Hospital Claudio Vicuña", cell_txt_center),
+            Paragraph("__________________________________________<br/><b>Jefatura / Supervisión de Servicio Clínico</b><br/>Hospital Claudio Vicuña", cell_txt_center)
         ]
     ]
     t_firmas = Table(firmas_cierre, colWidths=[270, 270])
