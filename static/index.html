@@ -84,29 +84,7 @@
 
             <!-- Acciones -->
             <div class="dropdown-menu-items">
-              <!-- Conmutar entre Módulo Bodega y Módulo Chequeo -->
-              <button type="button" class="dropdown-item dropdown-item-module-switch" id="btn-dropdown-switch-module" onclick="app.toggleModuleSwitch()">
-                <span class="dropdown-module-icon-container">
-                  <svg id="dropdown-icon-to-bodega" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                  </svg>
-                  <svg id="dropdown-icon-to-chequeo" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                </span>
-                <div class="dropdown-item-content">
-                  <span class="dropdown-item-title" id="dropdown-module-switch-title">Cambiar a Módulo Bodega</span>
-                  <span class="dropdown-item-desc" id="dropdown-module-switch-desc">Ir a Insumos y Estanterías</span>
-                </div>
-              </button>
-
-              <!-- Opción: Volver a Selección de Módulos (Sub Menú) -->
+              <!-- Opción: Volver a Selección de Módulos (Menú Principal) -->
               <button type="button" class="dropdown-item" id="btn-dropdown-select-modules" onclick="app.goToModuleSelector()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="3" width="7" height="7"></rect>
@@ -116,7 +94,7 @@
                 </svg>
                 <div class="dropdown-item-content">
                   <span class="dropdown-item-title">Menú Principal de Áreas</span>
-                  <span class="dropdown-item-desc">Ver opciones de Chequeos y Bodega</span>
+                  <span class="dropdown-item-desc">Volver al menú de secciones</span>
                 </div>
               </button>
 
@@ -186,7 +164,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>Hospital Claudio Vicuña · <strong>v1.12.1</strong></span>
+              <span>Hospital Claudio Vicuña · <strong>v1.12.2</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -206,72 +184,16 @@
       </div>
     </div>
 
-    <!-- Navegación por Pestañas -->
-    <nav class="nav-tabs" id="app-nav" style="display: none;">
-      <!-- Pestaña Tareas Diarias (Al principio de todas en el menú) -->
-      <button class="nav-tab" data-tab="tareas-diarias" id="nav-tab-tareas-diarias" onclick="app.navigate('tareas-diarias')" title="Bitácora de trabajos del día y reportes diarios/semanales por técnico">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path><rect x="9" y="3" width="6" height="4" rx="1"></rect><path d="M9 12l2 2 4-4"></path></svg>
-        Tareas Diarias
+    <!-- Barra mínima de regreso al Menú Principal (solo visible dentro de una sección abierta) -->
+    <div id="section-back-bar" style="display: none; background-color: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 0.5rem 1.25rem; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+      <button type="button" id="btn-back-to-menu" class="btn btn-outline btn-sm" onclick="app.goToModuleSelector()" style="display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        Menú Principal
       </button>
-
-      <!-- Pestañas del Módulo Chequeos & Equipos -->
-      <div id="nav-tabs-chequeo" class="nav-tabs-group" style="display: flex; gap: 0.25rem; align-items: center;">
-        <button class="nav-tab active" data-tab="chequeo" onclick="app.navigate('chequeo')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-          Nuevo Chequeo
-        </button>
-        <button class="nav-tab" data-tab="historial" onclick="app.navigate('historial')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
-          Historial
-        </button>
-        <button class="nav-tab" data-tab="equipos" onclick="app.navigate('equipos')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-          Equipos (2.553)
-        </button>
-        <button class="nav-tab" data-tab="chequeo-servicio" onclick="app.navigate('chequeo-servicio')" title="Chequeo preventivo organizado por servicio clínico">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-3"></path><path d="M9 9h1"></path><path d="M9 13h1"></path></svg>
-          Chequeo por Servicio
-        </button>
-      </div>
-
-      <!-- Pestañas del Módulo Bodega & Insumos -->
-      <div id="nav-tabs-bodega" class="nav-tabs-group" style="display: none; gap: 0.25rem; align-items: center;">
-        <button class="nav-tab active" data-tab="inventario" onclick="app.navigate('inventario')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-          Bodega / Insumos
-        </button>
-      </div>
-
-      <!-- Pestaña Dashboard del Proyecto (Visible para Administradores e Ingenieros) -->
-      <button class="nav-tab" data-tab="dashboard" id="nav-tab-dashboard" style="display: none;" onclick="app.navigate('dashboard')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
-        Dashboard
-      </button>
-
-      <!-- Pestaña Administración (solo visible para Administradores) -->
-      <button class="nav-tab" data-tab="admin" id="nav-tab-admin" style="display: none;" onclick="app.navigate('admin')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
-        Administración
-      </button>
-
-      <!-- Pestaña Entrega de Accesorios (Disponible para Todos los Usuarios) -->
-      <button class="nav-tab" data-tab="entregas" id="nav-tab-entregas" onclick="app.navigate('entregas')" title="Entrega de accesorios e insumos a servicios clínicos">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
-        Entrega Accesorios
-      </button>
-
-      <!-- Pestaña Entrega de Equipos (Disponible para Todos los Usuarios) -->
-      <button class="nav-tab" data-tab="entrega-equipos" id="nav-tab-entrega-equipos" onclick="app.navigate('entrega-equipos')" title="Entrega formal de equipos médicos a servicios clínicos">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-        Entrega Equipos
-      </button>
-
-      <!-- Botón de Salto Rápido entre Módulos en la Barra -->
-      <button type="button" class="nav-tab nav-tab-switcher" id="btn-nav-switch-module" onclick="app.toggleModuleSwitch()" title="Cambiar de módulo rápidamente">
-        <span id="nav-switch-label">Ir a Bodega</span>
-        <svg id="nav-switch-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-      </button>
-    </nav>
+      <span id="section-current-label" class="badge" style="background: var(--bg-subtle); color: var(--text-secondary); font-weight: 700; font-size: 0.78rem; padding: 0.3rem 0.75rem; border: 1px solid var(--border);">
+        Sección Actual
+      </span>
+    </div>
 
     <!-- Contenedor Principal -->
     <main class="main-content">
@@ -300,7 +222,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            Hospital Claudio Vicuña · Versión <strong>1.12.1</strong>
+            Hospital Claudio Vicuña · Versión <strong>1.12.2</strong>
           </div>
         </form>
       </section>
@@ -315,7 +237,7 @@
             <div class="module-selector-welcome">
               <span class="module-selector-badge">Panel Principal</span>
               <h1 class="module-selector-title" id="module-selector-greeting">Áreas de Trabajo EEMM</h1>
-              <p class="module-selector-subtitle">Selecciona el módulo en el que vas a operar. Podrás alternar entre ellos en todo momento desde el menú superior.</p>
+              <p class="module-selector-subtitle">Selecciona el área o sección en la que deseas trabajar.</p>
             </div>
           </div>
 

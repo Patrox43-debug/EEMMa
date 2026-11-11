@@ -476,13 +476,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.1",
-        "version_code": 30,
-        "release_tag": "v1.12.1",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.1/EEMM.apk",
+        "version_name": "1.12.2",
+        "version_code": 31,
+        "release_tag": "v1.12.2",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.2/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Entrega múltiple de equipos médicos: permite agregar varios equipos con sus series/inventarios en una misma acta oficial con firma digital y PDF detallado.\n• Sección 'Tareas Diarias' al principio del menú con reportes diarios y semanales por técnico.",
-        "published_at": "2026-11-10T21:25:00-03:00"
+        "notes": "• Navegación limpia por sección: eliminada la barra superior global con el listado de todas las secciones; al abrir cada módulo solo se muestra esa sección y el acceso directo para volver al Menú Principal.",
+        "published_at": "2026-11-11T20:20:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:

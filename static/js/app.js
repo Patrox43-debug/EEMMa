@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.1";
+        this.currentAppVersion = "1.12.2";
       }
     } else {
-      this.currentAppVersion = "1.12.1";
+      this.currentAppVersion = "1.12.2";
     }
 
     setTimeout(() => {
@@ -566,11 +566,28 @@ const app = {
       if (el) el.style.display = v === tabName ? "block" : "none";
     });
 
-    const appNav = document.getElementById("app-nav");
+    const sectionLabels = {
+      "tareas-diarias": "Tareas Diarias",
+      "chequeo": "Nuevo Chequeo",
+      "chequeo-servicio": "Chequeo por Servicio",
+      "historial": "Historial de Registros",
+      "equipos": "Catálogo de Equipos (2.553)",
+      "inventario": "Bodega / Insumos",
+      "entregas": "Entrega de Accesorios",
+      "entrega-equipos": "Entrega de Equipos",
+      "dashboard": "Dashboard del Proyecto",
+      "admin": "Panel de Administración"
+    };
+
+    const backBar = document.getElementById("section-back-bar");
+    const backBarLabel = document.getElementById("section-current-label");
+
     if (tabName === "login" || tabName === "modulo-selector") {
-      if (appNav) appNav.style.display = "none";
+      if (backBar) backBar.style.display = "none";
     } else if (this.currentUser) {
-      if (appNav) appNav.style.display = "flex";
+      if (backBar) backBar.style.display = "flex";
+      if (backBarLabel) backBarLabel.textContent = sectionLabels[tabName] || "Sección Actual";
+
       // Mantener sincronizado el módulo activo según la pestaña navegada
       if (tabName === "tareas-diarias") {
         this.currentModule = "tareas-diarias";
@@ -585,15 +602,6 @@ const app = {
       }
       this.updateModuleSwitcherUI();
     }
-
-    // Actualizar tabs activas en la barra
-    document.querySelectorAll(".nav-tab").forEach((tab) => {
-      if (tab.dataset.tab === tabName) {
-        tab.classList.add("active");
-      } else {
-        tab.classList.remove("active");
-      }
-    });
 
     // Cargar datos según la vista
     if (tabName === "tareas-diarias") {
@@ -846,7 +854,9 @@ const app = {
     const themeToggleBtn = document.getElementById("theme-toggle-btn");
     if (themeToggleBtn) themeToggleBtn.style.display = "inline-flex";
 
-    document.getElementById("app-nav").style.display = "none";
+    const backBar = document.getElementById("section-back-bar");
+    if (backBar) backBar.style.display = "none";
+
     this.navigate("login");
     this.showToast("Has cerrado sesión.", "info");
   },
@@ -972,13 +982,8 @@ const app = {
   selectModule(moduleName, targetTab) {
     this.currentModule = moduleName;
     localStorage.setItem("eemm_current_module", moduleName);
-    this.updateModuleSwitcherUI();
 
-    // Mostrar barra de navegación adaptada
-    const appNav = document.getElementById("app-nav");
-    if (appNav) appNav.style.display = "flex";
-
-    // Navegar a la pestaña solicitada dentro del módulo
+    // Navegar a la pestaña solicitada dentro del módulo (aislada sin barra de otras secciones)
     if (targetTab) {
       this.navigate(targetTab);
     } else {
@@ -998,25 +1003,20 @@ const app = {
         }
       }
     }
+    window.scrollTo({ top: 0, behavior: "smooth" });
   },
 
   toggleModuleSwitch() {
     this.closeUserDropdown();
-    if (this.currentModule === "bodega") {
-      const target = (this.currentUser && this.currentUser.rol === "ingeniero") ? "dashboard" : "chequeo";
-      this.selectModule("chequeo", target);
-      this.showToast(this.currentUser && this.currentUser.rol === "ingeniero" ? "Cambiado a Módulo de Supervisión" : "Cambiado a Módulo Chequeos y Equipos", "info");
-    } else {
-      this.selectModule("bodega", "inventario");
-      this.showToast("Cambiado a Módulo Bodega e Insumos", "info");
-    }
+    this.goToModuleSelector();
   },
 
   goToModuleSelector() {
     this.closeUserDropdown();
-    const appNav = document.getElementById("app-nav");
-    if (appNav) appNav.style.display = "none";
+    const backBar = document.getElementById("section-back-bar");
+    if (backBar) backBar.style.display = "none";
     this.navigate("modulo-selector");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   },
 
   updateModuleSwitcherUI() {
@@ -7562,7 +7562,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.1",
+  currentAppVersion: "1.12.2",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
