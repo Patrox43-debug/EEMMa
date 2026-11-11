@@ -184,12 +184,25 @@ def _ensure_tareas_tables(cursor):
         equipo TEXT,
         descripcion TEXT NOT NULL,
         estado_tarea TEXT NOT NULL DEFAULT 'Completada',
+        fecha_resolucion DATETIME,
+        resuelta_por TEXT,
+        nota_resolucion TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (reporte_id) REFERENCES tareas_diarias_reportes(id) ON DELETE CASCADE
     );
     """)
+    for col_stmt in [
+        "ALTER TABLE tareas_diarias_items ADD COLUMN fecha_resolucion DATETIME;",
+        "ALTER TABLE tareas_diarias_items ADD COLUMN resuelta_por TEXT;",
+        "ALTER TABLE tareas_diarias_items ADD COLUMN nota_resolucion TEXT;"
+    ]:
+        try:
+            cursor.execute(col_stmt)
+        except Exception:
+            pass
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_td_items_rep ON tareas_diarias_items(reporte_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_td_items_est ON tareas_diarias_items(estado_tarea);")
 
 
 def ensure_db_initialized():
@@ -476,13 +489,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.2",
-        "version_code": 31,
-        "release_tag": "v1.12.2",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.2/EEMM.apk",
+        "version_name": "1.12.3",
+        "version_code": 32,
+        "release_tag": "v1.12.3",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.3/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Navegación limpia por sección: eliminada la barra superior global con el listado de todas las secciones; al abrir cada módulo solo se muestra esa sección y el acceso directo para volver al Menú Principal.",
-        "published_at": "2026-11-11T20:20:00-03:00"
+        "notes": "• En Tareas Diarias: nuevas vistas integradas de 'Pendientes Anteriores' (con resolución rápida en un toque) y 'Tareas Resueltas' con filtros por técnico y fecha.",
+        "published_at": "2026-11-11T20:38:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -2978,6 +2991,9 @@ def _fetch_reporte_completo(cursor, reporte_id: int) -> Optional[dict]:
     rep = dict(row)
     cursor.execute("""
         SELECT id, reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
+               fecha_resolucion,
+               strftime('%d/%m/%Y %H:%M', fecha_resolucion) as fecha_resolucion_fmt,
+               resuelta_por, nota_resolucion,
                strftime('%d/%m/%Y %H:%M', created_at) as created_fmt
         FROM tareas_diarias_items
         WHERE reporte_id = ?
@@ -3124,11 +3140,15 @@ def add_tarea_diaria_item(item: TareaDiariaItemCreate):
             detail="El reporte diario para esta fecha ya fue finalizado y no permite agregar más tareas."
         )
 
-    cursor.execute("""
+    fecha_res_expr = "datetime('now', 'localtime')" if est_val.lower() == "completada" else "NULL"
+    resuelta_por_val = tec if est_val.lower() == "completada" else None
+
+    cursor.execute(f"""
         INSERT INTO tareas_diarias_items (
-            reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
-    """, (rep["id"], hora_val, serv, tipo_val, eq_val, desc, est_val))
+            reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
+            fecha_resolucion, resuelta_por, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, {fecha_res_expr}, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+    """, (rep["id"], hora_val, serv, tipo_val, eq_val, desc, est_val, resuelta_por_val))
 
     cursor.execute(
         "UPDATE tareas_diarias_reportes SET updated_at = datetime('now', 'localtime') WHERE id = ?",
@@ -3167,9 +3187,13 @@ def update_tarea_diaria_item(item_id: int, item: TareaDiariaItemUpdate):
         conn.close()
         raise HTTPException(status_code=400, detail="El reporte diario ya fue realizado y está bloqueado para edición.")
 
-    cursor.execute("""
+    new_est = (item.estado_tarea or "Completada").strip()
+    fecha_res_sql = "COALESCE(fecha_resolucion, datetime('now', 'localtime'))" if new_est.lower() == "completada" else "NULL"
+
+    cursor.execute(f"""
         UPDATE tareas_diarias_items
         SET hora = ?, servicio = ?, tipo_tarea = ?, equipo = ?, descripcion = ?, estado_tarea = ?,
+            fecha_resolucion = {fecha_res_sql},
             updated_at = datetime('now', 'localtime')
         WHERE id = ?
     """, (
@@ -3178,7 +3202,7 @@ def update_tarea_diaria_item(item_id: int, item: TareaDiariaItemUpdate):
         (item.tipo_tarea or "Mantención Correctiva").strip(),
         (item.equipo or "").strip(),
         desc,
-        (item.estado_tarea or "Completada").strip(),
+        new_est,
         item_id
     ))
     cursor.execute(
@@ -3382,6 +3406,193 @@ def list_tareas_diarias_historial(
 
     conn.close()
     return [r for r in reportes if r["total_items"] > 0 or r["estado"] == "FINALIZADO"]
+
+
+class TareaDiariaResolver(BaseModel):
+    tecnico_resuelve: Optional[str] = None
+    nota_resolucion: Optional[str] = ""
+    registrar_en_jornada_fecha: Optional[str] = None
+
+
+def _query_tareas_items_joined(
+    cursor,
+    is_resolved: bool,
+    tecnico: Optional[str] = None,
+    fecha_antes_de: Optional[str] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 120
+) -> List[dict]:
+    """Consulta tareas individuales (pendientes de días previos o resueltas/completadas)."""
+    clauses = []
+    params: List[Any] = []
+
+    if is_resolved:
+        clauses.append("LOWER(TRIM(ti.estado_tarea)) = 'completada'")
+    else:
+        clauses.append("LOWER(TRIM(ti.estado_tarea)) != 'completada'")
+        if fecha_antes_de and fecha_antes_de.strip():
+            clauses.append("date(tr.fecha) < date(?)")
+            params.append(fecha_antes_de.strip()[:10])
+
+    if tecnico and tecnico.strip() and tecnico.strip().upper() != "TODOS":
+        clauses.append("tr.tecnico = ?")
+        params.append(tecnico.strip())
+
+    if fecha_inicio and fecha_inicio.strip():
+        clauses.append("date(tr.fecha) >= date(?)")
+        params.append(fecha_inicio.strip()[:10])
+
+    if fecha_fin and fecha_fin.strip():
+        clauses.append("date(tr.fecha) <= date(?)")
+        params.append(fecha_fin.strip()[:10])
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        clauses.append(
+            "(ti.servicio LIKE ? OR ti.descripcion LIKE ? OR COALESCE(ti.equipo, '') LIKE ? "
+            "OR ti.tipo_tarea LIKE ? OR tr.tecnico LIKE ? OR COALESCE(ti.nota_resolucion, '') LIKE ?)"
+        )
+        params.extend([term] * 6)
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    order_sql = (
+        "COALESCE(ti.fecha_resolucion, tr.fecha || ' ' || COALESCE(ti.hora, '00:00')) DESC, ti.id DESC"
+        if is_resolved
+        else "tr.fecha DESC, COALESCE(ti.hora, '00:00') DESC, ti.id DESC"
+    )
+
+    cursor.execute(f"""
+        SELECT ti.id, ti.reporte_id, ti.hora, ti.servicio, ti.tipo_tarea, ti.equipo,
+               ti.descripcion, ti.estado_tarea,
+               ti.fecha_resolucion,
+               strftime('%d/%m/%Y %H:%M', ti.fecha_resolucion) as fecha_resolucion_fmt,
+               ti.resuelta_por, ti.nota_resolucion,
+               tr.fecha,
+               strftime('%d/%m/%Y', tr.fecha) as fecha_fmt,
+               tr.tecnico, tr.folio, tr.estado as reporte_estado
+        FROM tareas_diarias_items ti
+        JOIN tareas_diarias_reportes tr ON tr.id = ti.reporte_id
+        {where_sql}
+        ORDER BY {order_sql}
+        LIMIT ?
+    """, tuple(params + [limit]))
+    return [dict(r) for r in cursor.fetchall()]
+
+
+@app.get("/api/tareas-diarias/pendientes")
+def list_tareas_pendientes_anteriores(
+    tecnico: Optional[str] = None,
+    fecha_referencia: Optional[str] = None,
+    limit: int = 120
+):
+    """Retorna tareas pendientes o en proceso que quedaron de días anteriores a fecha_referencia."""
+    ref_norm = _norm_fecha_tarea(fecha_referencia)
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    rows = _query_tareas_items_joined(
+        cursor,
+        is_resolved=False,
+        tecnico=tecnico,
+        fecha_antes_de=ref_norm,
+        limit=limit
+    )
+    conn.close()
+    return rows
+
+
+@app.get("/api/tareas-diarias/resueltas")
+def list_tareas_resueltas(
+    tecnico: Optional[str] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 120
+):
+    """Retorna tareas completadas/resueltas, incluyendo las que quedaron pendientes de días previos."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    rows = _query_tareas_items_joined(
+        cursor,
+        is_resolved=True,
+        tecnico=tecnico,
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        q=q,
+        limit=limit
+    )
+    conn.close()
+    return rows
+
+
+@app.post("/api/tareas-diarias/items/{item_id}/resolver")
+def resolve_tarea_pendiente(item_id: int, payload: TareaDiariaResolver):
+    """Marca como resuelta (Completada) una tarea pendiente de días anteriores y opcionalmente registra seguimiento hoy."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+
+    cursor.execute("""
+        SELECT ti.id, ti.reporte_id, ti.servicio, ti.tipo_tarea, ti.equipo, ti.descripcion, ti.estado_tarea,
+               tr.tecnico, strftime('%d/%m/%Y', tr.fecha) as fecha_orig_fmt
+        FROM tareas_diarias_items ti
+        JOIN tareas_diarias_reportes tr ON tr.id = ti.reporte_id
+        WHERE ti.id = ?
+    """, (item_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Tarea pendiente no encontrada")
+
+    item_info = dict(row)
+    quien = (payload.tecnico_resuelve or item_info["tecnico"] or "Técnico EEMM").strip()
+    nota = (payload.nota_resolucion or "").strip()
+
+    cursor.execute("""
+        UPDATE tareas_diarias_items
+        SET estado_tarea = 'Completada',
+            fecha_resolucion = datetime('now', 'localtime'),
+            resuelta_por = ?,
+            nota_resolucion = ?,
+            updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+    """, (quien, nota, item_id))
+
+    added_to_today = False
+    if payload.registrar_en_jornada_fecha and payload.registrar_en_jornada_fecha.strip():
+        fecha_hoy = _norm_fecha_tarea(payload.registrar_en_jornada_fecha)
+        rep_hoy = _get_or_create_draft_reporte(cursor, quien, fecha_hoy)
+        if rep_hoy["estado"] != "FINALIZADO":
+            desc_hoy = f"Resolución tarea pendiente del {item_info['fecha_orig_fmt']}: {item_info['descripcion']}"
+            if nota:
+                desc_hoy += f" ({nota})"
+            cursor.execute("""
+                INSERT INTO tareas_diarias_items (
+                    reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
+                    fecha_resolucion, resuelta_por, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'Completada', datetime('now', 'localtime'), ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+            """, (
+                rep_hoy["id"],
+                datetime.now().strftime("%H:%M"),
+                item_info["servicio"],
+                item_info["tipo_tarea"],
+                item_info["equipo"] or "",
+                desc_hoy,
+                quien
+            ))
+            added_to_today = True
+
+    conn.commit()
+    conn.close()
+    return {
+        "status": "ok",
+        "item_id": item_id,
+        "added_to_today": added_to_today,
+        "message": "Tarea marcada como resuelta exitosamente."
+    }
 
 
 def _pdf_response(pdf_bytes: bytes, filename: str, download: bool) -> Response:

@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.2";
+        this.currentAppVersion = "1.12.3";
       }
     } else {
-      this.currentAppVersion = "1.12.2";
+      this.currentAppVersion = "1.12.3";
     }
 
     setTimeout(() => {
@@ -6848,41 +6848,31 @@ const app = {
   },
 
   switchTareasDiariasSubTab(subTab) {
-    const vReg = document.getElementById("tareas-diarias-subview-registro");
-    const vRep = document.getElementById("tareas-diarias-subview-reportes");
-    const btnReg = document.getElementById("btn-tab-td-registro");
-    const btnRep = document.getElementById("btn-tab-td-reportes");
+    const tabConfig = {
+      registro: { view: "tareas-diarias-subview-registro", btn: "btn-tab-td-registro", color: "#7c3aed" },
+      pendientes: { view: "tareas-diarias-subview-pendientes", btn: "btn-tab-td-pendientes", color: "#d97706" },
+      resueltas: { view: "tareas-diarias-subview-resueltas", btn: "btn-tab-td-resueltas", color: "#10b981" },
+      reportes: { view: "tareas-diarias-subview-reportes", btn: "btn-tab-td-reportes", color: "#7c3aed" }
+    };
 
-    if (subTab === "registro") {
-      if (vReg) vReg.style.display = "block";
-      if (vRep) vRep.style.display = "none";
-      if (btnReg) {
-        btnReg.className = "btn btn-primary btn-sm";
-        btnReg.style.background = "#7c3aed";
-        btnReg.style.borderColor = "#7c3aed";
-        btnReg.style.color = "white";
+    Object.entries(tabConfig).forEach(([key, cfg]) => {
+      const viewEl = document.getElementById(cfg.view);
+      const btnEl = document.getElementById(cfg.btn);
+      const active = key === subTab;
+      if (viewEl) viewEl.style.display = active ? "block" : "none";
+      if (btnEl) {
+        btnEl.className = active ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm";
+        btnEl.style.background = active ? cfg.color : "";
+        btnEl.style.borderColor = active ? cfg.color : "";
+        btnEl.style.color = active ? "white" : "";
       }
-      if (btnRep) {
-        btnRep.className = "btn btn-outline btn-sm";
-        btnRep.style.background = "";
-        btnRep.style.borderColor = "";
-        btnRep.style.color = "";
-      }
-    } else {
-      if (vReg) vReg.style.display = "none";
-      if (vRep) vRep.style.display = "block";
-      if (btnReg) {
-        btnReg.className = "btn btn-outline btn-sm";
-        btnReg.style.background = "";
-        btnReg.style.borderColor = "";
-        btnReg.style.color = "";
-      }
-      if (btnRep) {
-        btnRep.className = "btn btn-primary btn-sm";
-        btnRep.style.background = "#7c3aed";
-        btnRep.style.borderColor = "#7c3aed";
-        btnRep.style.color = "white";
-      }
+    });
+
+    if (subTab === "pendientes") {
+      this.loadTareasPendientes();
+    } else if (subTab === "resueltas") {
+      this.loadTareasResueltas();
+    } else if (subTab === "reportes") {
       this.loadHistorialTareasDiarias();
     }
   },
@@ -6904,7 +6894,9 @@ const app = {
 
   async loadTecnicosTareasSelects() {
     const activeSel = document.getElementById("td-active-tecnico");
-    const repSel = document.getElementById("td-rep-tecnico");
+    const filterSelects = ["td-rep-tecnico", "td-pend-tecnico", "td-res-tecnico"]
+      .map(id => document.getElementById(id))
+      .filter(Boolean);
     const currentName = (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "Técnico EEMM";
     const canSwitchTech = this.currentUser && (this.currentUser.rol === "administrador" || this.currentUser.rol === "ingeniero");
 
@@ -6939,37 +6931,42 @@ const app = {
         : "Técnico logueado en la sesión actual";
     }
 
-    if (repSel) {
-      const prevRepVal = repSel.value;
-      repSel.innerHTML = '<option value="">-- Todos los Técnicos --</option>';
+    filterSelects.forEach((sel) => {
+      const prevVal = sel.value;
+      sel.innerHTML = '<option value="">-- Todos los Técnicos --</option>';
       tecnicos.forEach(t => {
         const opt = document.createElement("option");
         opt.value = t;
         opt.textContent = t;
-        repSel.appendChild(opt);
+        sel.appendChild(opt);
       });
-      if (prevRepVal && tecnicos.includes(prevRepVal)) {
-        repSel.value = prevRepVal;
+      if (prevVal && tecnicos.includes(prevVal)) {
+        sel.value = prevVal;
       } else if (!canSwitchTech) {
-        repSel.value = currentName;
+        sel.value = currentName;
       }
-    }
+    });
   },
 
   async loadTareasDiariasView() {
-    const todayStr = this._formatLocalDateYMD(new Date());
+    const now = new Date();
+    const todayStr = this._formatLocalDateYMD(now);
+    const firstDayMonthStr = this._formatLocalDateYMD(new Date(now.getFullYear(), now.getMonth(), 1));
     const fJornada = document.getElementById("td-fecha-jornada");
     const fDiario = document.getElementById("td-rep-diario-fecha");
     const fSemDesde = document.getElementById("td-rep-sem-desde");
     const fSemHasta = document.getElementById("td-rep-sem-hasta");
+    const fResDesde = document.getElementById("td-res-desde");
+    const fResHasta = document.getElementById("td-res-hasta");
     const horaInput = document.getElementById("td-item-hora");
 
     if (fJornada && !fJornada.value) fJornada.value = todayStr;
     if (fDiario && !fDiario.value) fDiario.value = todayStr;
+    if (fResDesde && !fResDesde.value) fResDesde.value = firstDayMonthStr;
+    if (fResHasta && !fResHasta.value) fResHasta.value = todayStr;
     if (horaInput && !horaInput.value) horaInput.value = this._getCurrentTimeHHMM();
 
     if (fSemDesde && fSemHasta && (!fSemDesde.value || !fSemHasta.value)) {
-      const now = new Date();
       const day = now.getDay();
       const diffToMon = day === 0 ? -6 : 1 - day;
       const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon);
@@ -7001,7 +6998,10 @@ const app = {
     }
 
     await this.loadTecnicosTareasSelects();
-    await this.loadTareaDiariaActual();
+    await Promise.all([
+      this.loadTareaDiariaActual(),
+      this.refreshTareasPendientesYResueltasCounters()
+    ]);
   },
 
   async loadTareaDiariaActual() {
@@ -7195,6 +7195,7 @@ const app = {
       this.currentTareaDiariaReport = data;
       this.cancelEditTareaItem(true);
       this.renderTareaDiariaActual();
+      this.refreshTareasPendientesYResueltasCounters();
       this.showToast(editId ? "Tarea actualizada correctamente" : "Tarea agregada a tu jornada", "success");
     } catch (err) {
       this.showToast(err.message || "Error al guardar tarea", "error");
@@ -7269,6 +7270,7 @@ const app = {
       this.currentTareaDiariaReport = data;
       this.cancelEditTareaItem(true);
       this.renderTareaDiariaActual();
+      this.refreshTareasPendientesYResueltasCounters();
       this.showToast("Tarea eliminada del borrador", "info");
     } catch (err) {
       this.showToast(err.message || "Error al eliminar tarea", "error");
@@ -7540,6 +7542,270 @@ const app = {
     this.handlePdfDownloadOrView(`/api/tareas-diarias/pdf/semanal?${params.toString()}`, `Reporte_Semanal_Tareas${tecSlug}_${desde}_${hasta}.pdf`);
   },
 
+  async refreshTareasPendientesYResueltasCounters() {
+    const todayStr = this._formatLocalDateYMD(new Date());
+    const canSwitchTech = this.currentUser && (this.currentUser.rol === "administrador" || this.currentUser.rol === "ingeniero");
+    const currentName = (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "";
+
+    try {
+      const pParams = new URLSearchParams({ fecha_referencia: todayStr });
+      if (!canSwitchTech && currentName) pParams.append("tecnico", currentName);
+
+      const rParams = new URLSearchParams({ limit: "200" });
+      if (!canSwitchTech && currentName) rParams.append("tecnico", currentName);
+
+      const [resPend, resRes] = await Promise.all([
+        fetch(`/api/tareas-diarias/pendientes?${pParams.toString()}`),
+        fetch(`/api/tareas-diarias/resueltas?${rParams.toString()}`)
+      ]);
+
+      const pendientes = resPend.ok ? await resPend.json() : [];
+      const resueltas = resRes.ok ? await resRes.json() : [];
+
+      const pendBadge = document.getElementById("td-pendientes-badge");
+      if (pendBadge) {
+        pendBadge.textContent = pendientes.length;
+        pendBadge.style.background = pendientes.length > 0 ? "rgba(245, 158, 11, 0.25)" : "var(--bg-subtle)";
+        pendBadge.style.color = pendientes.length > 0 ? "#d97706" : "var(--text-tertiary)";
+      }
+
+      const resBadge = document.getElementById("td-resueltas-badge");
+      if (resBadge) {
+        resBadge.textContent = resueltas.length;
+      }
+
+      const alertBanner = document.getElementById("td-alert-pendientes-hoy");
+      const alertTxt = document.getElementById("td-alert-pendientes-texto");
+      if (alertBanner && alertTxt) {
+        if (pendientes.length > 0) {
+          alertBanner.style.display = "flex";
+          alertTxt.textContent = `Tienes ${pendientes.length} tarea(s) pendiente(s) o en proceso que quedaron de días anteriores.`;
+        } else {
+          alertBanner.style.display = "none";
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudieron actualizar contadores de pendientes/resueltas:", e);
+    }
+  },
+
+  async loadTareasPendientes() {
+    const cont = document.getElementById("td-pendientes-list-container");
+    const tecSel = document.getElementById("td-pend-tecnico");
+    if (!cont) return;
+
+    cont.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
+        <span class="spinner-border spinner-border-sm" style="width:16px;height:16px;border-width:2px;"></span> Buscando tareas pendientes de días anteriores...
+      </div>
+    `;
+
+    const todayStr = this._formatLocalDateYMD(new Date());
+    const params = new URLSearchParams({ fecha_referencia: todayStr });
+    if (tecSel && tecSel.value.trim()) params.append("tecnico", tecSel.value.trim());
+
+    try {
+      const res = await fetch(`/api/tareas-diarias/pendientes?${params.toString()}`);
+      if (!res.ok) throw new Error("Error al consultar tareas pendientes");
+      const rows = await res.json();
+      const pendientes = Array.isArray(rows) ? rows : [];
+
+      if (pendientes.length === 0) {
+        cont.innerHTML = `
+          <div style="text-align: center; padding: 2.5rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-md); color: var(--text-tertiary);">
+            <div style="font-size: 1.85rem; margin-bottom: 0.4rem;">🎉</div>
+            <div style="font-weight: 700; color: var(--text-secondary);">¡Sin tareas pendientes de días anteriores!</div>
+            <div style="font-size: 0.78rem; margin-top: 4px;">Todas las labores de jornadas pasadas se encuentran resueltas y completadas.</div>
+          </div>
+        `;
+        return;
+      }
+
+      cont.innerHTML = pendientes.map(it => {
+        const isProc = (it.estado_tarea || "").toLowerCase().includes("proceso");
+        const estBg = isProc ? "rgba(245, 158, 11, 0.14); color: #d97706;" : "rgba(239, 68, 68, 0.12); color: #dc2626;";
+
+        return `
+          <div style="background: var(--bg-subtle); border: 1px solid rgba(217, 119, 6, 0.35); border-left: 4px solid #d97706; border-radius: var(--radius-md); padding: 0.9rem 1rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 240px;">
+                <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.4rem;">
+                  <span class="badge" style="background: rgba(124, 58, 237, 0.12); color: #7c3aed; font-weight: 700;">
+                    📅 ${this.escapeHtml(it.fecha_fmt || it.fecha)} ${it.hora ? `· ${this.escapeHtml(it.hora)}` : ""}
+                  </span>
+                  <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; font-weight: 700;">
+                    ${this.escapeHtml(it.servicio || "")}
+                  </span>
+                  <span class="badge" style="${estBg} font-weight: 700;">
+                    ${this.escapeHtml(it.estado_tarea || "Pendiente")}
+                  </span>
+                  <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">
+                    👤 ${this.escapeHtml(it.tecnico || "")}
+                  </span>
+                </div>
+                ${it.equipo ? `<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.25rem;"><strong>Equipo / Ref.:</strong> ${this.escapeHtml(it.equipo)}</div>` : ""}
+                <div style="font-size: 0.86rem; color: var(--text-primary); line-height: 1.45; white-space: pre-wrap;">${this.escapeHtml(it.descripcion || "")}</div>
+                <div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 3px;">${this.escapeHtml(it.tipo_tarea || "")}</div>
+              </div>
+            </div>
+
+            <!-- Barra de resolución rápida -->
+            <div style="margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px dashed var(--border); display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <input type="text" id="td-resolve-note-${it.id}" class="form-control" placeholder="Nota de solución aplicada (opcional)..." style="flex: 1; min-width: 190px; height: 34px; font-size: 0.8rem;">
+              <button type="button" class="btn btn-sm" onclick="app.resolverTareaPendiente(${it.id})" style="height: 34px; background: #10b981; border-color: #10b981; color: white; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
+                ✅ Marcar como Resuelta
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    } catch (err) {
+      console.error("Error cargando tareas pendientes:", err);
+      cont.innerHTML = `<div style="color: var(--danger, #ef4444); padding: 1.5rem; text-align: center;">No se pudieron cargar las tareas pendientes: ${this.escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  async resolverTareaPendiente(itemId) {
+    const noteEl = document.getElementById(`td-resolve-note-${itemId}`);
+    const nota = noteEl ? noteEl.value.trim() : "";
+    const quien = (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "Técnico EEMM";
+    const todayStr = this._formatLocalDateYMD(new Date());
+
+    try {
+      const res = await fetch(`/api/tareas-diarias/items/${itemId}/resolver`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tecnico_resuelve: quien,
+          nota_resolucion: nota,
+          registrar_en_jornada_fecha: todayStr
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "No se pudo marcar como resuelta");
+
+      this.showToast(
+        data.added_to_today
+          ? "✅ Tarea resuelta y registrada en tu jornada de hoy"
+          : "✅ Tarea marcada como resuelta y movida a Tareas Resueltas",
+        "success"
+      );
+
+      await Promise.all([
+        this.loadTareasPendientes(),
+        this.loadTareaDiariaActual(),
+        this.refreshTareasPendientesYResueltasCounters()
+      ]);
+    } catch (err) {
+      this.showToast(err.message || "Error al resolver tarea", "error");
+    }
+  },
+
+  async loadTareasResueltas() {
+    const tecSel = document.getElementById("td-res-tecnico");
+    const fDesde = document.getElementById("td-res-desde");
+    const fHasta = document.getElementById("td-res-hasta");
+    const qEl = document.getElementById("td-res-q");
+    const kpiBar = document.getElementById("td-resueltas-kpi-bar");
+    const tbody = document.getElementById("td-resueltas-tbody");
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
+          <span class="spinner-border spinner-border-sm" style="width:16px;height:16px;border-width:2px;"></span> Cargando tareas resueltas...
+        </td>
+      </tr>
+    `;
+
+    const params = new URLSearchParams({ limit: "200" });
+    if (tecSel && tecSel.value.trim()) params.append("tecnico", tecSel.value.trim());
+    if (fDesde && fDesde.value.trim()) params.append("fecha_inicio", fDesde.value.trim());
+    if (fHasta && fHasta.value.trim()) params.append("fecha_fin", fHasta.value.trim());
+    if (qEl && qEl.value.trim()) params.append("q", qEl.value.trim());
+
+    try {
+      const res = await fetch(`/api/tareas-diarias/resueltas?${params.toString()}`);
+      if (!res.ok) throw new Error("Error al consultar tareas resueltas");
+      const rows = await res.json();
+      const resueltas = Array.isArray(rows) ? rows : [];
+
+      const servSet = new Set(resueltas.map(r => r.servicio).filter(Boolean));
+      const tecSet = new Set(resueltas.map(r => r.resuelta_por || r.tecnico).filter(Boolean));
+
+      if (kpiBar) {
+        kpiBar.innerHTML = `
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Tareas Resueltas</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #10b981; margin-top: 2px;">${resueltas.length}</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Servicios Atendidos</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #0284c7; margin-top: 2px;">${servSet.size} áreas</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Técnicos Participantes</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #7c3aed; margin-top: 2px;">${tecSet.size}</div>
+          </div>
+        `;
+      }
+
+      if (resueltas.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-tertiary);">
+              <div style="font-size: 1.75rem; margin-bottom: 0.4rem;">✅</div>
+              <div style="font-weight: 600; color: var(--text-secondary);">No hay tareas resueltas con los filtros seleccionados.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = resueltas.map(it => {
+        const notaHtml = it.nota_resolucion
+          ? `<div style="font-size: 0.75rem; color: #059669; margin-top: 3px; font-weight: 600;">💡 Resolución: ${this.escapeHtml(it.nota_resolucion)}</div>`
+          : "";
+        const cierreTxt = it.fecha_resolucion_fmt
+          ? `<div style="font-size: 0.72rem; color: #059669; margin-top: 2px;">Resuelta: ${this.escapeHtml(it.fecha_resolucion_fmt)}</div>`
+          : "";
+        const resueltaPorTxt = (it.resuelta_por && it.resuelta_por !== it.tecnico)
+          ? `<div style="font-size: 0.72rem; color: #059669; margin-top: 2px;">Resuelta por: ${this.escapeHtml(it.resuelta_por)}</div>`
+          : "";
+
+        return `
+          <tr>
+            <td style="white-space: nowrap;">
+              <div style="font-weight: 700; font-size: 0.78rem; color: var(--text-primary);">
+                ${this.escapeHtml(it.fecha_fmt || it.fecha)}
+              </div>
+              <div style="font-size: 0.72rem; color: var(--text-tertiary);">${this.escapeHtml(it.hora || "")}</div>
+              ${cierreTxt}
+            </td>
+            <td>
+              <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; font-weight: 700;">
+                ${this.escapeHtml(it.servicio || "")}
+              </span>
+              ${it.equipo ? `<div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 3px; font-weight: 600;">${this.escapeHtml(it.equipo)}</div>` : ""}
+            </td>
+            <td>
+              <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-tertiary);">${this.escapeHtml(it.tipo_tarea || "")}</div>
+              <div style="font-size: 0.82rem; color: var(--text-primary); line-height: 1.4;">${this.escapeHtml(it.descripcion || "")}</div>
+              ${notaHtml}
+            </td>
+            <td>
+              <div style="font-weight: 600; font-size: 0.8rem; color: var(--text-primary);">${this.escapeHtml(it.tecnico || "")}</div>
+              ${resueltaPorTxt}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    } catch (err) {
+      console.error("Error cargando tareas resueltas:", err);
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--danger, #ef4444);">Error: ${this.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
   /* ==========================================================================
      TOAST NOTIFICATIONS
      ========================================================================== */
@@ -7562,7 +7828,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.2",
+  currentAppVersion: "1.12.3",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
