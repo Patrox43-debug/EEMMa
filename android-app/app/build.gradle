@@ -10,8 +10,8 @@ android {
         applicationId "cl.cfelbc.eemm"
         minSdk 24
         targetSdk 35
-        versionCode 28
-        versionName "1.11.1"
+        versionCode 29
+        versionName "1.12.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

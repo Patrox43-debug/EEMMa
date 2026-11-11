@@ -26,7 +26,8 @@ from pydantic import BaseModel
 
 from pdf_generator import (
     generate_chequeo_pdf, generate_servicio_pdf, generate_entregas_pdf,
-    generate_entrega_equipo_pdf, generate_entregas_equipos_consolidado_pdf
+    generate_entrega_equipo_pdf, generate_entregas_equipos_consolidado_pdf,
+    generate_tareas_diarias_pdf, generate_tareas_semanal_pdf
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -116,7 +117,47 @@ app.add_middleware(
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
     return conn
+
+
+def _ensure_tareas_tables(cursor):
+    """Asegura la existencia de tablas e índices para Tareas Diarias por Técnico."""
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tareas_diarias_reportes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folio TEXT UNIQUE,
+        tecnico TEXT NOT NULL,
+        fecha DATE NOT NULL,
+        estado TEXT NOT NULL DEFAULT 'BORRADOR',
+        observaciones_generales TEXT,
+        fecha_cierre DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tecnico, fecha)
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_td_rep_tecnico ON tareas_diarias_reportes(tecnico);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_td_rep_fecha ON tareas_diarias_reportes(fecha);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_td_rep_estado ON tareas_diarias_reportes(estado);")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tareas_diarias_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reporte_id INTEGER NOT NULL,
+        hora TEXT,
+        servicio TEXT NOT NULL,
+        tipo_tarea TEXT NOT NULL DEFAULT 'Mantención Correctiva',
+        equipo TEXT,
+        descripcion TEXT NOT NULL,
+        estado_tarea TEXT NOT NULL DEFAULT 'Completada',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (reporte_id) REFERENCES tareas_diarias_reportes(id) ON DELETE CASCADE
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_td_items_rep ON tareas_diarias_items(reporte_id);")
+
 
 def ensure_db_initialized():
     """Asegura la creación de tablas e inicializa datos maestros si la base de datos está vacía."""
@@ -322,6 +363,9 @@ def ensure_db_initialized():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_rev_servicio_unidad ON revisiones_servicio(unidad);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_rev_servicio_fecha ON revisiones_servicio(fecha);")
 
+        # 8. Tablas Tareas Diarias por Técnico
+        _ensure_tareas_tables(cursor)
+
         # Sembrar usuarios por defecto si está vacía
         cursor.execute("SELECT COUNT(*) FROM perfiles")
         if cursor.fetchone()[0] == 0:
@@ -422,13 +466,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.11.1",
-        "version_code": 28,
-        "release_tag": "v1.11.1",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.11.1/EEMM.apk",
+        "version_name": "1.12.0",
+        "version_code": 29,
+        "release_tag": "v1.12.0",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.0/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Actualización institucional: estandarización del nombre oficial 'Hospital Claudio Vicuña' en todos los reportes, informes técnicos, protocolos y actas PDF.\n• Optimización de membretes, firmas y pies de página oficiales.",
-        "published_at": "2026-11-09T07:00:00-03:00"
+        "notes": "• Nueva sección 'Tareas Diarias' ubicada al principio del menú principal y barra de navegación.\n• Bitácora editable durante la jornada con bloqueo oficial al presionar 'Realizar Reporte Diario'.\n• Emisión de reportes diarios y semanales por técnico en formato PDF.",
+        "published_at": "2026-11-10T21:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -2883,6 +2927,543 @@ def delete_entrega_equipo(id: int):
     conn.commit()
     conn.close()
     return {"status": "ok", "message": "Entrega de equipo eliminada correctamente"}
+
+
+# ==============================================================================
+# MÓDULO: TAREAS DIARIAS POR TÉCNICO (BORRADOR EDITABLE, CIERRE DIARIO Y PDFs)
+# ==============================================================================
+class TareaDiariaItemCreate(BaseModel):
+    tecnico: str
+    fecha: Optional[str] = None
+    hora: Optional[str] = None
+    servicio: str
+    tipo_tarea: Optional[str] = "Mantención Correctiva"
+    equipo: Optional[str] = None
+    descripcion: str
+    estado_tarea: Optional[str] = "Completada"
+
+
+class TareaDiariaItemUpdate(BaseModel):
+    hora: Optional[str] = None
+    servicio: str
+    tipo_tarea: Optional[str] = "Mantención Correctiva"
+    equipo: Optional[str] = None
+    descripcion: str
+    estado_tarea: Optional[str] = "Completada"
+
+
+class TareaDiariaObsUpdate(BaseModel):
+    tecnico: str
+    fecha: Optional[str] = None
+    observaciones_generales: Optional[str] = ""
+
+
+class TareaDiariaFinalizar(BaseModel):
+    tecnico: str
+    fecha: Optional[str] = None
+    observaciones_generales: Optional[str] = None
+
+
+def _norm_fecha_tarea(fecha_val: Optional[str]) -> str:
+    """Normaliza la fecha a formato YYYY-MM-DD (por defecto hoy local)."""
+    f = (fecha_val or "").strip()
+    if f:
+        return f[:10]
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _fetch_reporte_completo(cursor, reporte_id: int) -> Optional[dict]:
+    """Obtiene cabecera del reporte diario junto con su listado ordenado de tareas."""
+    cursor.execute("""
+        SELECT id, folio, tecnico, fecha,
+               strftime('%d/%m/%Y', fecha) as fecha_fmt,
+               estado, observaciones_generales,
+               strftime('%d/%m/%Y %H:%M', fecha_cierre) as fecha_cierre_fmt,
+               fecha_cierre, created_at, updated_at
+        FROM tareas_diarias_reportes
+        WHERE id = ?
+    """, (reporte_id,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    rep = dict(row)
+    cursor.execute("""
+        SELECT id, reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
+               strftime('%d/%m/%Y %H:%M', created_at) as created_fmt
+        FROM tareas_diarias_items
+        WHERE reporte_id = ?
+        ORDER BY COALESCE(hora, '00:00') ASC, id ASC
+    """, (reporte_id,))
+    rep["items"] = [dict(it) for it in cursor.fetchall()]
+    return rep
+
+
+def _get_or_create_draft_reporte(cursor, tecnico: str, fecha: str) -> dict:
+    """Obtiene o inicializa un reporte diario en estado BORRADOR para (tecnico, fecha)."""
+    cursor.execute(
+        "SELECT id, estado FROM tareas_diarias_reportes WHERE tecnico = ? AND fecha = ?",
+        (tecnico, fecha)
+    )
+    row = cursor.fetchone()
+    if row:
+        return dict(row)
+    cursor.execute("""
+        INSERT INTO tareas_diarias_reportes (tecnico, fecha, estado, created_at, updated_at)
+        VALUES (?, ?, 'BORRADOR', datetime('now', 'localtime'), datetime('now', 'localtime'))
+    """, (tecnico, fecha))
+    return {"id": cursor.lastrowid, "estado": "BORRADOR"}
+
+
+def _query_reportes_con_items(cursor, fecha_inicio: str, fecha_fin: str, tecnico: Optional[str] = None) -> List[dict]:
+    """Consulta reportes diarios en un rango de fechas con sus tareas para exportación o historial."""
+    clauses = ["date(fecha) >= date(?)", "date(fecha) <= date(?)"]
+    params: List[Any] = [fecha_inicio, fecha_fin]
+    if tecnico and tecnico.strip() and tecnico.strip().upper() != "TODOS":
+        clauses.append("tecnico = ?")
+        params.append(tecnico.strip())
+
+    where_sql = " AND ".join(clauses)
+    cursor.execute(f"""
+        SELECT id, folio, tecnico, fecha,
+               strftime('%d/%m/%Y', fecha) as fecha_fmt,
+               estado, observaciones_generales,
+               strftime('%d/%m/%Y %H:%M', fecha_cierre) as fecha_cierre_fmt,
+               fecha_cierre
+        FROM tareas_diarias_reportes
+        WHERE {where_sql}
+        ORDER BY fecha ASC, tecnico ASC, id ASC
+    """, tuple(params))
+    reportes = [dict(r) for r in cursor.fetchall()]
+    for rep in reportes:
+        cursor.execute("""
+            SELECT id, reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea
+            FROM tareas_diarias_items
+            WHERE reporte_id = ?
+            ORDER BY COALESCE(hora, '00:00') ASC, id ASC
+        """, (rep["id"],))
+        rep["items"] = [dict(it) for it in cursor.fetchall()]
+    return reportes
+
+
+@app.get("/api/tareas-diarias/tecnicos")
+def list_tecnicos_tareas():
+    """Retorna listado unificado de técnicos para filtros y generación de reportes."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    nombres = []
+    seen = set()
+
+    for q_sql in [
+        "SELECT DISTINCT COALESCE(NULLIF(TRIM(tecnico), ''), TRIM(nombre)) as nom FROM perfiles ORDER BY nom ASC",
+        "SELECT DISTINCT TRIM(tecnico) as nom FROM tareas_diarias_reportes ORDER BY nom ASC"
+    ]:
+        cursor.execute(q_sql)
+        for r in cursor.fetchall():
+            val = (r[0] or "").strip()
+            if val and val.lower() not in seen:
+                seen.add(val.lower())
+                nombres.append(val)
+
+    conn.close()
+    return sorted(nombres, key=lambda x: x.lower())
+
+
+@app.get("/api/tareas-diarias/actual")
+def get_tarea_diaria_actual(tecnico: str, fecha: Optional[str] = None):
+    """Obtiene el reporte activo (BORRADOR o FINALIZADO) de un técnico para una fecha."""
+    tec = (tecnico or "").strip()
+    if not tec:
+        raise HTTPException(status_code=400, detail="Debe especificar el técnico")
+    fecha_norm = _norm_fecha_tarea(fecha)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    cursor.execute(
+        "SELECT id FROM tareas_diarias_reportes WHERE tecnico = ? AND fecha = ?",
+        (tec, fecha_norm)
+    )
+    row = cursor.fetchone()
+    if row:
+        rep = _fetch_reporte_completo(cursor, row[0])
+        conn.close()
+        return rep
+
+    conn.close()
+    return {
+        "id": None,
+        "folio": None,
+        "tecnico": tec,
+        "fecha": fecha_norm,
+        "fecha_fmt": datetime.strptime(fecha_norm, "%Y-%m-%d").strftime("%d/%m/%Y") if len(fecha_norm) == 10 else fecha_norm,
+        "estado": "BORRADOR",
+        "observaciones_generales": "",
+        "fecha_cierre_fmt": None,
+        "items": []
+    }
+
+
+@app.post("/api/tareas-diarias/items")
+def add_tarea_diaria_item(item: TareaDiariaItemCreate):
+    """Agrega una tarea/trabajo al borrador diario del técnico (solo si no está finalizado)."""
+    tec = (item.tecnico or "").strip()
+    serv = (item.servicio or "").strip()
+    desc = (item.descripcion or "").strip()
+    if not tec:
+        raise HTTPException(status_code=400, detail="Debe indicar el nombre del técnico")
+    if not serv:
+        raise HTTPException(status_code=400, detail="Debe seleccionar el servicio clínico o área")
+    if not desc:
+        raise HTTPException(status_code=400, detail="Debe describir el trabajo o tarea realizada")
+
+    fecha_norm = _norm_fecha_tarea(item.fecha)
+    hora_val = (item.hora or datetime.now().strftime("%H:%M")).strip()
+    tipo_val = (item.tipo_tarea or "Mantención Correctiva").strip()
+    eq_val = (item.equipo or "").strip()
+    est_val = (item.estado_tarea or "Completada").strip()
+
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    rep = _get_or_create_draft_reporte(cursor, tec, fecha_norm)
+
+    if rep["estado"] == "FINALIZADO":
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail="El reporte diario para esta fecha ya fue finalizado y no permite agregar más tareas."
+        )
+
+    cursor.execute("""
+        INSERT INTO tareas_diarias_items (
+            reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+    """, (rep["id"], hora_val, serv, tipo_val, eq_val, desc, est_val))
+
+    cursor.execute(
+        "UPDATE tareas_diarias_reportes SET updated_at = datetime('now', 'localtime') WHERE id = ?",
+        (rep["id"],)
+    )
+    conn.commit()
+    full_rep = _fetch_reporte_completo(cursor, rep["id"])
+    conn.close()
+    return full_rep
+
+
+@app.put("/api/tareas-diarias/items/{item_id}")
+def update_tarea_diaria_item(item_id: int, item: TareaDiariaItemUpdate):
+    """Edita una tarea existente mientras el reporte diario permanezca en estado BORRADOR."""
+    serv = (item.servicio or "").strip()
+    desc = (item.descripcion or "").strip()
+    if not serv or not desc:
+        raise HTTPException(status_code=400, detail="El servicio clínico y la descripción son obligatorios")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    cursor.execute("""
+        SELECT ti.reporte_id, tr.estado
+        FROM tareas_diarias_items ti
+        JOIN tareas_diarias_reportes tr ON tr.id = ti.reporte_id
+        WHERE ti.id = ?
+    """, (item_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    reporte_id, estado_rep = row[0], row[1]
+    if estado_rep == "FINALIZADO":
+        conn.close()
+        raise HTTPException(status_code=400, detail="El reporte diario ya fue realizado y está bloqueado para edición.")
+
+    cursor.execute("""
+        UPDATE tareas_diarias_items
+        SET hora = ?, servicio = ?, tipo_tarea = ?, equipo = ?, descripcion = ?, estado_tarea = ?,
+            updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+    """, (
+        (item.hora or "").strip() or None,
+        serv,
+        (item.tipo_tarea or "Mantención Correctiva").strip(),
+        (item.equipo or "").strip(),
+        desc,
+        (item.estado_tarea or "Completada").strip(),
+        item_id
+    ))
+    cursor.execute(
+        "UPDATE tareas_diarias_reportes SET updated_at = datetime('now', 'localtime') WHERE id = ?",
+        (reporte_id,)
+    )
+    conn.commit()
+    full_rep = _fetch_reporte_completo(cursor, reporte_id)
+    conn.close()
+    return full_rep
+
+
+@app.delete("/api/tareas-diarias/items/{item_id}")
+def delete_tarea_diaria_item(item_id: int):
+    """Elimina una tarea del borrador diario (solo permitido antes de finalizar el reporte)."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    cursor.execute("""
+        SELECT ti.reporte_id, tr.estado
+        FROM tareas_diarias_items ti
+        JOIN tareas_diarias_reportes tr ON tr.id = ti.reporte_id
+        WHERE ti.id = ?
+    """, (item_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    reporte_id, estado_rep = row[0], row[1]
+    if estado_rep == "FINALIZADO":
+        conn.close()
+        raise HTTPException(status_code=400, detail="El reporte diario ya fue finalizado y no permite eliminar tareas.")
+
+    cursor.execute("DELETE FROM tareas_diarias_items WHERE id = ?", (item_id,))
+    cursor.execute(
+        "UPDATE tareas_diarias_reportes SET updated_at = datetime('now', 'localtime') WHERE id = ?",
+        (reporte_id,)
+    )
+    conn.commit()
+    full_rep = _fetch_reporte_completo(cursor, reporte_id)
+    conn.close()
+    return full_rep
+
+
+@app.put("/api/tareas-diarias/observaciones")
+def update_tarea_diaria_obs(payload: TareaDiariaObsUpdate):
+    """Guarda observaciones generales del borrador diario."""
+    tec = (payload.tecnico or "").strip()
+    if not tec:
+        raise HTTPException(status_code=400, detail="Debe indicar el técnico")
+    fecha_norm = _norm_fecha_tarea(payload.fecha)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    rep = _get_or_create_draft_reporte(cursor, tec, fecha_norm)
+    if rep["estado"] == "FINALIZADO":
+        conn.close()
+        raise HTTPException(status_code=400, detail="El reporte diario ya fue finalizado y no admite cambios.")
+
+    cursor.execute("""
+        UPDATE tareas_diarias_reportes
+        SET observaciones_generales = ?, updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+    """, ((payload.observaciones_generales or "").strip(), rep["id"]))
+    conn.commit()
+    full_rep = _fetch_reporte_completo(cursor, rep["id"])
+    conn.close()
+    return full_rep
+
+
+@app.post("/api/tareas-diarias/finalizar")
+def finalizar_reporte_diario(payload: TareaDiariaFinalizar):
+    """Cierra y bloquea el reporte diario de tareas generando su folio oficial."""
+    tec = (payload.tecnico or "").strip()
+    if not tec:
+        raise HTTPException(status_code=400, detail="Debe indicar el técnico")
+    fecha_norm = _norm_fecha_tarea(payload.fecha)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    cursor.execute(
+        "SELECT id, estado, folio FROM tareas_diarias_reportes WHERE tecnico = ? AND fecha = ?",
+        (tec, fecha_norm)
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No hay tareas registradas para finalizar el reporte diario.")
+
+    rep_id, estado_rep, existing_folio = row[0], row[1], row[2]
+    if estado_rep == "FINALIZADO":
+        conn.close()
+        raise HTTPException(status_code=400, detail="Este reporte diario ya se encuentra realizado y cerrado.")
+
+    cursor.execute("SELECT COUNT(*) FROM tareas_diarias_items WHERE reporte_id = ?", (rep_id,))
+    item_count = cursor.fetchone()[0] or 0
+    if item_count == 0:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Debe agregar al menos una tarea antes de realizar el reporte diario.")
+
+    date_prefix = fecha_norm.replace("-", "")
+    cursor.execute(
+        "SELECT COUNT(*) FROM tareas_diarias_reportes WHERE fecha = ? AND folio IS NOT NULL",
+        (fecha_norm,)
+    )
+    seq = (cursor.fetchone()[0] or 0) + 1
+    folio = existing_folio or f"TD-{date_prefix}-{seq:04d}"
+
+    if payload.observaciones_generales is not None:
+        cursor.execute("""
+            UPDATE tareas_diarias_reportes
+            SET estado = 'FINALIZADO',
+                folio = ?,
+                observaciones_generales = ?,
+                fecha_cierre = datetime('now', 'localtime'),
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        """, (folio, payload.observaciones_generales.strip(), rep_id))
+    else:
+        cursor.execute("""
+            UPDATE tareas_diarias_reportes
+            SET estado = 'FINALIZADO',
+                folio = ?,
+                fecha_cierre = datetime('now', 'localtime'),
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ?
+        """, (folio, rep_id))
+
+    conn.commit()
+    full_rep = _fetch_reporte_completo(cursor, rep_id)
+    conn.close()
+    return full_rep
+
+
+@app.get("/api/tareas-diarias/historial")
+def list_tareas_diarias_historial(
+    tecnico: Optional[str] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    estado: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 150
+):
+    """Lista reportes diarios filtrados por técnico, rango de fechas, estado o texto."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+
+    clauses = []
+    params: List[Any] = []
+
+    if tecnico and tecnico.strip() and tecnico.strip().upper() != "TODOS":
+        clauses.append("tr.tecnico = ?")
+        params.append(tecnico.strip())
+    if fecha_inicio and fecha_inicio.strip():
+        clauses.append("date(tr.fecha) >= date(?)")
+        params.append(fecha_inicio.strip())
+    if fecha_fin and fecha_fin.strip():
+        clauses.append("date(tr.fecha) <= date(?)")
+        params.append(fecha_fin.strip())
+    if estado and estado.strip():
+        clauses.append("tr.estado = ?")
+        params.append(estado.strip().upper())
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        clauses.append("""(
+            COALESCE(tr.folio, '') LIKE ? OR tr.tecnico LIKE ? OR COALESCE(tr.observaciones_generales, '') LIKE ?
+            OR EXISTS (
+                SELECT 1 FROM tareas_diarias_items ti
+                WHERE ti.reporte_id = tr.id AND (ti.servicio LIKE ? OR ti.descripcion LIKE ? OR COALESCE(ti.equipo, '') LIKE ? OR ti.tipo_tarea LIKE ?)
+            )
+        )""")
+        params.extend([term] * 7)
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    cursor.execute(f"""
+        SELECT tr.id, tr.folio, tr.tecnico, tr.fecha,
+               strftime('%d/%m/%Y', tr.fecha) as fecha_fmt,
+               tr.estado, tr.observaciones_generales,
+               strftime('%d/%m/%Y %H:%M', tr.fecha_cierre) as fecha_cierre_fmt,
+               tr.fecha_cierre
+        FROM tareas_diarias_reportes tr
+        {where_sql}
+        ORDER BY tr.fecha DESC, tr.id DESC
+        LIMIT ?
+    """, tuple(params + [limit]))
+
+    reportes = [dict(r) for r in cursor.fetchall()]
+    for rep in reportes:
+        cursor.execute("""
+            SELECT id, reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea
+            FROM tareas_diarias_items
+            WHERE reporte_id = ?
+            ORDER BY COALESCE(hora, '00:00') ASC, id ASC
+        """, (rep["id"],))
+        rep["items"] = [dict(it) for it in cursor.fetchall()]
+        rep["total_items"] = len(rep["items"])
+
+    conn.close()
+    return [r for r in reportes if r["total_items"] > 0 or r["estado"] == "FINALIZADO"]
+
+
+def _pdf_response(pdf_bytes: bytes, filename: str, download: bool) -> Response:
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
+            "Content-Type": "application/pdf",
+            "Cache-Control": "no-cache"
+        }
+    )
+
+
+@app.get("/api/tareas-diarias/reportes/{reporte_id}/pdf")
+def get_tarea_diaria_reporte_pdf(reporte_id: int, download: bool = False):
+    """Genera el PDF individual de un reporte diario específico."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    rep = _fetch_reporte_completo(cursor, reporte_id)
+    conn.close()
+    if not rep:
+        raise HTTPException(status_code=404, detail="Reporte diario no encontrado")
+    pdf_bytes = generate_tareas_diarias_pdf([rep], rep["fecha"], rep["tecnico"])
+    folio_clean = (rep.get("folio") or f"TD_{rep['fecha']}_{reporte_id}").replace("/", "_")
+    return _pdf_response(pdf_bytes, f"Reporte_Diario_{folio_clean}.pdf", download)
+
+
+@app.get("/api/tareas-diarias/pdf/diario")
+def get_tareas_diario_por_tecnico_pdf(
+    fecha: Optional[str] = None,
+    tecnico: Optional[str] = None,
+    download: bool = False
+):
+    """Genera el reporte PDF diario por técnico (o consolidado de técnicos) para una fecha dada."""
+    fecha_norm = _norm_fecha_tarea(fecha)
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    reportes = _query_reportes_con_items(cursor, fecha_norm, fecha_norm, tecnico)
+    conn.close()
+
+    if not reportes and tecnico and tecnico.strip():
+        reportes = [{"tecnico": tecnico.strip(), "fecha": fecha_norm, "estado": "SIN REGISTROS", "items": []}]
+
+    pdf_bytes = generate_tareas_diarias_pdf(reportes, fecha_norm, tecnico)
+    tec_slug = f"_{re.sub(r'[^A-Za-z0-9_-]+', '_', tecnico.strip())}" if (tecnico and tecnico.strip()) else "_Todos"
+    return _pdf_response(pdf_bytes, f"Reporte_Diario_Tareas{tec_slug}_{fecha_norm}.pdf", download)
+
+
+@app.get("/api/tareas-diarias/pdf/semanal")
+def get_tareas_semanal_por_tecnico_pdf(
+    fecha_inicio: str,
+    fecha_fin: str,
+    tecnico: Optional[str] = None,
+    download: bool = False
+):
+    """Genera el reporte PDF semanal consolidado de labores por técnico."""
+    ini_norm = _norm_fecha_tarea(fecha_inicio)
+    fin_norm = _norm_fecha_tarea(fecha_fin)
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    reportes = _query_reportes_con_items(cursor, ini_norm, fin_norm, tecnico)
+    conn.close()
+
+    pdf_bytes = generate_tareas_semanal_pdf(reportes, ini_norm, fin_norm, tecnico)
+    tec_slug = f"_{re.sub(r'[^A-Za-z0-9_-]+', '_', tecnico.strip())}" if (tecnico and tecnico.strip()) else "_Todos"
+    return _pdf_response(pdf_bytes, f"Reporte_Semanal_Tareas{tec_slug}_{ini_norm}_{fin_norm}.pdf", download)
 
 
 # Catálogo oficial de pautas técnicas por categoría

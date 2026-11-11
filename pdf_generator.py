@@ -1815,3 +1815,389 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
     buf.seek(0)
     return buf.getvalue()
 
+
+def _format_fecha_cl(fecha_str: str) -> str:
+    """Convierte YYYY-MM-DD a DD/MM/YYYY de forma segura."""
+    if not fecha_str:
+        return ""
+    s = str(fecha_str).strip()
+    try:
+        dt = datetime.strptime(s[:10], "%Y-%m-%d")
+        return dt.strftime("%d/%m/%Y")
+    except Exception:
+        return s
+
+
+def _format_dia_semana_es(fecha_str: str) -> str:
+    """Retorna el día de la semana en español para una fecha YYYY-MM-DD."""
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    try:
+        dt = datetime.strptime(str(fecha_str).strip()[:10], "%Y-%m-%d")
+        return f"{dias[dt.weekday()]} {dt.strftime('%d/%m/%Y')}"
+    except Exception:
+        return str(fecha_str or "")
+
+
+def _tareas_pdf_styles():
+    """Retorna diccionario de estilos comunes para reportes diarios y semanales de tareas."""
+    styles = getSampleStyleSheet()
+    return {
+        "title": ParagraphStyle(
+            'DocTitleTareas', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=11, leading=13, textColor=colors.HexColor('#0f172a')
+        ),
+        "subtitle": ParagraphStyle(
+            'DocSubTareas', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=8.5, leading=11, textColor=colors.HexColor('#0f172a')
+        ),
+        "tag": ParagraphStyle(
+            'DocTagTareas', parent=styles['Normal'], fontName='Helvetica',
+            fontSize=7, leading=9.5, textColor=colors.HexColor('#64748b')
+        ),
+        "meta_title": ParagraphStyle(
+            'MetaTitleTareas', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=9, leading=11, alignment=TA_RIGHT, textColor=colors.HexColor('#6d28d9')
+        ),
+        "meta_sub": ParagraphStyle(
+            'MetaSubTareas', parent=styles['Normal'], fontName='Helvetica',
+            fontSize=7.2, leading=9.5, alignment=TA_RIGHT, textColor=colors.HexColor('#475569')
+        ),
+        "sec_heading": ParagraphStyle(
+            'SecHeadTareas', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=8.5, leading=11, textColor=colors.HexColor('#0f172a')
+        ),
+        "day_heading": ParagraphStyle(
+            'DayHeadTareas', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=8.2, leading=10.5, textColor=colors.HexColor('#4c1d95')
+        ),
+        "cell_hdr": ParagraphStyle(
+            'CellHdrTareas', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=7.5, leading=9.5, alignment=TA_CENTER, textColor=colors.HexColor('#ffffff')
+        ),
+        "cell_txt": ParagraphStyle(
+            'CellTxtTareas', parent=styles['Normal'], fontName='Helvetica',
+            fontSize=7.5, leading=10, textColor=colors.HexColor('#0f172a')
+        ),
+        "cell_txt_bold": ParagraphStyle(
+            'CellTxtBoldTareas', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=7.8, leading=10, textColor=colors.HexColor('#0f172a')
+        ),
+        "cell_txt_center": ParagraphStyle(
+            'CellTxtCenterTareas', parent=styles['Normal'], fontName='Helvetica',
+            fontSize=7.2, leading=9.5, alignment=TA_CENTER, textColor=colors.HexColor('#334155')
+        ),
+    }
+
+
+def _build_tareas_header(st: dict, subtitle_desc: str, right_meta: list) -> list:
+    """Construye encabezado institucional Hospital Claudio Vicuña para reportes de tareas."""
+    logo_hcv = get_scaled_image("static/hcv_logo.png", max_width=72, max_height=44) or \
+               get_scaled_image("static/hcv_logo.jpg", max_width=72, max_height=44)
+    col_izq = logo_hcv if logo_hcv else Paragraph("<b>Hospital Claudio Vicuña</b>", st["tag"])
+    col_centro = [
+        Paragraph("HOSPITAL CLAUDIO VICUÑA", st["title"]),
+        Paragraph("SUBDIRECCIÓN DE OPERACIONES · UNIDAD DE EQUIPOS MÉDICOS", st["subtitle"]),
+        Paragraph(subtitle_desc, st["tag"])
+    ]
+    header_table = Table([[col_izq, col_centro, right_meta]], colWidths=[78, 282, 180])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return [
+        header_table,
+        HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#6d28d9'), spaceBefore=5, spaceAfter=8)
+    ]
+
+
+def _build_tareas_table(items: list, st: dict, include_tecnico: bool = False) -> Table:
+    """Genera la tabla estandarizada de tareas/trabajos realizados."""
+    if include_tecnico:
+        col_w = [40, 82, 95, 100, 168, 55]
+        headers = ["Hora", "Técnico", "Servicio Clínico", "Tipo / Equipo", "Descripción del Trabajo", "Estado"]
+    else:
+        col_w = [44, 108, 118, 212, 58]
+        headers = ["Hora", "Servicio Clínico", "Tipo / Equipo", "Descripción del Trabajo", "Estado"]
+
+    rows = [[Paragraph(f"<b>{h}</b>", st["cell_hdr"]) for h in headers]]
+
+    if not items:
+        empty_row = [""] * len(headers)
+        empty_row[1] = Paragraph("Sin trabajos o tareas registradas en este período.", st["cell_txt"])
+        rows.append(empty_row)
+    else:
+        for it in items:
+            hora = str(it.get("hora") or "--:--").strip()
+            serv = str(it.get("servicio") or "GENERAL").strip()
+            tipo = str(it.get("tipo_tarea") or "Labor Técnica").strip()
+            equipo = str(it.get("equipo") or "").strip()
+            desc = str(it.get("descripcion") or "").strip()
+            estado_t = str(it.get("estado_tarea") or "Completada").strip()
+
+            labor_html = f"<b>{tipo}</b>"
+            if equipo:
+                labor_html += f"<br/><font color='#475569' size='7'>Equipo: {equipo}</font>"
+
+            est_color = "#15803d" if estado_t.lower() == "completada" else ("#b45309" if "proceso" in estado_t.lower() else "#b91c1c")
+            c_hora = Paragraph(f"<b>{hora}</b>", st["cell_txt_center"])
+            c_serv = Paragraph(f"<b>{serv}</b>", st["cell_txt"])
+            c_labor = Paragraph(labor_html, st["cell_txt"])
+            c_desc = Paragraph(desc.replace("\n", "<br/>"), st["cell_txt"])
+            c_est = Paragraph(f"<font color='{est_color}'><b>{estado_t}</b></font>", st["cell_txt_center"])
+
+            if include_tecnico:
+                tec_name = str(it.get("tecnico") or "").strip()
+                rows.append([c_hora, Paragraph(tec_name, st["cell_txt"]), c_serv, c_labor, c_desc, c_est])
+            else:
+                rows.append([c_hora, c_serv, c_labor, c_desc, c_est])
+
+    tbl = Table(rows, colWidths=col_w, repeatRows=1)
+    t_styles = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#6d28d9')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (-1, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]
+    for r in range(1, len(rows)):
+        bg = colors.HexColor('#ffffff') if r % 2 != 0 else colors.HexColor('#f8fafc')
+        t_styles.append(('BACKGROUND', (0, r), (-1, r), bg))
+    tbl.setStyle(TableStyle(t_styles))
+    return tbl
+
+
+def generate_tareas_diarias_pdf(reportes: list, fecha: str = None, tecnico: str = None) -> bytes:
+    """
+    Genera el Reporte Diario oficial de Tareas / Trabajos realizados por técnico (o consolidado diario)
+    para el Hospital Claudio Vicuña.
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=42
+    )
+    st = _tareas_pdf_styles()
+    story = []
+
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+    fecha_cl = _format_fecha_cl(fecha) if fecha else now_str[:10]
+    single_rep = reportes[0] if len(reportes) == 1 else None
+    all_items = []
+    for rep in reportes:
+        for it in rep.get("items", []):
+            item_copy = dict(it)
+            item_copy["tecnico"] = rep.get("tecnico", "")
+            all_items.append(item_copy)
+
+    tecnico_label = (single_rep.get("tecnico") if single_rep else (tecnico or "Todos los Técnicos"))
+    folio_label = (single_rep.get("folio") or "BORRADOR") if single_rep else f"DIARIO-{fecha or 'EEMM'}"
+    estado_label = (single_rep.get("estado") or "BORRADOR") if single_rep else "CONSOLIDADO"
+
+    right_meta = [
+        Paragraph("REPORTE DIARIO DE TAREAS", st["meta_title"]),
+        Spacer(1, 2),
+        Paragraph(f"<b>Folio:</b> {folio_label}", st["meta_sub"]),
+        Paragraph(f"<b>Fecha Jornada:</b> {fecha_cl}", st["meta_sub"]),
+        Paragraph(f"<b>Estado:</b> {estado_label}", st["meta_sub"]),
+        Paragraph(f"<b>Emisión:</b> {now_str}", st["meta_sub"])
+    ]
+    story.extend(_build_tareas_header(st, "Control de Actividades Diarias & Ingeniería Clínica", right_meta))
+
+    servicios_unicos = len(set(it.get("servicio") for it in all_items if it.get("servicio")))
+    completadas = sum(1 for it in all_items if str(it.get("estado_tarea", "")).lower() == "completada")
+
+    summary_data = [
+        [
+            Paragraph("TÉCNICO RESPONSABLE", st["tag"]),
+            Paragraph("TAREAS REGISTRADAS", st["tag"]),
+            Paragraph("COMPLETADAS", st["tag"]),
+            Paragraph("SERVICIOS ATENDIDOS", st["tag"])
+        ],
+        [
+            Paragraph(f"<b>{tecnico_label}</b>", st["cell_txt_bold"]),
+            Paragraph(f"<b>{len(all_items)}</b> actividades", st["cell_txt_bold"]),
+            Paragraph(f"<b>{completadas} / {len(all_items)}</b>", st["cell_txt_bold"]),
+            Paragraph(f"<b>{servicios_unicos}</b> áreas clínicas", st["cell_txt_bold"])
+        ]
+    ]
+    summary_table = Table(summary_data, colWidths=[185, 115, 115, 125])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f5f3ff')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#ddd6fe')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#ede9fe')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("1. DETALLE DE TRABAJOS Y TAREAS DE LA JORNADA", st["sec_heading"]))
+    story.append(Spacer(1, 4))
+    story.append(_build_tareas_table(all_items, st, include_tecnico=(len(reportes) > 1)))
+    story.append(Spacer(1, 10))
+
+    obs_list = []
+    for rep in reportes:
+        obs_txt = (rep.get("observaciones_generales") or "").strip()
+        if obs_txt:
+            prefix = f"<b>{rep.get('tecnico')}:</b> " if len(reportes) > 1 else ""
+            obs_list.append(f"{prefix}{obs_txt}")
+
+    if obs_list:
+        story.append(Paragraph("2. OBSERVACIONES GENERALES DE LA JORNADA", st["sec_heading"]))
+        story.append(Spacer(1, 3))
+        obs_tbl = Table([[Paragraph("<br/>".join(obs_list), st["cell_txt"])]], colWidths=[540])
+        obs_tbl.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(obs_tbl)
+        story.append(Spacer(1, 14))
+
+    t_firmas = Table([[
+        Paragraph(f"__________________________________________<br/><b>{tecnico_label}</b><br/>Unidad de Equipos Médicos (EEMM)", st["cell_txt_center"]),
+        Paragraph("__________________________________________<br/><b>V°B° Jefatura / Supervisión EEMM</b><br/>Hospital Claudio Vicuña", st["cell_txt_center"])
+    ]], colWidths=[270, 270])
+    t_firmas.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 16),
+    ]))
+    story.append(KeepTogether([t_firmas]))
+
+    doc.build(story, onFirstPage=build_pdf_header_footer, onLaterPages=build_pdf_header_footer)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def generate_tareas_semanal_pdf(reportes: list, fecha_inicio: str, fecha_fin: str, tecnico: str = None) -> bytes:
+    """
+    Genera el Reporte Semanal consolidado de trabajos y tareas por técnico
+    agrupado cronológicamente por jornada para el Hospital Claudio Vicuña.
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=42
+    )
+    st = _tareas_pdf_styles()
+    story = []
+
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+    ini_cl = _format_fecha_cl(fecha_inicio)
+    fin_cl = _format_fecha_cl(fecha_fin)
+    tecnico_label = tecnico.strip() if tecnico and tecnico.strip() else "Todos los Técnicos EEMM"
+
+    all_items = [it for rep in reportes for it in rep.get("items", [])]
+    dias_con_registro = len(set(rep.get("fecha") for rep in reportes if rep.get("items")))
+    servicios_unicos = len(set(it.get("servicio") for it in all_items if it.get("servicio")))
+    completadas = sum(1 for it in all_items if str(it.get("estado_tarea", "")).lower() == "completada")
+
+    right_meta = [
+        Paragraph("REPORTE SEMANAL DE TAREAS", st["meta_title"]),
+        Spacer(1, 2),
+        Paragraph(f"<b>Período:</b> {ini_cl} al {fin_cl}", st["meta_sub"]),
+        Paragraph(f"<b>Técnico:</b> {tecnico_label}", st["meta_sub"]),
+        Paragraph(f"<b>Total Tareas:</b> {len(all_items)}", st["meta_sub"]),
+        Paragraph(f"<b>Emisión:</b> {now_str}", st["meta_sub"])
+    ]
+    story.extend(_build_tareas_header(st, "Informe Semanal de Labores Técnicas e Ingeniería Clínica", right_meta))
+
+    summary_data = [
+        [
+            Paragraph("TÉCNICO / ALCANCE", st["tag"]),
+            Paragraph("JORNADAS ACTIVAS", st["tag"]),
+            Paragraph("TOTAL TAREAS SEMANA", st["tag"]),
+            Paragraph("COMPLETADAS / ÁREAS", st["tag"])
+        ],
+        [
+            Paragraph(f"<b>{tecnico_label}</b>", st["cell_txt_bold"]),
+            Paragraph(f"<b>{dias_con_registro}</b> días reportados", st["cell_txt_bold"]),
+            Paragraph(f"<b>{len(all_items)}</b> actividades", st["cell_txt_bold"]),
+            Paragraph(f"<b>{completadas}</b> ok · <b>{servicios_unicos}</b> servicios", st["cell_txt_bold"])
+        ]
+    ]
+    summary_table = Table(summary_data, colWidths=[180, 110, 120, 130])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f5f3ff')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#ddd6fe')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#ede9fe')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 10))
+
+    if not reportes or not all_items:
+        empty_box = Table(
+            [[Paragraph("No se encontraron tareas ni reportes diarios registrados para el técnico y semana seleccionados.", st["cell_txt_center"])]],
+            colWidths=[540]
+        )
+        empty_box.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('TOPPADDING', (0, 0), (-1, -1), 16),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
+        ]))
+        story.append(empty_box)
+    else:
+        for rep in reportes:
+            items_rep = rep.get("items", [])
+            if not items_rep:
+                continue
+            dia_txt = _format_dia_semana_es(rep.get("fecha"))
+            folio_r = rep.get("folio") or "BORRADOR"
+            est_r = rep.get("estado") or "BORRADOR"
+            tec_r = rep.get("tecnico") or ""
+            header_day_txt = f"{dia_txt} · Técnico: {tec_r} · Folio: {folio_r} ({est_r}) — {len(items_rep)} tareas"
+
+            day_banner = Table([[Paragraph(header_day_txt, st["day_heading"])]], colWidths=[540])
+            day_banner.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#ede9fe')),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#c4b5fd')),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            story.append(day_banner)
+            story.append(Spacer(1, 3))
+            story.append(_build_tareas_table(items_rep, st, include_tecnico=False))
+
+            obs_r = (rep.get("observaciones_generales") or "").strip()
+            if obs_r:
+                story.append(Spacer(1, 2))
+                story.append(Paragraph(f"<i>Obs. Jornada: {obs_r}</i>", st["tag"]))
+
+            story.append(Spacer(1, 10))
+
+    t_firmas = Table([[
+        Paragraph(f"__________________________________________<br/><b>{tecnico_label}</b><br/>Unidad de Equipos Médicos (EEMM)", st["cell_txt_center"]),
+        Paragraph("__________________________________________<br/><b>V°B° Jefatura / Supervisión EEMM</b><br/>Hospital Claudio Vicuña", st["cell_txt_center"])
+    ]], colWidths=[270, 270])
+    t_firmas.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 14),
+    ]))
+    story.append(KeepTogether([t_firmas]))
+
+    doc.build(story, onFirstPage=build_pdf_header_footer, onLaterPages=build_pdf_header_footer)
+    buf.seek(0)
+    return buf.getvalue()
+

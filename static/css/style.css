@@ -2025,6 +2025,10 @@ select.form-control {
   height: 4px;
 }
 
+.module-card-tareas::before {
+  background: linear-gradient(90deg, #7c3aed, #6d28d9);
+}
+
 .module-card-chequeo::before {
   background: linear-gradient(90deg, var(--primary), #3b82f6);
 }
@@ -2037,9 +2041,17 @@ select.form-control {
   background: linear-gradient(90deg, #10b981, #059669);
 }
 
+.module-card-entrega-equipos::before {
+  background: linear-gradient(90deg, #0ea5e9, #0284c7);
+}
+
 .module-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-lg);
+}
+
+.module-card-tareas:hover {
+  border-color: #7c3aed;
 }
 
 .module-card-chequeo:hover {
@@ -2052,6 +2064,10 @@ select.form-control {
 
 .module-card-entregas:hover {
   border-color: #10b981;
+}
+
+.module-card-entrega-equipos:hover {
+  border-color: #0284c7;
 }
 
 .module-card-header {

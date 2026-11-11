@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.11.1";
+        this.currentAppVersion = "1.12.0";
       }
     } else {
-      this.currentAppVersion = "1.11.1";
+      this.currentAppVersion = "1.12.0";
     }
 
     setTimeout(() => {
@@ -560,7 +560,7 @@ const app = {
     this.activeTab = tabName;
 
     // Ocultar todas las vistas
-    const views = ["login", "modulo-selector", "dashboard", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario", "entregas", "entrega-equipos"];
+    const views = ["login", "modulo-selector", "tareas-diarias", "dashboard", "chequeo", "chequeo-servicio", "historial", "equipos", "admin", "inventario", "entregas", "entrega-equipos"];
     views.forEach((v) => {
       const el = document.getElementById(`view-${v}`);
       if (el) el.style.display = v === tabName ? "block" : "none";
@@ -572,7 +572,9 @@ const app = {
     } else if (this.currentUser) {
       if (appNav) appNav.style.display = "flex";
       // Mantener sincronizado el módulo activo según la pestaña navegada
-      if (tabName === "inventario") {
+      if (tabName === "tareas-diarias") {
+        this.currentModule = "tareas-diarias";
+      } else if (tabName === "inventario") {
         this.currentModule = "bodega";
       } else if (tabName === "entregas") {
         this.currentModule = "entregas";
@@ -594,7 +596,9 @@ const app = {
     });
 
     // Cargar datos según la vista
-    if (tabName === "dashboard") {
+    if (tabName === "tareas-diarias") {
+      this.loadTareasDiariasView();
+    } else if (tabName === "dashboard") {
       this.loadProjectDashboard();
     } else if (tabName === "historial") {
       this.refreshCurrentHistorialTab();
@@ -978,7 +982,9 @@ const app = {
     if (targetTab) {
       this.navigate(targetTab);
     } else {
-      if (moduleName === "bodega") {
+      if (moduleName === "tareas-diarias") {
+        this.navigate("tareas-diarias");
+      } else if (moduleName === "bodega") {
         this.navigate("inventario");
       } else if (moduleName === "entregas") {
         this.navigate("entregas");
@@ -1031,6 +1037,11 @@ const app = {
     if (tabsBodega) tabsBodega.style.display = isBodega ? "flex" : "none";
 
     // Pestañas globales en la barra superior
+    const tareasTab = document.getElementById("nav-tab-tareas-diarias");
+    if (tareasTab) {
+      tareasTab.style.display = "inline-flex";
+    }
+
     const entregasTab = document.getElementById("nav-tab-entregas");
     if (entregasTab) {
       entregasTab.style.display = "inline-flex";
@@ -1103,29 +1114,21 @@ const app = {
       const select = document.getElementById("select-unidad");
       const filtro = document.getElementById("filtro-historial-unidad");
       const selectServicio = document.getElementById("select-servicio-clinico");
+      const selectTdServicio = document.getElementById("td-item-servicio");
       if (select) select.innerHTML = '<option value="">-- Seleccionar Servicio / Unidad --</option>';
       if (filtro) filtro.innerHTML = '<option value="">Todas las Unidades</option>';
       if (selectServicio) selectServicio.innerHTML = '<option value="">-- Selecciona el Servicio Clínico --</option>';
+      if (selectTdServicio) selectTdServicio.innerHTML = '<option value="">-- Selecciona el Servicio Clínico --</option>';
       
       unidades.forEach((u) => {
-        if (select) {
-          const opt = document.createElement("option");
-          opt.value = u;
-          opt.textContent = u;
-          select.appendChild(opt);
-        }
-        if (filtro) {
-          const opt2 = document.createElement("option");
-          opt2.value = u;
-          opt2.textContent = u;
-          filtro.appendChild(opt2);
-        }
-        if (selectServicio) {
-          const opt3 = document.createElement("option");
-          opt3.value = u;
-          opt3.textContent = u;
-          selectServicio.appendChild(opt3);
-        }
+        [select, filtro, selectServicio, selectTdServicio].forEach((sel) => {
+          if (sel) {
+            const opt = document.createElement("option");
+            opt.value = u;
+            opt.textContent = u;
+            sel.appendChild(opt);
+          }
+        });
       });
 
       if (selectServicio && this.selectedServicioClinico) {
@@ -6703,6 +6706,716 @@ const app = {
   },
 
   /* ==========================================================================
+     MÓDULO: TAREAS DIARIAS POR TÉCNICO (BORRADOR EDITABLE, CIERRE DIARIO Y PDFs)
+     ========================================================================== */
+  currentTareaDiariaReport: null,
+
+  _formatLocalDateYMD(dateObj = new Date()) {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const d = String(dateObj.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  },
+
+  _getCurrentTimeHHMM() {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  },
+
+  switchTareasDiariasSubTab(subTab) {
+    const vReg = document.getElementById("tareas-diarias-subview-registro");
+    const vRep = document.getElementById("tareas-diarias-subview-reportes");
+    const btnReg = document.getElementById("btn-tab-td-registro");
+    const btnRep = document.getElementById("btn-tab-td-reportes");
+
+    if (subTab === "registro") {
+      if (vReg) vReg.style.display = "block";
+      if (vRep) vRep.style.display = "none";
+      if (btnReg) {
+        btnReg.className = "btn btn-primary btn-sm";
+        btnReg.style.background = "#7c3aed";
+        btnReg.style.borderColor = "#7c3aed";
+        btnReg.style.color = "white";
+      }
+      if (btnRep) {
+        btnRep.className = "btn btn-outline btn-sm";
+        btnRep.style.background = "";
+        btnRep.style.borderColor = "";
+        btnRep.style.color = "";
+      }
+    } else {
+      if (vReg) vReg.style.display = "none";
+      if (vRep) vRep.style.display = "block";
+      if (btnReg) {
+        btnReg.className = "btn btn-outline btn-sm";
+        btnReg.style.background = "";
+        btnReg.style.borderColor = "";
+        btnReg.style.color = "";
+      }
+      if (btnRep) {
+        btnRep.className = "btn btn-primary btn-sm";
+        btnRep.style.background = "#7c3aed";
+        btnRep.style.borderColor = "#7c3aed";
+        btnRep.style.color = "white";
+      }
+      this.loadHistorialTareasDiarias();
+    }
+  },
+
+  setTareasWeekPreset(preset = "current") {
+    const now = new Date();
+    const day = now.getDay(); // 0=Dom, 1=Lun, ...
+    const diffToMon = (day === 0 ? -6 : 1 - day) - (preset === "previous" ? 7 : 0);
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+
+    const fDesde = document.getElementById("td-rep-sem-desde");
+    const fHasta = document.getElementById("td-rep-sem-hasta");
+    if (fDesde) fDesde.value = this._formatLocalDateYMD(monday);
+    if (fHasta) fHasta.value = this._formatLocalDateYMD(sunday);
+
+    this.loadHistorialTareasDiarias();
+  },
+
+  async loadTecnicosTareasSelects() {
+    const activeSel = document.getElementById("td-active-tecnico");
+    const repSel = document.getElementById("td-rep-tecnico");
+    const currentName = (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "Técnico EEMM";
+    const canSwitchTech = this.currentUser && (this.currentUser.rol === "administrador" || this.currentUser.rol === "ingeniero");
+
+    let tecnicos = [];
+    try {
+      const res = await fetch("/api/tareas-diarias/tecnicos");
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list)) tecnicos = list;
+      }
+    } catch (e) {
+      console.warn("No se pudo cargar lista de técnicos:", e);
+    }
+
+    if (!tecnicos.some(t => t.toLowerCase() === currentName.toLowerCase())) {
+      tecnicos.unshift(currentName);
+    }
+
+    if (activeSel) {
+      const prevVal = activeSel.value;
+      activeSel.innerHTML = "";
+      tecnicos.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        activeSel.appendChild(opt);
+      });
+      activeSel.value = (prevVal && tecnicos.includes(prevVal)) ? prevVal : currentName;
+      activeSel.disabled = !canSwitchTech;
+      activeSel.title = canSwitchTech
+        ? "Puedes seleccionar cualquier técnico para revisar o completar su jornada"
+        : "Técnico logueado en la sesión actual";
+    }
+
+    if (repSel) {
+      const prevRepVal = repSel.value;
+      repSel.innerHTML = '<option value="">-- Todos los Técnicos --</option>';
+      tecnicos.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        repSel.appendChild(opt);
+      });
+      if (prevRepVal && tecnicos.includes(prevRepVal)) {
+        repSel.value = prevRepVal;
+      } else if (!canSwitchTech) {
+        repSel.value = currentName;
+      }
+    }
+  },
+
+  async loadTareasDiariasView() {
+    const todayStr = this._formatLocalDateYMD(new Date());
+    const fJornada = document.getElementById("td-fecha-jornada");
+    const fDiario = document.getElementById("td-rep-diario-fecha");
+    const fSemDesde = document.getElementById("td-rep-sem-desde");
+    const fSemHasta = document.getElementById("td-rep-sem-hasta");
+    const horaInput = document.getElementById("td-item-hora");
+
+    if (fJornada && !fJornada.value) fJornada.value = todayStr;
+    if (fDiario && !fDiario.value) fDiario.value = todayStr;
+    if (horaInput && !horaInput.value) horaInput.value = this._getCurrentTimeHHMM();
+
+    if (fSemDesde && fSemHasta && (!fSemDesde.value || !fSemHasta.value)) {
+      const now = new Date();
+      const day = now.getDay();
+      const diffToMon = day === 0 ? -6 : 1 - day;
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon);
+      const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+      fSemDesde.value = this._formatLocalDateYMD(monday);
+      fSemHasta.value = this._formatLocalDateYMD(sunday);
+    }
+
+    // Asegurar catálogo oficial de 50 servicios en select de Tareas Diarias
+    const servSel = document.getElementById("td-item-servicio");
+    if (servSel && servSel.options.length <= 1 && Array.isArray(this.serviciosClinicosOficiales)) {
+      servSel.innerHTML = '<option value="">-- Selecciona el Servicio Clínico --</option>';
+      this.serviciosClinicosOficiales.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        servSel.appendChild(opt);
+      });
+    }
+
+    // Poblar autocompletado de equipos
+    const eqDatalist = document.getElementById("list-equipos-td-autocomplete");
+    if (eqDatalist && eqDatalist.options.length === 0 && Array.isArray(this.equiposBase)) {
+      this.equiposBase.slice(0, 300).forEach(eq => {
+        const opt = document.createElement("option");
+        opt.value = `${eq.nombre || ''} ${eq.marca || ''} ${eq.modelo || ''}${eq.serie ? ` (${eq.serie})` : ''}`.trim();
+        eqDatalist.appendChild(opt);
+      });
+    }
+
+    await this.loadTecnicosTareasSelects();
+    await this.loadTareaDiariaActual();
+  },
+
+  async loadTareaDiariaActual() {
+    const tecSel = document.getElementById("td-active-tecnico");
+    const fechaInput = document.getElementById("td-fecha-jornada");
+    const tecnico = (tecSel && tecSel.value.trim()) || (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "Técnico EEMM";
+    const fecha = (fechaInput && fechaInput.value.trim()) || this._formatLocalDateYMD(new Date());
+
+    this.cancelEditTareaItem(true);
+
+    try {
+      const params = new URLSearchParams({ tecnico, fecha });
+      const res = await fetch(`/api/tareas-diarias/actual?${params.toString()}`);
+      if (!res.ok) throw new Error("Error al consultar tareas del día");
+      this.currentTareaDiariaReport = await res.json();
+      this.renderTareaDiariaActual();
+    } catch (err) {
+      console.error("Error cargando jornada diaria:", err);
+      this.showToast(err.message || "Error al cargar la jornada diaria", "error");
+    }
+  },
+
+  renderTareaDiariaActual() {
+    const rep = this.currentTareaDiariaReport || { estado: "BORRADOR", items: [], observaciones_generales: "" };
+    const items = Array.isArray(rep.items) ? rep.items : [];
+    const isFinalizado = rep.estado === "FINALIZADO";
+
+    const badgeCont = document.getElementById("td-estado-badge-container");
+    const bannerFin = document.getElementById("td-banner-finalizado");
+    const finTit = document.getElementById("td-finalizado-titulo");
+    const finSub = document.getElementById("td-finalizado-sub");
+    const formCard = document.getElementById("td-form-card");
+    const obsInput = document.getElementById("td-obs-generales");
+    const btnFinalizar = document.getElementById("btn-td-finalizar");
+    const editHint = document.getElementById("td-edit-hint");
+    const countSpan = document.getElementById("td-items-count");
+    const listCont = document.getElementById("td-items-list-container");
+
+    if (badgeCont) {
+      if (isFinalizado) {
+        badgeCont.innerHTML = `
+          <span class="badge" style="background: rgba(16, 185, 129, 0.14); color: #059669; font-weight: 700; padding: 0.45rem 0.8rem;">
+            🔒 Reporte Realizado · ${this.escapeHtml(rep.folio || "OFICIAL")}
+          </span>
+        `;
+      } else {
+        badgeCont.innerHTML = `
+          <span class="badge" style="background: rgba(124, 58, 237, 0.14); color: #7c3aed; font-weight: 700; padding: 0.45rem 0.8rem;">
+            📝 Borrador Editable (${items.length} tareas)
+          </span>
+        `;
+      }
+    }
+
+    if (bannerFin) {
+      bannerFin.style.display = isFinalizado ? "flex" : "none";
+      if (isFinalizado) {
+        if (finTit) finTit.textContent = `Reporte Diario Realizado · Folio ${rep.folio || ""}`;
+        if (finSub) finSub.textContent = `Cerrado el ${rep.fecha_cierre_fmt || rep.fecha_fmt || ""}. Las tareas registradas ya no pueden ser editadas.`;
+      }
+    }
+
+    if (formCard) {
+      formCard.style.display = isFinalizado ? "none" : "block";
+    }
+    if (btnFinalizar) {
+      btnFinalizar.style.display = isFinalizado ? "none" : "inline-flex";
+    }
+    if (obsInput) {
+      obsInput.value = rep.observaciones_generales || "";
+      obsInput.disabled = isFinalizado;
+    }
+    if (editHint) {
+      editHint.textContent = isFinalizado
+        ? "Reporte cerrado: modo solo lectura."
+        : "Puedes editar o eliminar estas tareas hasta presionar «Realizar Reporte Diario».";
+    }
+    if (countSpan) countSpan.textContent = items.length;
+
+    if (!listCont) return;
+    if (items.length === 0) {
+      listCont.innerHTML = `
+        <div style="text-align: center; padding: 2rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-md); color: var(--text-tertiary);">
+          <div style="font-size: 1.75rem; margin-bottom: 0.35rem;">📝</div>
+          <div style="font-weight: 600; color: var(--text-secondary);">Aún no has registrado trabajos para esta fecha.</div>
+          <div style="font-size: 0.78rem; margin-top: 3px;">Completa el formulario superior para agregar tu primera tarea del día.</div>
+        </div>
+      `;
+      return;
+    }
+
+    listCont.innerHTML = items.map((it, idx) => {
+      const est = it.estado_tarea || "Completada";
+      const estStyle = est === "Completada"
+        ? "background: rgba(16, 185, 129, 0.12); color: #059669;"
+        : (est === "En Proceso" ? "background: rgba(245, 158, 11, 0.14); color: #d97706;" : "background: rgba(239, 68, 68, 0.12); color: #dc2626;");
+
+      const actionsHtml = isFinalizado ? "" : `
+        <div style="display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0;">
+          <button type="button" class="btn btn-outline btn-xs" onclick="app.editTareaItem(${it.id})" title="Editar tarea" style="padding: 4px 8px; font-weight: 600;">
+            ✏️ Editar
+          </button>
+          <button type="button" class="btn btn-danger btn-xs" onclick="app.deleteTareaItem(${it.id})" title="Eliminar tarea" style="padding: 4px 8px;">
+            🗑️
+          </button>
+        </div>
+      `;
+
+      return `
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.85rem; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 240px;">
+            <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
+              <span class="badge" style="background: rgba(124, 58, 237, 0.12); color: #7c3aed; font-weight: 700; font-family: monospace;">
+                #${idx + 1} · ${this.escapeHtml(it.hora || "--:--")}
+              </span>
+              <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; font-weight: 700;">
+                ${this.escapeHtml(it.servicio || "")}
+              </span>
+              <span class="badge" style="${estStyle} font-weight: 700;">
+                ${this.escapeHtml(est)}
+              </span>
+              <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">
+                ${this.escapeHtml(it.tipo_tarea || "")}
+              </span>
+            </div>
+            ${it.equipo ? `<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.25rem;"><strong>Equipo / Ref.:</strong> ${this.escapeHtml(it.equipo)}</div>` : ""}
+            <div style="font-size: 0.86rem; color: var(--text-primary); line-height: 1.45; white-space: pre-wrap;">${this.escapeHtml(it.descripcion || "")}</div>
+          </div>
+          ${actionsHtml}
+        </div>
+      `;
+    }).join("");
+  },
+
+  async saveTareaDiariaItem() {
+    const editIdEl = document.getElementById("td-edit-item-id");
+    const horaEl = document.getElementById("td-item-hora");
+    const servEl = document.getElementById("td-item-servicio");
+    const tipoEl = document.getElementById("td-item-tipo");
+    const eqEl = document.getElementById("td-item-equipo");
+    const descEl = document.getElementById("td-item-descripcion");
+    const estEl = document.getElementById("td-item-estado");
+    const btnSave = document.getElementById("btn-td-save-item");
+    const tecSel = document.getElementById("td-active-tecnico");
+    const fechaEl = document.getElementById("td-fecha-jornada");
+
+    const editId = editIdEl ? editIdEl.value.trim() : "";
+    const servicio = servEl ? servEl.value.trim() : "";
+    const descripcion = descEl ? descEl.value.trim() : "";
+
+    if (!servicio) {
+      this.showToast("Selecciona el servicio clínico o área", "warning");
+      if (servEl) servEl.focus();
+      return;
+    }
+    if (!descripcion) {
+      this.showToast("Describe el trabajo o tarea realizada", "warning");
+      if (descEl) descEl.focus();
+      return;
+    }
+
+    const tecnico = (tecSel && tecSel.value.trim()) || (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "Técnico EEMM";
+    const fecha = (fechaEl && fechaEl.value.trim()) || this._formatLocalDateYMD(new Date());
+
+    const payload = {
+      tecnico,
+      fecha,
+      hora: (horaEl && horaEl.value.trim()) || this._getCurrentTimeHHMM(),
+      servicio,
+      tipo_tarea: tipoEl ? tipoEl.value : "Mantención Correctiva / Reparación",
+      equipo: eqEl ? eqEl.value.trim() : "",
+      descripcion,
+      estado_tarea: estEl ? estEl.value : "Completada"
+    };
+
+    if (btnSave) btnSave.disabled = true;
+
+    try {
+      const url = editId ? `/api/tareas-diarias/items/${editId}` : "/api/tareas-diarias/items";
+      const method = editId ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || "No se pudo guardar la tarea");
+      }
+
+      this.currentTareaDiariaReport = data;
+      this.cancelEditTareaItem(true);
+      this.renderTareaDiariaActual();
+      this.showToast(editId ? "Tarea actualizada correctamente" : "Tarea agregada a tu jornada", "success");
+    } catch (err) {
+      this.showToast(err.message || "Error al guardar tarea", "error");
+    } finally {
+      if (btnSave) btnSave.disabled = false;
+    }
+  },
+
+  editTareaItem(itemId) {
+    const rep = this.currentTareaDiariaReport;
+    if (!rep || rep.estado === "FINALIZADO") return;
+    const item = (rep.items || []).find(it => it.id === itemId);
+    if (!item) return;
+
+    const editIdEl = document.getElementById("td-edit-item-id");
+    const horaEl = document.getElementById("td-item-hora");
+    const servEl = document.getElementById("td-item-servicio");
+    const tipoEl = document.getElementById("td-item-tipo");
+    const eqEl = document.getElementById("td-item-equipo");
+    const descEl = document.getElementById("td-item-descripcion");
+    const estEl = document.getElementById("td-item-estado");
+    const btnCancel = document.getElementById("btn-td-cancel-edit");
+    const btnSave = document.getElementById("btn-td-save-item");
+    const pill = document.getElementById("td-edit-mode-pill");
+    const formCard = document.getElementById("td-form-card");
+
+    if (editIdEl) editIdEl.value = item.id;
+    if (horaEl) horaEl.value = item.hora || "";
+    if (servEl) servEl.value = item.servicio || "";
+    if (tipoEl) tipoEl.value = item.tipo_tarea || "Mantención Correctiva / Reparación";
+    if (eqEl) eqEl.value = item.equipo || "";
+    if (descEl) descEl.value = item.descripcion || "";
+    if (estEl) estEl.value = item.estado_tarea || "Completada";
+
+    if (btnCancel) btnCancel.style.display = "inline-flex";
+    if (pill) pill.style.display = "inline-flex";
+    if (btnSave) {
+      btnSave.innerHTML = `💾 Guardar Cambios`;
+    }
+    if (formCard) {
+      formCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  },
+
+  cancelEditTareaItem(keepHoraFresh = false) {
+    const form = document.getElementById("form-tarea-diaria-item");
+    if (form) form.reset();
+    const editIdEl = document.getElementById("td-edit-item-id");
+    if (editIdEl) editIdEl.value = "";
+    const horaEl = document.getElementById("td-item-hora");
+    if (horaEl && keepHoraFresh) horaEl.value = this._getCurrentTimeHHMM();
+
+    const btnCancel = document.getElementById("btn-td-cancel-edit");
+    const pill = document.getElementById("td-edit-mode-pill");
+    const btnSave = document.getElementById("btn-td-save-item");
+    if (btnCancel) btnCancel.style.display = "none";
+    if (pill) pill.style.display = "none";
+    if (btnSave) {
+      btnSave.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Agregar Tarea al Día
+      `;
+    }
+  },
+
+  async deleteTareaItem(itemId) {
+    if (!confirm("¿Eliminar esta tarea del borrador diario?")) return;
+    try {
+      const res = await fetch(`/api/tareas-diarias/items/${itemId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "No se pudo eliminar la tarea");
+      this.currentTareaDiariaReport = data;
+      this.cancelEditTareaItem(true);
+      this.renderTareaDiariaActual();
+      this.showToast("Tarea eliminada del borrador", "info");
+    } catch (err) {
+      this.showToast(err.message || "Error al eliminar tarea", "error");
+    }
+  },
+
+  async saveTareaObsGenerales() {
+    const rep = this.currentTareaDiariaReport;
+    if (!rep || rep.estado === "FINALIZADO") return;
+    const obsEl = document.getElementById("td-obs-generales");
+    const obsVal = obsEl ? obsEl.value.trim() : "";
+    if (!rep.id && !obsVal) return;
+
+    const tecSel = document.getElementById("td-active-tecnico");
+    const fechaEl = document.getElementById("td-fecha-jornada");
+    const tecnico = (tecSel && tecSel.value.trim()) || rep.tecnico;
+    const fecha = (fechaEl && fechaEl.value.trim()) || rep.fecha;
+
+    try {
+      const res = await fetch("/api/tareas-diarias/observaciones", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tecnico, fecha, observaciones_generales: obsVal })
+      });
+      if (res.ok) {
+        this.currentTareaDiariaReport = await res.json();
+      }
+    } catch (e) {
+      console.warn("No se pudo guardar observación:", e);
+    }
+  },
+
+  async finalizarReporteDiario() {
+    const rep = this.currentTareaDiariaReport;
+    const items = (rep && Array.isArray(rep.items)) ? rep.items : [];
+    if (items.length === 0) {
+      this.showToast("Debes agregar al menos una tarea antes de realizar el reporte diario", "warning");
+      return;
+    }
+
+    if (!confirm("¿Confirmas realizar y cerrar el Reporte Diario?\n\nUna vez realizado, las tareas de esta jornada quedarán bloqueadas y ya no podrán ser editadas.")) {
+      return;
+    }
+
+    const tecSel = document.getElementById("td-active-tecnico");
+    const fechaEl = document.getElementById("td-fecha-jornada");
+    const obsEl = document.getElementById("td-obs-generales");
+    const btnFin = document.getElementById("btn-td-finalizar");
+
+    const tecnico = (tecSel && tecSel.value.trim()) || rep.tecnico;
+    const fecha = (fechaEl && fechaEl.value.trim()) || rep.fecha;
+    const observaciones_generales = obsEl ? obsEl.value.trim() : "";
+
+    if (btnFin) btnFin.disabled = true;
+    try {
+      const res = await fetch("/api/tareas-diarias/finalizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tecnico, fecha, observaciones_generales })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "No se pudo realizar el reporte diario");
+
+      this.currentTareaDiariaReport = data;
+      this.cancelEditTareaItem(true);
+      this.renderTareaDiariaActual();
+      this.showToast(`¡Reporte Diario ${data.folio || ''} realizado con éxito!`, "success");
+
+      if (data.id) {
+        this.downloadTareaReportePdf(data.id, data.folio);
+      }
+    } catch (err) {
+      this.showToast(err.message || "Error al realizar el reporte diario", "error");
+    } finally {
+      if (btnFin) btnFin.disabled = false;
+    }
+  },
+
+  async loadHistorialTareasDiarias() {
+    const tecSel = document.getElementById("td-rep-tecnico");
+    const fDesde = document.getElementById("td-rep-sem-desde");
+    const fHasta = document.getElementById("td-rep-sem-hasta");
+    const estSel = document.getElementById("td-hist-estado");
+    const qInput = document.getElementById("td-hist-q");
+    const tbody = document.getElementById("td-historial-tbody");
+    const kpiBar = document.getElementById("td-historial-kpi-bar");
+
+    if (!tbody) return;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
+          <span class="spinner-border spinner-border-sm" style="width:16px;height:16px;border-width:2px;"></span> Cargando historial de tareas...
+        </td>
+      </tr>
+    `;
+
+    const params = new URLSearchParams();
+    if (tecSel && tecSel.value.trim()) params.append("tecnico", tecSel.value.trim());
+    if (fDesde && fDesde.value.trim()) params.append("fecha_inicio", fDesde.value.trim());
+    if (fHasta && fHasta.value.trim()) params.append("fecha_fin", fHasta.value.trim());
+    if (estSel && estSel.value.trim()) params.append("estado", estSel.value.trim());
+    if (qInput && qInput.value.trim()) params.append("q", qInput.value.trim());
+    params.append("limit", 200);
+
+    try {
+      const res = await fetch(`/api/tareas-diarias/historial?${params.toString()}`);
+      if (!res.ok) throw new Error("Error al consultar historial de tareas");
+      const rows = await res.json();
+      const reportes = Array.isArray(rows) ? rows : [];
+
+      const totalReportes = reportes.length;
+      const totalTareas = reportes.reduce((acc, r) => acc + (r.items ? r.items.length : 0), 0);
+      const finalizados = reportes.filter(r => r.estado === "FINALIZADO").length;
+      const servSet = new Set();
+      reportes.forEach(r => (r.items || []).forEach(it => { if (it.servicio) servSet.add(it.servicio); }));
+
+      if (kpiBar) {
+        kpiBar.innerHTML = `
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Jornadas / Reportes</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #7c3aed; margin-top: 2px;">${totalReportes}</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Total Tareas Ejecutadas</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: var(--primary); margin-top: 2px;">${totalTareas}</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Reportes Cerrados</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #10b981; margin-top: 2px;">${finalizados} / ${totalReportes}</div>
+          </div>
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+            <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Áreas Intervenidas</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #0284c7; margin-top: 2px;">${servSet.size} servicios</div>
+          </div>
+        `;
+      }
+
+      if (totalReportes === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-tertiary);">
+              <div style="font-size: 1.75rem; margin-bottom: 0.4rem;">📋</div>
+              <div style="font-weight: 600; color: var(--text-secondary);">No se encontraron jornadas registradas con los filtros actuales.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = reportes.map(r => {
+        const items = r.items || [];
+        const isFin = r.estado === "FINALIZADO";
+        const folio = r.folio || `BORRADOR (${r.fecha_fmt || r.fecha})`;
+        const estadoBadge = isFin
+          ? `<span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #059669; font-weight: 700;">🔒 Finalizado</span>`
+          : `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #d97706; font-weight: 700;">📝 Borrador</span>`;
+
+        const previewItems = items.slice(0, 4).map(it =>
+          `<li><strong style="color: #7c3aed;">${this.escapeHtml(it.hora || "--:--")}</strong> [${this.escapeHtml(it.servicio)}] — ${this.escapeHtml(it.descripcion)}</li>`
+        ).join("");
+        const moreHtml = items.length > 4 ? `<div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 2px;">... y ${items.length - 4} tareas más</div>` : "";
+
+        return `
+          <tr>
+            <td>
+              <div class="badge" style="background: rgba(124, 58, 237, 0.12); color: #7c3aed; font-weight: 700; font-family: monospace;">
+                ${this.escapeHtml(folio)}
+              </div>
+              <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">
+                ${this.escapeHtml(r.fecha_fmt || r.fecha)}
+              </div>
+            </td>
+            <td style="font-weight: 600; color: var(--text-primary);">
+              ${this.escapeHtml(r.tecnico || "")}
+            </td>
+            <td>
+              <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 3px;">
+                ${items.length} tarea(s) registrada(s):
+              </div>
+              <ul style="margin: 0; padding-left: 1rem; font-size: 0.76rem; color: var(--text-primary); line-height: 1.35;">
+                ${previewItems}
+              </ul>
+              ${moreHtml}
+            </td>
+            <td style="text-align: center;">
+              ${estadoBadge}
+            </td>
+            <td style="text-align: center; white-space: nowrap;">
+              <button type="button" class="btn btn-outline btn-xs" onclick="app.downloadTareaReportePdf(${r.id}, '${this.escapeHtml(r.folio || r.fecha)}')" title="Descargar Reporte Diario en PDF" style="padding: 4px 8px; font-weight: 600;">
+                📄 PDF
+              </button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="app.openTareaEnFormulario('${this.escapeHtml(r.tecnico)}', '${this.escapeHtml(r.fecha)}')" title="Abrir jornada en el formulario" style="padding: 4px 8px; margin-left: 3px; font-weight: 600;">
+                👁️ Ver
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    } catch (err) {
+      console.error("Error historial tareas:", err);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 2rem; color: var(--danger, #ef4444);">
+            Error al cargar el historial: ${this.escapeHtml(err.message || "Error del servidor")}
+          </td>
+        </tr>
+      `;
+    }
+  },
+
+  async openTareaEnFormulario(tecnico, fecha) {
+    const canSwitchTech = this.currentUser && (this.currentUser.rol === "administrador" || this.currentUser.rol === "ingeniero");
+    const tecSel = document.getElementById("td-active-tecnico");
+    const fechaEl = document.getElementById("td-fecha-jornada");
+
+    if (tecSel && canSwitchTech && tecnico) {
+      tecSel.value = tecnico;
+    }
+    if (fechaEl && fecha) {
+      fechaEl.value = fecha;
+    }
+    this.switchTareasDiariasSubTab("registro");
+    await this.loadTareaDiariaActual();
+  },
+
+  downloadTareaDiariaActualPdf() {
+    const rep = this.currentTareaDiariaReport;
+    if (rep && rep.id) {
+      this.downloadTareaReportePdf(rep.id, rep.folio || rep.fecha);
+      return;
+    }
+    const tecSel = document.getElementById("td-active-tecnico");
+    const fechaEl = document.getElementById("td-fecha-jornada");
+    const tecnico = (tecSel && tecSel.value.trim()) || "";
+    const fecha = (fechaEl && fechaEl.value.trim()) || this._formatLocalDateYMD(new Date());
+    const params = new URLSearchParams({ fecha, download: "true" });
+    if (tecnico) params.append("tecnico", tecnico);
+    this.handlePdfDownloadOrView(`/api/tareas-diarias/pdf/diario?${params.toString()}`, `Reporte_Diario_Tareas_${fecha}.pdf`);
+  },
+
+  downloadTareaReportePdf(reporteId, folio) {
+    const clean = (folio || `TD_${reporteId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
+    this.handlePdfDownloadOrView(`/api/tareas-diarias/reportes/${reporteId}/pdf?download=true`, `Reporte_Diario_${clean}.pdf`);
+  },
+
+  exportTareaDiarioPorTecnicoPdf() {
+    const tecSel = document.getElementById("td-rep-tecnico");
+    const fEl = document.getElementById("td-rep-diario-fecha");
+    const tecnico = tecSel ? tecSel.value.trim() : "";
+    const fecha = (fEl && fEl.value.trim()) || this._formatLocalDateYMD(new Date());
+
+    const params = new URLSearchParams({ fecha, download: "true" });
+    if (tecnico) params.append("tecnico", tecnico);
+    const tecSlug = tecnico ? `_${tecnico.replace(/[^A-Za-z0-9_-]+/g, "_")}` : "_Todos";
+    this.handlePdfDownloadOrView(`/api/tareas-diarias/pdf/diario?${params.toString()}`, `Reporte_Diario_Tareas${tecSlug}_${fecha}.pdf`);
+  },
+
+  exportTareaSemanalPorTecnicoPdf() {
+    const tecSel = document.getElementById("td-rep-tecnico");
+    const fDesde = document.getElementById("td-rep-sem-desde");
+    const fHasta = document.getElementById("td-rep-sem-hasta");
+    const tecnico = tecSel ? tecSel.value.trim() : "";
+    const desde = (fDesde && fDesde.value.trim()) || this._formatLocalDateYMD(new Date());
+    const hasta = (fHasta && fHasta.value.trim()) || this._formatLocalDateYMD(new Date());
+
+    const params = new URLSearchParams({ fecha_inicio: desde, fecha_fin: hasta, download: "true" });
+    if (tecnico) params.append("tecnico", tecnico);
+    const tecSlug = tecnico ? `_${tecnico.replace(/[^A-Za-z0-9_-]+/g, "_")}` : "_Todos";
+    this.handlePdfDownloadOrView(`/api/tareas-diarias/pdf/semanal?${params.toString()}`, `Reporte_Semanal_Tareas${tecSlug}_${desde}_${hasta}.pdf`);
+  },
+
+  /* ==========================================================================
      TOAST NOTIFICATIONS
      ========================================================================== */
   showToast(message, type = "info") {
@@ -6724,7 +7437,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.11.1",
+  currentAppVersion: "1.12.0",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
