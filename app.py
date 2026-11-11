@@ -121,6 +121,39 @@ def get_db():
     return conn
 
 
+def _ensure_entregas_equipos_table(cursor):
+    """Asegura la tabla e índices de entregas_equipos incluyendo columnas serie e items_json."""
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS entregas_equipos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folio TEXT UNIQUE,
+        nombre_equipo TEXT NOT NULL,
+        marca TEXT,
+        modelo TEXT,
+        serie TEXT,
+        inventario TEXT NOT NULL,
+        servicio TEXT NOT NULL,
+        nombre_receptor TEXT NOT NULL,
+        usuario_entrega TEXT NOT NULL,
+        firma_data TEXT,
+        observaciones TEXT,
+        items_json TEXT,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    for col_stmt in [
+        "ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;",
+        "ALTER TABLE entregas_equipos ADD COLUMN items_json TEXT;"
+    ]:
+        try:
+            cursor.execute(col_stmt)
+        except Exception:
+            pass
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_fecha ON entregas_equipos(fecha);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_servicio ON entregas_equipos(servicio);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_inventario ON entregas_equipos(inventario);")
+
+
 def _ensure_tareas_tables(cursor):
     """Asegura la existencia de tablas e índices para Tareas Diarias por Técnico."""
     cursor.execute("""
@@ -309,30 +342,7 @@ def ensure_db_initialized():
             pass
 
         # 5.3 Tabla entregas_equipos (Actas de entrega formal de equipos médicos a servicios clínicos)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS entregas_equipos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            folio TEXT UNIQUE,
-            nombre_equipo TEXT NOT NULL,
-            marca TEXT,
-            modelo TEXT,
-            serie TEXT,
-            inventario TEXT NOT NULL,
-            servicio TEXT NOT NULL,
-            nombre_receptor TEXT NOT NULL,
-            usuario_entrega TEXT NOT NULL,
-            firma_data TEXT,
-            observaciones TEXT,
-            fecha DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-        """)
-        try:
-            cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
-        except Exception:
-            pass
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_fecha ON entregas_equipos(fecha);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_servicio ON entregas_equipos(servicio);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entregas_eq_inventario ON entregas_equipos(inventario);")
+        _ensure_entregas_equipos_table(cursor)
 
         # 6. Tabla unidades
         cursor.execute("""
@@ -466,13 +476,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.0",
-        "version_code": 29,
-        "release_tag": "v1.12.0",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.0/EEMM.apk",
+        "version_name": "1.12.1",
+        "version_code": 30,
+        "release_tag": "v1.12.1",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.1/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Nueva sección 'Tareas Diarias' ubicada al principio del menú principal y barra de navegación.\n• Bitácora editable durante la jornada con bloqueo oficial al presionar 'Realizar Reporte Diario'.\n• Emisión de reportes diarios y semanales por técnico en formato PDF.",
-        "published_at": "2026-11-10T21:00:00-03:00"
+        "notes": "• Entrega múltiple de equipos médicos: permite agregar varios equipos con sus series/inventarios en una misma acta oficial con firma digital y PDF detallado.\n• Sección 'Tareas Diarias' al principio del menú con reportes diarios y semanales por técnico.",
+        "published_at": "2026-11-10T21:25:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -2607,8 +2617,17 @@ def export_entregas_pdf(
 # MÓDULO ENTREGA DE EQUIPOS MÉDICOS (ACTAS Y REPORTES PDF)
 # -------------------------------------------------------------
 
-class EntregaEquipoCreate(BaseModel):
+class EntregaEquipoItemDetail(BaseModel):
     nombre_equipo: str
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    serie: Optional[str] = None
+    inventario: Optional[str] = None
+
+
+class EntregaEquipoCreate(BaseModel):
+    items: Optional[List[EntregaEquipoItemDetail]] = None
+    nombre_equipo: Optional[str] = None
     marca: Optional[str] = None
     modelo: Optional[str] = None
     serie: Optional[str] = None
@@ -2619,53 +2638,93 @@ class EntregaEquipoCreate(BaseModel):
     firma_data: Optional[str] = None
     observaciones: Optional[str] = None
 
+
+def _parse_entrega_equipo_row(row_dict: dict) -> dict:
+    """Deserializa items_json en lista estructurada de equipos manteniendo retrocompatibilidad."""
+    raw_items = row_dict.get("items_json")
+    parsed = []
+    if raw_items:
+        try:
+            loaded = json.loads(raw_items)
+            if isinstance(loaded, list):
+                parsed = loaded
+        except Exception:
+            parsed = []
+    if not parsed and row_dict.get("nombre_equipo"):
+        parsed = [{
+            "nombre_equipo": row_dict.get("nombre_equipo") or "",
+            "marca": row_dict.get("marca") or "",
+            "modelo": row_dict.get("modelo") or "",
+            "serie": row_dict.get("serie") or "",
+            "inventario": row_dict.get("inventario") or "S/I",
+        }]
+    row_dict["items"] = parsed
+    return row_dict
+
+
 @app.post("/api/entregas-equipos")
 def create_entrega_equipo(item: EntregaEquipoCreate):
-    nombre_eq = (item.nombre_equipo or "").strip()
-    if not nombre_eq:
-        raise HTTPException(status_code=400, detail="Debe indicar el nombre del equipo médico")
-    
-    serie = (item.serie or "").strip()
-    inv = (item.inventario or serie or "S/I").strip()
-    if not inv and not serie:
-        raise HTTPException(status_code=400, detail="Debe indicar el N° de inventario o serie del equipo")
-    
     servicio = (item.servicio or "").strip()
     if not servicio:
         raise HTTPException(status_code=400, detail="Debe indicar el servicio clínico de destino")
-    
+
     nombre_rec = (item.nombre_receptor or "").strip()
     if not nombre_rec:
         raise HTTPException(status_code=400, detail="Debe indicar el nombre de quien recibe el equipo")
-    
-    marca = (item.marca or "").strip()
-    modelo = (item.modelo or "").strip()
+
+    # Normalizar lista de equipos (soporta múltiples equipos o equipo único)
+    items_to_deliver = []
+    if item.items and len(item.items) > 0:
+        for it in item.items:
+            nom = (it.nombre_equipo or "").strip()
+            if not nom:
+                continue
+            ser = (it.serie or "").strip()
+            inv_v = (it.inventario or ser or "S/I").strip()
+            items_to_deliver.append({
+                "nombre_equipo": nom,
+                "marca": (it.marca or "").strip(),
+                "modelo": (it.modelo or "").strip(),
+                "serie": ser,
+                "inventario": inv_v
+            })
+    elif item.nombre_equipo and item.nombre_equipo.strip():
+        ser = (item.serie or "").strip()
+        inv_v = (item.inventario or ser or "S/I").strip()
+        items_to_deliver.append({
+            "nombre_equipo": item.nombre_equipo.strip(),
+            "marca": (item.marca or "").strip(),
+            "modelo": (item.modelo or "").strip(),
+            "serie": ser,
+            "inventario": inv_v
+        })
+
+    if not items_to_deliver:
+        raise HTTPException(status_code=400, detail="Debe agregar al menos un equipo médico a entregar")
+
+    if len(items_to_deliver) == 1:
+        eq0 = items_to_deliver[0]
+        nombre_eq = eq0["nombre_equipo"]
+        marca = eq0["marca"]
+        modelo = eq0["modelo"]
+        serie = eq0["serie"]
+        inv = eq0["inventario"]
+    else:
+        nombre_eq = f"{len(items_to_deliver)} equipos: " + ", ".join(it["nombre_equipo"] for it in items_to_deliver)
+        marcas_unicas = sorted(set(it["marca"] for it in items_to_deliver if it["marca"]))
+        modelos_unicos = sorted(set(it["modelo"] for it in items_to_deliver if it["modelo"]))
+        marca = ", ".join(marcas_unicas) if marcas_unicas else "Múltiples"
+        modelo = ", ".join(modelos_unicos) if modelos_unicos else "Múltiples"
+        serie = ", ".join(it["serie"] for it in items_to_deliver if it["serie"])
+        inv = ", ".join(it["inventario"] for it in items_to_deliver if it["inventario"]) or "Varios"
+
     usuario_ent = (item.usuario_entrega or "Técnico EEMM").strip()
     obs_txt = (item.observaciones or "").strip()
-    
+    items_json_str = json.dumps(items_to_deliver, ensure_ascii=False)
+
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS entregas_equipos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        folio TEXT UNIQUE,
-        nombre_equipo TEXT NOT NULL,
-        marca TEXT,
-        modelo TEXT,
-        serie TEXT,
-        inventario TEXT NOT NULL,
-        servicio TEXT NOT NULL,
-        nombre_receptor TEXT NOT NULL,
-        usuario_entrega TEXT NOT NULL,
-        firma_data TEXT,
-        observaciones TEXT,
-        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
-    try:
-        cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
-    except Exception:
-        pass
+    _ensure_entregas_equipos_table(cursor)
 
     date_prefix = datetime.now().strftime("%Y%m%d")
     cursor.execute("SELECT COUNT(*) FROM entregas_equipos WHERE date(fecha) = date('now', 'localtime')")
@@ -2675,8 +2734,8 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
     cursor.execute("""
         INSERT INTO entregas_equipos (
             folio, nombre_equipo, marca, modelo, serie, inventario,
-            servicio, nombre_receptor, usuario_entrega, firma_data, observaciones, fecha
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+            servicio, nombre_receptor, usuario_entrega, firma_data, observaciones, items_json, fecha
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     """, (
         folio,
         nombre_eq,
@@ -2688,21 +2747,70 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
         nombre_rec,
         usuario_ent,
         item.firma_data,
-        obs_txt
+        obs_txt,
+        items_json_str
     ))
     entrega_id = cursor.lastrowid
     conn.commit()
 
     cursor.execute("""
         SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
-               servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
+               servicio, nombre_receptor, usuario_entrega, firma_data, observaciones, items_json,
                strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
         FROM entregas_equipos
         WHERE id = ?
     """, (entrega_id,))
-    entrega_row = dict(cursor.fetchone())
+    entrega_row = _parse_entrega_equipo_row(dict(cursor.fetchone()))
     conn.close()
     return entrega_row
+
+
+def _query_entregas_equipos_filtered(
+    cursor,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    servicio: Optional[str] = None,
+    q: Optional[str] = None,
+    order_by: str = "id DESC",
+    limit: Optional[int] = None
+) -> List[dict]:
+    """Consulta entregas de equipos aplicando filtros comunes sin duplicar SQL."""
+    clauses = []
+    params: List[Any] = []
+
+    if fecha_inicio and fecha_inicio.strip():
+        clauses.append("date(fecha) >= date(?)")
+        params.append(fecha_inicio.strip())
+
+    if fecha_fin and fecha_fin.strip():
+        clauses.append("date(fecha) <= date(?)")
+        params.append(fecha_fin.strip())
+
+    if servicio and servicio.strip():
+        clauses.append("servicio = ?")
+        params.append(servicio.strip())
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        clauses.append("(folio LIKE ? OR nombre_equipo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR inventario LIKE ? OR nombre_receptor LIKE ? OR usuario_entrega LIKE ? OR servicio LIKE ? OR COALESCE(items_json, '') LIKE ?)")
+        params.extend([term] * 10)
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    limit_sql = "LIMIT ?" if limit is not None else ""
+    if limit is not None:
+        params.append(limit)
+
+    sql = f"""
+        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
+               servicio, nombre_receptor, usuario_entrega, firma_data, observaciones, items_json,
+               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
+        FROM entregas_equipos
+        {where_sql}
+        ORDER BY {order_by}
+        {limit_sql}
+    """
+    cursor.execute(sql, tuple(params))
+    return [_parse_entrega_equipo_row(dict(r)) for r in cursor.fetchall()]
 
 
 @app.get("/api/entregas-equipos")
@@ -2715,117 +2823,10 @@ def list_entregas_equipos(
 ):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS entregas_equipos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        folio TEXT UNIQUE,
-        nombre_equipo TEXT NOT NULL,
-        marca TEXT,
-        modelo TEXT,
-        inventario TEXT NOT NULL,
-        servicio TEXT NOT NULL,
-        nombre_receptor TEXT NOT NULL,
-        usuario_entrega TEXT NOT NULL,
-        firma_data TEXT,
-        observaciones TEXT,
-        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
-
-    clauses = []
-    params = []
-
-    if fecha_inicio and fecha_inicio.strip():
-        clauses.append("date(fecha) >= date(?)")
-        params.append(fecha_inicio.strip())
-
-    if fecha_fin and fecha_fin.strip():
-        clauses.append("date(fecha) <= date(?)")
-        params.append(fecha_fin.strip())
-
-    if servicio and servicio.strip():
-        clauses.append("servicio = ?")
-        params.append(servicio.strip())
-
-    if q and q.strip():
-        term = f"%{q.strip()}%"
-        clauses.append("(folio LIKE ? OR nombre_equipo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR inventario LIKE ? OR nombre_receptor LIKE ? OR usuario_entrega LIKE ? OR servicio LIKE ?)")
-        params.extend([term, term, term, term, term, term, term, term, term])
-
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    sql = f"""
-        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
-               servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
-               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
-        FROM entregas_equipos
-        {where_sql}
-        ORDER BY id DESC
-        LIMIT ?
-    """
-    params.append(limit)
-    cursor.execute(sql, tuple(params))
-    rows = [dict(r) for r in cursor.fetchall()]
+    _ensure_entregas_equipos_table(cursor)
+    rows = _query_entregas_equipos_filtered(cursor, fecha_inicio, fecha_fin, servicio, q, "id DESC", limit)
     conn.close()
     return rows
-
-
-@app.get("/api/entregas-equipos/{id}/pdf")
-def get_entrega_equipo_pdf(id: int, download: bool = False):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS entregas_equipos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        folio TEXT UNIQUE,
-        nombre_equipo TEXT NOT NULL,
-        marca TEXT,
-        modelo TEXT,
-        serie TEXT,
-        inventario TEXT NOT NULL,
-        servicio TEXT NOT NULL,
-        nombre_receptor TEXT NOT NULL,
-        usuario_entrega TEXT NOT NULL,
-        firma_data TEXT,
-        observaciones TEXT,
-        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
-    try:
-        cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
-    except Exception:
-        pass
-    cursor.execute("""
-        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
-               servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
-               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
-        FROM entregas_equipos
-        WHERE id = ?
-    """, (id,))
-    row = cursor.fetchone()
-    conn.close()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Acta de entrega de equipo no encontrada")
-    
-    record = dict(row)
-    try:
-        pdf_bytes = generate_entrega_equipo_pdf(record)
-        disposition = "attachment" if download else "inline"
-        folio_clean = (record.get("folio") or f"EQ_{id}").replace('/', '_')
-        filename = f"Acta_Entrega_{folio_clean}.pdf"
-
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
-                "Content-Type": "application/pdf",
-                "Cache-Control": "no-cache"
-            }
-        )
-    except Exception as e:
-        print(f"[ERROR] Error generando PDF de entrega de equipo: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al generar el acta PDF: {str(e)}")
 
 
 @app.get("/api/entregas-equipos/export/pdf")
@@ -2838,59 +2839,8 @@ def export_entregas_equipos_pdf(
 ):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS entregas_equipos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        folio TEXT UNIQUE,
-        nombre_equipo TEXT NOT NULL,
-        marca TEXT,
-        modelo TEXT,
-        serie TEXT,
-        inventario TEXT NOT NULL,
-        servicio TEXT NOT NULL,
-        nombre_receptor TEXT NOT NULL,
-        usuario_entrega TEXT NOT NULL,
-        firma_data TEXT,
-        observaciones TEXT,
-        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
-    try:
-        cursor.execute("ALTER TABLE entregas_equipos ADD COLUMN serie TEXT;")
-    except Exception:
-        pass
-
-    clauses = []
-    params = []
-
-    if fecha_inicio and fecha_inicio.strip():
-        clauses.append("date(fecha) >= date(?)")
-        params.append(fecha_inicio.strip())
-
-    if fecha_fin and fecha_fin.strip():
-        clauses.append("date(fecha) <= date(?)")
-        params.append(fecha_fin.strip())
-
-    if servicio and servicio.strip():
-        clauses.append("servicio = ?")
-        params.append(servicio.strip())
-
-    if q and q.strip():
-        term = f"%{q.strip()}%"
-        clauses.append("(folio LIKE ? OR nombre_equipo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR inventario LIKE ? OR nombre_receptor LIKE ? OR usuario_entrega LIKE ? OR servicio LIKE ?)")
-        params.extend([term, term, term, term, term, term, term, term, term])
-
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    sql = f"""
-        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
-               servicio, nombre_receptor, usuario_entrega, firma_data, observaciones,
-               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
-        FROM entregas_equipos
-        {where_sql}
-        ORDER BY fecha ASC, id ASC
-    """
-    cursor.execute(sql, tuple(params))
-    entregas = [dict(r) for r in cursor.fetchall()]
+    _ensure_entregas_equipos_table(cursor)
+    entregas = _query_entregas_equipos_filtered(cursor, fecha_inicio, fecha_fin, servicio, q, "fecha ASC, id ASC", None)
     conn.close()
 
     try:
@@ -2914,6 +2864,45 @@ def export_entregas_equipos_pdf(
     except Exception as e:
         print(f"[ERROR] Error generando PDF consolidado de entregas de equipos: {e}")
         raise HTTPException(status_code=500, detail=f"Error al generar reporte consolidado PDF: {str(e)}")
+
+
+@app.get("/api/entregas-equipos/{id}/pdf")
+def get_entrega_equipo_pdf(id: int, download: bool = False):
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_entregas_equipos_table(cursor)
+    cursor.execute("""
+        SELECT id, folio, nombre_equipo, marca, modelo, serie, inventario,
+               servicio, nombre_receptor, usuario_entrega, firma_data, observaciones, items_json,
+               strftime('%d/%m/%Y %H:%M', fecha) as fecha_fmt, fecha
+        FROM entregas_equipos
+        WHERE id = ?
+    """, (id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Acta de entrega de equipo no encontrada")
+    
+    record = _parse_entrega_equipo_row(dict(row))
+    try:
+        pdf_bytes = generate_entrega_equipo_pdf(record)
+        disposition = "attachment" if download else "inline"
+        folio_clean = (record.get("folio") or f"EQ_{id}").replace('/', '_')
+        filename = f"Acta_Entrega_{folio_clean}.pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"{disposition}; filename=\"{filename}\"",
+                "Content-Type": "application/pdf",
+                "Cache-Control": "no-cache"
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] Error generando PDF de entrega de equipo: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al generar el acta PDF: {str(e)}")
 
 
 @app.delete("/api/entregas-equipos/{id}")

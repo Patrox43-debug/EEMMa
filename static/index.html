@@ -186,7 +186,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>Hospital Claudio Vicuña · <strong>v1.12.0</strong></span>
+              <span>Hospital Claudio Vicuña · <strong>v1.12.1</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -300,7 +300,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            Hospital Claudio Vicuña · Versión <strong>1.12.0</strong>
+            Hospital Claudio Vicuña · Versión <strong>1.12.1</strong>
           </div>
         </form>
       </section>
@@ -2085,25 +2085,25 @@
               <datalist id="list-equipos-entrega-autocomplete"></datalist>
             </div>
 
-            <!-- Fila 1: Nombre del Equipo e Inventario -->
+            <!-- Fila 1: Nombre del Equipo e Inventario / Serie -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label for="entrega-eq-nombre" class="form-label">
                   Nombre del Equipo: <span style="color: var(--danger, #ef4444);">*</span>
                 </label>
-                <input type="text" id="entrega-eq-nombre" class="form-control" placeholder="Ej: MONITOR DE SIGNOS VITALES" required autocomplete="off">
+                <input type="text" id="entrega-eq-nombre" class="form-control" placeholder="Ej: MONITOR DE SIGNOS VITALES" autocomplete="off">
               </div>
 
               <div class="form-group" style="margin-bottom: 0;">
                 <label for="entrega-eq-inventario" class="form-label">
-                  N° de Inventario / Activo: <span style="color: var(--danger, #ef4444);">*</span>
+                  N° de Serie / Inventario: <span style="color: var(--danger, #ef4444);">*</span>
                 </label>
-                <input type="text" id="entrega-eq-inventario" class="form-control" placeholder="Ej: HCV-EQ-10492 o N° de Placa" required autocomplete="off">
+                <input type="text" id="entrega-eq-inventario" class="form-control" placeholder="Ej: HCV-EQ-10492 o N° de Serie" autocomplete="off">
               </div>
             </div>
 
             <!-- Fila 2: Marca y Modelo -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 0.85rem;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label for="entrega-eq-marca" class="form-label">
                   Marca:
@@ -2116,6 +2116,23 @@
                   Modelo:
                 </label>
                 <input type="text" id="entrega-eq-modelo" class="form-control" placeholder="Ej: INTELLIVUE MX450, BENEVISION..." autocomplete="off">
+              </div>
+            </div>
+
+            <!-- Botón Agregar Equipo + Lista de Equipos Agregados -->
+            <div style="background: rgba(14, 165, 233, 0.04); border: 1px dashed rgba(14, 165, 233, 0.35); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 1.1rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.65rem;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">
+                  🩺 Equipos en esta Entrega (<span id="entrega-equipos-items-count">0</span>)
+                </span>
+                <button type="button" id="btn-add-equipo-lista" class="btn btn-sm" onclick="app.addEquipoToEntregaList()" style="background: #0284c7; border-color: #0284c7; color: white; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                  ➕ Agregar Equipo a la Lista
+                </button>
+              </div>
+              <div id="entrega-equipos-items-list" class="entrega-basket-container">
+                <div class="entrega-basket-empty" style="font-size: 0.78rem;">
+                  Puedes completar los datos arriba y pulsar <strong>"Agregar Equipo a la Lista"</strong> para entregar varios equipos en una misma acta, o guardar directamente con un solo equipo.
+                </div>
               </div>
             </div>
 

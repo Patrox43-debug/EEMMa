@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.0";
+        this.currentAppVersion = "1.12.1";
       }
     } else {
-      this.currentAppVersion = "1.12.0";
+      this.currentAppVersion = "1.12.1";
     }
 
     setTimeout(() => {
@@ -6369,11 +6369,99 @@ const app = {
     }
   },
 
+  entregaEquiposCart: [],
+
+  addEquipoToEntregaList() {
+    const nombreInput = document.getElementById("entrega-eq-nombre");
+    const invInput = document.getElementById("entrega-eq-inventario");
+    const marcaInput = document.getElementById("entrega-eq-marca");
+    const modeloInput = document.getElementById("entrega-eq-modelo");
+    const autoSearch = document.getElementById("entrega-eq-autosearch");
+
+    const nombre = nombreInput ? nombreInput.value.trim() : "";
+    const inventario = invInput ? invInput.value.trim() : "";
+    const marca = marcaInput ? marcaInput.value.trim() : "";
+    const modelo = modeloInput ? modeloInput.value.trim() : "";
+
+    if (!nombre) {
+      this.showToast("Ingresa el nombre del equipo médico para agregarlo a la lista", "warning");
+      if (nombreInput) nombreInput.focus();
+      return;
+    }
+    if (!inventario) {
+      this.showToast("Ingresa el N° de serie / inventario del equipo", "warning");
+      if (invInput) invInput.focus();
+      return;
+    }
+
+    this.entregaEquiposCart.push({
+      nombre_equipo: nombre,
+      marca: marca,
+      modelo: modelo,
+      serie: inventario,
+      inventario: inventario
+    });
+
+    if (nombreInput) nombreInput.value = "";
+    if (invInput) invInput.value = "";
+    if (marcaInput) marcaInput.value = "";
+    if (modeloInput) modeloInput.value = "";
+    if (autoSearch) autoSearch.value = "";
+
+    this.renderEntregaEquiposCart();
+    this.showToast(`Equipo "${nombre}" agregado (${this.entregaEquiposCart.length} en lista)`, "success");
+    if (autoSearch) autoSearch.focus();
+  },
+
+  removeEquipoFromEntregaList(idx) {
+    if (idx < 0 || idx >= this.entregaEquiposCart.length) return;
+    this.entregaEquiposCart.splice(idx, 1);
+    this.renderEntregaEquiposCart();
+  },
+
+  renderEntregaEquiposCart() {
+    const listEl = document.getElementById("entrega-equipos-items-list");
+    const countEl = document.getElementById("entrega-equipos-items-count");
+    if (countEl) countEl.textContent = this.entregaEquiposCart.length;
+    if (!listEl) return;
+
+    if (this.entregaEquiposCart.length === 0) {
+      listEl.innerHTML = `
+        <div class="entrega-basket-empty" style="font-size: 0.78rem;">
+          Puedes completar los datos arriba y pulsar <strong>"Agregar Equipo a la Lista"</strong> para entregar varios equipos en una misma acta, o guardar directamente con un solo equipo.
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = this.entregaEquiposCart.map((it, idx) => {
+      const mm = [it.marca, it.modelo].filter(Boolean).join(" ");
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.65rem; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem; margin-bottom: 0.45rem;">
+          <div style="min-width: 0; flex: 1;">
+            <div style="font-weight: 700; font-size: 0.84rem; color: var(--text-primary);">
+              <span style="color: #0284c7;">#${idx + 1}</span> ${this.escapeHtml(it.nombre_equipo)}
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 2px;">
+              ${mm ? `<span>${this.escapeHtml(mm)}</span> · ` : ""}
+              <span>Serie / Inv.: <strong>${this.escapeHtml(it.inventario || it.serie || "S/I")}</strong></span>
+            </div>
+          </div>
+          <button type="button" class="btn btn-danger btn-xs" onclick="app.removeEquipoFromEntregaList(${idx})" title="Quitar de la entrega" style="padding: 4px 8px; flex-shrink: 0;">
+            🗑️ Quitar
+          </button>
+        </div>
+      `;
+    }).join("");
+  },
+
   resetEntregaEquipoForm() {
     const form = document.getElementById("form-nueva-entrega-equipo");
     if (form) form.reset();
     const autoSearch = document.getElementById("entrega-eq-autosearch");
     if (autoSearch) autoSearch.value = "";
+    this.entregaEquiposCart = [];
+    this.renderEntregaEquiposCart();
     this.clearEntregaEquipoSignature();
   },
 
@@ -6401,16 +6489,33 @@ const app = {
     const receptor = receptorInput ? receptorInput.value.trim() : "";
     const obs = obsInput ? obsInput.value.trim() : "";
 
-    if (!nombre) {
-      this.showToast("Ingresa el nombre del equipo médico", "warning");
+    const itemsToSend = [...this.entregaEquiposCart];
+    if (nombre || inventario) {
+      if (!nombre) {
+        this.showToast("Ingresa el nombre del equipo médico pendiente o limpia el campo", "warning");
+        if (nombreInput) nombreInput.focus();
+        return;
+      }
+      if (!inventario) {
+        this.showToast("Ingresa el N° de serie / inventario del equipo pendiente", "warning");
+        if (invInput) invInput.focus();
+        return;
+      }
+      itemsToSend.push({
+        nombre_equipo: nombre,
+        marca: marca,
+        modelo: modelo,
+        serie: inventario,
+        inventario: inventario
+      });
+    }
+
+    if (itemsToSend.length === 0) {
+      this.showToast("Debes ingresar o agregar al menos un equipo médico para entregar", "warning");
       if (nombreInput) nombreInput.focus();
       return;
     }
-    if (!inventario) {
-      this.showToast("Ingresa el N° de inventario del equipo", "warning");
-      if (invInput) invInput.focus();
-      return;
-    }
+
     if (!servicio) {
       this.showToast("Selecciona el servicio clínico de destino", "warning");
       if (servicioSelect) servicioSelect.focus();
@@ -6440,10 +6545,7 @@ const app = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          nombre_equipo: nombre,
-          marca: marca,
-          modelo: modelo,
-          inventario: inventario,
+          items: itemsToSend,
           servicio: servicio,
           nombre_receptor: receptor,
           usuario_entrega: usuarioEntrega,
@@ -6459,7 +6561,8 @@ const app = {
         throw new Error((data && data.detail) || `Error ${res.status} al registrar entrega`);
       }
 
-      this.showToast("Acta de entrega de equipo registrada con éxito", "success");
+      const eqWord = itemsToSend.length > 1 ? `${itemsToSend.length} equipos` : "equipo";
+      this.showToast(`Acta de entrega de ${eqWord} registrada con éxito`, "success");
 
       // Descargar o abrir el acta PDF generada
       if (data && data.id) {
@@ -6522,7 +6625,7 @@ const app = {
 
       // KPIs
       const totalActas = this.entregasEquiposData.length;
-      const equiposUnicos = new Set(this.entregasEquiposData.map(e => e.inventario || e.nombre_equipo).filter(Boolean));
+      const totalEquiposCount = this.entregasEquiposData.reduce((acc, e) => acc + ((Array.isArray(e.items) && e.items.length > 0) ? e.items.length : 1), 0);
       const serviciosUnicos = new Set(this.entregasEquiposData.map(e => e.servicio).filter(Boolean));
 
       if (kpiBar) {
@@ -6533,7 +6636,7 @@ const app = {
           </div>
           <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
             <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Equipos Entregados</div>
-            <div style="font-size: 1.35rem; font-weight: 800; color: var(--primary); margin-top: 2px;">${equiposUnicos.size}</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: var(--primary); margin-top: 2px;">${totalEquiposCount}</div>
           </div>
           <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 1rem;">
             <div style="font-size: 0.7rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700;">Servicios Receptores</div>
@@ -6562,8 +6665,33 @@ const app = {
           ? `<img src="${e.firma_data}" alt="Firma" style="max-height: 28px; max-width: 75px; object-fit: contain; background: white; border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px; cursor: pointer;" onclick="app.showFirmaModal('${this.escapeHtml(e.firma_data)}', '${this.escapeHtml(folio)}')">`
           : `<span style="font-size: 0.7rem; color: var(--text-tertiary);">(Sin firma)</span>`;
 
-        const marcaModelo = [e.marca, e.modelo].filter(Boolean).join(" ");
-        const eqDetails = marcaModelo ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${this.escapeHtml(marcaModelo)}</div>` : "";
+        const itemsArr = Array.isArray(e.items) && e.items.length > 0 ? e.items : null;
+        let eqHtml = "";
+        let invHtml = "";
+
+        if (itemsArr && itemsArr.length > 1) {
+          eqHtml = `
+            <div style="font-weight: 700; font-size: 0.8rem; color: #0284c7; margin-bottom: 2px;">${itemsArr.length} equipos entregados:</div>
+            <ul style="margin: 0; padding-left: 1rem; font-size: 0.76rem; color: var(--text-primary); line-height: 1.35;">
+              ${itemsArr.map(it => {
+                const mm = [it.marca, it.modelo].filter(Boolean).join(" ");
+                return `<li><strong>${this.escapeHtml(it.nombre_equipo || '')}</strong>${mm ? ` <span style="color:var(--text-secondary);">(${this.escapeHtml(mm)})</span>` : ''}</li>`;
+              }).join('')}
+            </ul>
+          `;
+          invHtml = `
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              ${itemsArr.map(it => `<span class="badge badge-subtle" style="font-family: monospace; font-size: 0.7rem; font-weight: 700;">${this.escapeHtml(it.serie || it.inventario || 'S/I')}</span>`).join('')}
+            </div>
+          `;
+        } else {
+          const single = itemsArr ? itemsArr[0] : e;
+          const marcaModelo = [single.marca, single.modelo].filter(Boolean).join(" ");
+          const eqDetails = marcaModelo ? `<div style="font-size: 0.72rem; color: var(--text-secondary);">${this.escapeHtml(marcaModelo)}</div>` : "";
+          eqHtml = `<strong style="color: var(--text-primary); font-size: 0.825rem;">${this.escapeHtml(single.nombre_equipo || e.nombre_equipo || '')}</strong>${eqDetails}`;
+          invHtml = `<span class="badge badge-subtle" style="font-family: monospace; font-size: 0.75rem; font-weight: 700;">${this.escapeHtml(single.serie || single.inventario || e.inventario || 'S/I')}</span>`;
+        }
+
         const obsHtml = e.observaciones ? `<div style="font-size: 0.7rem; color: var(--text-tertiary); font-style: italic; margin-top: 2px;">${this.escapeHtml(e.observaciones)}</div>` : "";
 
         return `
@@ -6577,14 +6705,11 @@ const app = {
               ${this.escapeHtml(fecha)}
             </td>
             <td>
-              <strong style="color: var(--text-primary); font-size: 0.825rem;">${this.escapeHtml(e.nombre_equipo || '')}</strong>
-              ${eqDetails}
+              ${eqHtml}
               ${obsHtml}
             </td>
             <td>
-              <span class="badge badge-subtle" style="font-family: monospace; font-size: 0.75rem; font-weight: 700;">
-                ${this.escapeHtml(e.inventario || 'S/I')}
-              </span>
+              ${invHtml}
             </td>
             <td>
               <span style="font-weight: 600; color: var(--text-primary); font-size: 0.825rem;">
@@ -7437,7 +7562,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.0",
+  currentAppVersion: "1.12.1",
   pendingUpdateInfo: null,
   updateDownloading: false,
 

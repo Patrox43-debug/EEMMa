@@ -1343,66 +1343,111 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     story.append(header_table)
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#0284c7'), spaceBefore=6, spaceAfter=8))
 
-    # 2. IDENTIFICACIÓN DEL EQUIPO MÉDICO
-    story.append(Paragraph("1. IDENTIFICACIÓN DEL EQUIPO MÉDICO", sec_heading))
-    story.append(Spacer(1, 3))
+    # 2. IDENTIFICACIÓN DEL EQUIPO MÉDICO (SOPORTA MÚLTIPLES EQUIPOS O EQUIPO ÚNICO)
+    items_eq = record.get("items") or []
+    if len(items_eq) > 1:
+        story.append(Paragraph(f"1. IDENTIFICACIÓN DE EQUIPOS MÉDICOS ENTREGADOS ({len(items_eq)} EQUIPOS)", sec_heading))
+        story.append(Spacer(1, 3))
 
-    nombre_eq = record.get("nombre_equipo") or "No especificado"
-    marca_eq = record.get("marca") or "N/A"
-    modelo_eq = record.get("modelo") or "N/A"
-    inv_eq = record.get("inventario") or ""
-    serie_eq = record.get("serie") or record.get("numero_serie") or ""
+        hdr_eq = ParagraphStyle('EqHdrMulti', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=7.8, leading=10, alignment=TA_CENTER, textColor=colors.HexColor('#ffffff'))
+        eq_rows = [[
+            Paragraph("<b>N°</b>", hdr_eq),
+            Paragraph("<b>Nombre del Equipo</b>", hdr_eq),
+            Paragraph("<b>Marca</b>", hdr_eq),
+            Paragraph("<b>Modelo</b>", hdr_eq),
+            Paragraph("<b>N° Serie / Inventario</b>", hdr_eq),
+        ]]
+        for idx_i, eq_it in enumerate(items_eq, 1):
+            n_i = eq_it.get("nombre_equipo") or "No especificado"
+            m_i = eq_it.get("marca") or "N/A"
+            mo_i = eq_it.get("modelo") or "N/A"
+            s_i = eq_it.get("serie") or ""
+            inv_i = eq_it.get("inventario") or ""
+            id_txt = f"{s_i} / {inv_i}" if (s_i and inv_i and s_i != inv_i) else (s_i or inv_i or "S/I")
+            eq_rows.append([
+                Paragraph(f"<b>{idx_i}</b>", cell_txt_center),
+                Paragraph(f"<b>{n_i}</b>", cell_val_bold),
+                Paragraph(m_i, cell_val),
+                Paragraph(mo_i, cell_val),
+                Paragraph(f"<b>{id_txt}</b>", cell_val_bold),
+            ])
 
-    if serie_eq and inv_eq and serie_eq != inv_eq:
-        eq_data = [
-            [
-                Paragraph("Nombre del Equipo:", cell_lbl),
-                Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
-                Paragraph("N° de Serie:", cell_lbl),
-                Paragraph(f"<b>{serie_eq}</b>", cell_val_bold)
-            ],
-            [
-                Paragraph("Marca:", cell_lbl),
-                Paragraph(marca_eq, cell_val),
-                Paragraph("Modelo:", cell_lbl),
-                Paragraph(modelo_eq, cell_val)
-            ],
-            [
-                Paragraph("N° Inventario / Activo:", cell_lbl),
-                Paragraph(f"<b>{inv_eq}</b>", cell_val_bold),
-                Paragraph("", cell_lbl),
-                Paragraph("", cell_val)
-            ]
+        eq_table = Table(eq_rows, colWidths=[28, 172, 95, 100, 145], repeatRows=1)
+        eq_styles = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0284c7')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ]
+        for r_i in range(1, len(eq_rows)):
+            eq_styles.append(('BACKGROUND', (0, r_i), (-1, r_i), colors.HexColor('#ffffff') if r_i % 2 != 0 else colors.HexColor('#f8fafc')))
+        eq_table.setStyle(TableStyle(eq_styles))
     else:
-        label_id = "N° de Serie / Inventario:" if (serie_eq or inv_eq) else "N° de Inventario / Activo:"
-        val_id = serie_eq or inv_eq or "S/I"
-        eq_data = [
-            [
-                Paragraph("Nombre del Equipo:", cell_lbl),
-                Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
-                Paragraph(label_id, cell_lbl),
-                Paragraph(f"<b>{val_id}</b>", cell_val_bold)
-            ],
-            [
-                Paragraph("Marca:", cell_lbl),
-                Paragraph(marca_eq, cell_val),
-                Paragraph("Modelo:", cell_lbl),
-                Paragraph(modelo_eq, cell_val)
-            ]
-        ]
+        story.append(Paragraph("1. IDENTIFICACIÓN DEL EQUIPO MÉDICO", sec_heading))
+        story.append(Spacer(1, 3))
 
-    eq_table = Table(eq_data, colWidths=[120, 150, 140, 130])
-    eq_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-    ]))
+        src = items_eq[0] if len(items_eq) == 1 else record
+        nombre_eq = src.get("nombre_equipo") or record.get("nombre_equipo") or "No especificado"
+        marca_eq = src.get("marca") or record.get("marca") or "N/A"
+        modelo_eq = src.get("modelo") or record.get("modelo") or "N/A"
+        inv_eq = src.get("inventario") or record.get("inventario") or ""
+        serie_eq = src.get("serie") or src.get("numero_serie") or record.get("serie") or ""
+
+        if serie_eq and inv_eq and serie_eq != inv_eq:
+            eq_data = [
+                [
+                    Paragraph("Nombre del Equipo:", cell_lbl),
+                    Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
+                    Paragraph("N° de Serie:", cell_lbl),
+                    Paragraph(f"<b>{serie_eq}</b>", cell_val_bold)
+                ],
+                [
+                    Paragraph("Marca:", cell_lbl),
+                    Paragraph(marca_eq, cell_val),
+                    Paragraph("Modelo:", cell_lbl),
+                    Paragraph(modelo_eq, cell_val)
+                ],
+                [
+                    Paragraph("N° Inventario / Activo:", cell_lbl),
+                    Paragraph(f"<b>{inv_eq}</b>", cell_val_bold),
+                    Paragraph("", cell_lbl),
+                    Paragraph("", cell_val)
+                ]
+            ]
+        else:
+            label_id = "N° de Serie / Inventario:" if (serie_eq or inv_eq) else "N° de Inventario / Activo:"
+            val_id = serie_eq or inv_eq or "S/I"
+            eq_data = [
+                [
+                    Paragraph("Nombre del Equipo:", cell_lbl),
+                    Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
+                    Paragraph(label_id, cell_lbl),
+                    Paragraph(f"<b>{val_id}</b>", cell_val_bold)
+                ],
+                [
+                    Paragraph("Marca:", cell_lbl),
+                    Paragraph(marca_eq, cell_val),
+                    Paragraph("Modelo:", cell_lbl),
+                    Paragraph(modelo_eq, cell_val)
+                ]
+            ]
+
+        eq_table = Table(eq_data, colWidths=[120, 150, 140, 130])
+        eq_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ]))
     story.append(eq_table)
     story.append(Spacer(1, 8))
 
@@ -1666,7 +1711,7 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
 
     # 2. TARJETAS DE RESUMEN EJECUTIVO
     servicios_unicos = len(set(e.get("servicio") for e in entregas if e.get("servicio")))
-    equipos_unicos = len(set(e.get("nombre_equipo") for e in entregas if e.get("nombre_equipo")))
+    total_equipos_entregados = sum(len(e.get("items") or []) or 1 for e in entregas)
 
     summary_data = [
         [
@@ -1677,7 +1722,7 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
         ],
         [
             Paragraph(f"<b>{len(entregas)}</b> actas", cell_txt_bold),
-            Paragraph(f"<b>{equipos_unicos}</b> tipos de equipo", cell_txt_bold),
+            Paragraph(f"<b>{total_equipos_entregados}</b> equipos", cell_txt_bold),
             Paragraph(f"<b>{servicios_unicos}</b> áreas / servicios", cell_txt_bold),
             Paragraph("<b>Conformes y Firmadas</b>", cell_txt_bold)
         ]
@@ -1704,7 +1749,7 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
             Paragraph("<b>Folio / Fecha</b>", cell_hdr),
             Paragraph("<b>Servicio Clínico</b>", cell_hdr),
             Paragraph("<b>Equipo / Marca / Modelo</b>", cell_hdr),
-            Paragraph("<b>N° Inventario</b>", cell_hdr),
+            Paragraph("<b>N° Serie / Inv.</b>", cell_hdr),
             Paragraph("<b>Receptor / Entrega</b>", cell_hdr),
             Paragraph("<b>Firma</b>", cell_hdr),
             Paragraph("<b>Obs.</b>", cell_hdr),
@@ -1723,9 +1768,6 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
             folio_e = str(e.get("folio") or f"ENT-EQ-{e.get('id', idx)}")
             rec_e = str(e.get("nombre_receptor") or "")
             tec_e = str(e.get("usuario_entrega") or "Técnico EEMM")
-            nom_eq = str(e.get("nombre_equipo") or "")
-            marca_mod = f"{e.get('marca') or ''} {e.get('modelo') or ''}".strip() or "S/M"
-            inv_e = str(e.get("inventario") or "S/I")
             serv_e = str(e.get("servicio") or "")
             obs_e = str(e.get("observaciones") or "").strip()
 
@@ -1734,11 +1776,30 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
                 Paragraph(f"<font color='#64748b'>{fecha_e}</font>", tag_style)
             ]
             c_serv = Paragraph(f"<b>{serv_e}</b>", cell_txt)
-            c_equipo = [
-                Paragraph(f"<b>{nom_eq}</b>", cell_txt),
-                Paragraph(f"<font color='#475569'>{marca_mod}</font>", tag_style)
-            ]
-            c_inv = Paragraph(f"<b>{inv_e}</b>", cell_txt)
+
+            items_eq = e.get("items") or []
+            if len(items_eq) > 1:
+                eq_lines = [Paragraph(f"<b>{len(items_eq)} equipos:</b>", cell_txt)]
+                inv_lines = []
+                for it_eq in items_eq:
+                    nm = it_eq.get("nombre_equipo") or ""
+                    mm = f"{it_eq.get('marca') or ''} {it_eq.get('modelo') or ''}".strip()
+                    eq_lines.append(Paragraph(f"• {nm}" + (f" <font color='#475569'>({mm})</font>" if mm else ""), tag_style))
+                    id_str = it_eq.get("serie") or it_eq.get("inventario") or "S/I"
+                    inv_lines.append(Paragraph(f"• {id_str}", tag_style))
+                c_equipo = eq_lines
+                c_inv = inv_lines
+            else:
+                src = items_eq[0] if len(items_eq) == 1 else e
+                nom_eq = str(src.get("nombre_equipo") or e.get("nombre_equipo") or "")
+                marca_mod = f"{src.get('marca') or ''} {src.get('modelo') or ''}".strip() or "S/M"
+                inv_e = str(src.get("serie") or src.get("inventario") or e.get("inventario") or "S/I")
+                c_equipo = [
+                    Paragraph(f"<b>{nom_eq}</b>", cell_txt),
+                    Paragraph(f"<font color='#475569'>{marca_mod}</font>", tag_style)
+                ]
+                c_inv = Paragraph(f"<b>{inv_e}</b>", cell_txt)
+
             c_resp = [
                 Paragraph(f"<b>Recibe:</b> {rec_e}", cell_txt),
                 Paragraph(f"<b>Entrega:</b> {tec_e}", tag_style)
