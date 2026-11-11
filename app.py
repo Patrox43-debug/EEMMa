@@ -489,13 +489,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.3",
-        "version_code": 32,
-        "release_tag": "v1.12.3",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.3/EEMM.apk",
+        "version_name": "1.12.4",
+        "version_code": 33,
+        "release_tag": "v1.12.4",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.4/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• En Tareas Diarias: nuevas vistas integradas de 'Pendientes Anteriores' (con resolución rápida en un toque) y 'Tareas Resueltas' con filtros por técnico y fecha.",
-        "published_at": "2026-11-11T20:38:00-03:00"
+        "notes": "• Corrección en Tareas Diarias: ahora la pestaña y alertas de Pendientes muestran también las tareas pendientes o en proceso creadas durante el día de hoy (no solo días anteriores).",
+        "published_at": "2026-11-11T21:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -3419,12 +3419,13 @@ def _query_tareas_items_joined(
     is_resolved: bool,
     tecnico: Optional[str] = None,
     fecha_antes_de: Optional[str] = None,
+    incluir_hoy: bool = True,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
     q: Optional[str] = None,
     limit: int = 120
 ) -> List[dict]:
-    """Consulta tareas individuales (pendientes de días previos o resueltas/completadas)."""
+    """Consulta tareas individuales (pendientes de hoy/días previos o resueltas/completadas)."""
     clauses = []
     params: List[Any] = []
 
@@ -3433,7 +3434,8 @@ def _query_tareas_items_joined(
     else:
         clauses.append("LOWER(TRIM(ti.estado_tarea)) != 'completada'")
         if fecha_antes_de and fecha_antes_de.strip():
-            clauses.append("date(tr.fecha) < date(?)")
+            op = "<=" if incluir_hoy else "<"
+            clauses.append(f"date(tr.fecha) {op} date(?)")
             params.append(fecha_antes_de.strip()[:10])
 
     if tecnico and tecnico.strip() and tecnico.strip().upper() != "TODOS":
@@ -3485,10 +3487,11 @@ def _query_tareas_items_joined(
 def list_tareas_pendientes_anteriores(
     tecnico: Optional[str] = None,
     fecha_referencia: Optional[str] = None,
+    solo_anteriores: bool = False,
     limit: int = 120
 ):
-    """Retorna tareas pendientes o en proceso que quedaron de días anteriores a fecha_referencia."""
-    ref_norm = _norm_fecha_tarea(fecha_referencia)
+    """Retorna tareas pendientes o en proceso acumuladas (incluyendo las del día actual por defecto)."""
+    ref_norm = _norm_fecha_tarea(fecha_referencia) if fecha_referencia and fecha_referencia.strip() else None
     conn = get_db()
     cursor = conn.cursor()
     _ensure_tareas_tables(cursor)
@@ -3497,6 +3500,7 @@ def list_tareas_pendientes_anteriores(
         is_resolved=False,
         tecnico=tecnico,
         fecha_antes_de=ref_norm,
+        incluir_hoy=not solo_anteriores,
         limit=limit
     )
     conn.close()
@@ -3537,7 +3541,7 @@ def resolve_tarea_pendiente(item_id: int, payload: TareaDiariaResolver):
 
     cursor.execute("""
         SELECT ti.id, ti.reporte_id, ti.servicio, ti.tipo_tarea, ti.equipo, ti.descripcion, ti.estado_tarea,
-               tr.tecnico, strftime('%d/%m/%Y', tr.fecha) as fecha_orig_fmt
+               tr.tecnico, tr.fecha as fecha_orig, strftime('%d/%m/%Y', tr.fecha) as fecha_orig_fmt
         FROM tareas_diarias_items ti
         JOIN tareas_diarias_reportes tr ON tr.id = ti.reporte_id
         WHERE ti.id = ?
@@ -3564,26 +3568,27 @@ def resolve_tarea_pendiente(item_id: int, payload: TareaDiariaResolver):
     added_to_today = False
     if payload.registrar_en_jornada_fecha and payload.registrar_en_jornada_fecha.strip():
         fecha_hoy = _norm_fecha_tarea(payload.registrar_en_jornada_fecha)
-        rep_hoy = _get_or_create_draft_reporte(cursor, quien, fecha_hoy)
-        if rep_hoy["estado"] != "FINALIZADO":
-            desc_hoy = f"Resolución tarea pendiente del {item_info['fecha_orig_fmt']}: {item_info['descripcion']}"
-            if nota:
-                desc_hoy += f" ({nota})"
-            cursor.execute("""
-                INSERT INTO tareas_diarias_items (
-                    reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
-                    fecha_resolucion, resuelta_por, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'Completada', datetime('now', 'localtime'), ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
-            """, (
-                rep_hoy["id"],
-                datetime.now().strftime("%H:%M"),
-                item_info["servicio"],
-                item_info["tipo_tarea"],
-                item_info["equipo"] or "",
-                desc_hoy,
-                quien
-            ))
-            added_to_today = True
+        if fecha_hoy != (item_info.get("fecha_orig") or "")[:10]:
+            rep_hoy = _get_or_create_draft_reporte(cursor, quien, fecha_hoy)
+            if rep_hoy["estado"] != "FINALIZADO" and rep_hoy["id"] != item_info["reporte_id"]:
+                desc_hoy = f"Resolución tarea pendiente del {item_info['fecha_orig_fmt']}: {item_info['descripcion']}"
+                if nota:
+                    desc_hoy += f" ({nota})"
+                cursor.execute("""
+                    INSERT INTO tareas_diarias_items (
+                        reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
+                        fecha_resolucion, resuelta_por, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'Completada', datetime('now', 'localtime'), ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                """, (
+                    rep_hoy["id"],
+                    datetime.now().strftime("%H:%M"),
+                    item_info["servicio"],
+                    item_info["tipo_tarea"],
+                    item_info["equipo"] or "",
+                    desc_hoy,
+                    quien
+                ))
+                added_to_today = True
 
     conn.commit()
     conn.close()

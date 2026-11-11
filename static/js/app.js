@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.3";
+        this.currentAppVersion = "1.12.4";
       }
     } else {
-      this.currentAppVersion = "1.12.3";
+      this.currentAppVersion = "1.12.4";
     }
 
     setTimeout(() => {
@@ -7579,7 +7579,7 @@ const app = {
       if (alertBanner && alertTxt) {
         if (pendientes.length > 0) {
           alertBanner.style.display = "flex";
-          alertTxt.textContent = `Tienes ${pendientes.length} tarea(s) pendiente(s) o en proceso que quedaron de días anteriores.`;
+          alertTxt.textContent = `Tienes ${pendientes.length} tarea(s) pendiente(s) o en proceso por resolver.`;
         } else {
           alertBanner.style.display = "none";
         }
@@ -7596,7 +7596,7 @@ const app = {
 
     cont.innerHTML = `
       <div style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
-        <span class="spinner-border spinner-border-sm" style="width:16px;height:16px;border-width:2px;"></span> Buscando tareas pendientes de días anteriores...
+        <span class="spinner-border spinner-border-sm" style="width:16px;height:16px;border-width:2px;"></span> Buscando tareas pendientes...
       </div>
     `;
 
@@ -7614,8 +7614,8 @@ const app = {
         cont.innerHTML = `
           <div style="text-align: center; padding: 2.5rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-md); color: var(--text-tertiary);">
             <div style="font-size: 1.85rem; margin-bottom: 0.4rem;">🎉</div>
-            <div style="font-weight: 700; color: var(--text-secondary);">¡Sin tareas pendientes de días anteriores!</div>
-            <div style="font-size: 0.78rem; margin-top: 4px;">Todas las labores de jornadas pasadas se encuentran resueltas y completadas.</div>
+            <div style="font-weight: 700; color: var(--text-secondary);">¡Sin tareas pendientes!</div>
+            <div style="font-size: 0.78rem; margin-top: 4px;">Todas las labores de hoy y jornadas pasadas se encuentran resueltas y completadas.</div>
           </div>
         `;
         return;
@@ -7624,6 +7624,7 @@ const app = {
       cont.innerHTML = pendientes.map(it => {
         const isProc = (it.estado_tarea || "").toLowerCase().includes("proceso");
         const estBg = isProc ? "rgba(245, 158, 11, 0.14); color: #d97706;" : "rgba(239, 68, 68, 0.12); color: #dc2626;";
+        const esHoy = (it.fecha || "").slice(0, 10) === todayStr;
 
         return `
           <div style="background: var(--bg-subtle); border: 1px solid rgba(217, 119, 6, 0.35); border-left: 4px solid #d97706; border-radius: var(--radius-md); padding: 0.9rem 1rem; margin-bottom: 0.75rem;">
@@ -7631,7 +7632,7 @@ const app = {
               <div style="flex: 1; min-width: 240px;">
                 <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.4rem;">
                   <span class="badge" style="background: rgba(124, 58, 237, 0.12); color: #7c3aed; font-weight: 700;">
-                    📅 ${this.escapeHtml(it.fecha_fmt || it.fecha)} ${it.hora ? `· ${this.escapeHtml(it.hora)}` : ""}
+                    📅 ${this.escapeHtml(it.fecha_fmt || it.fecha)}${esHoy ? " (Hoy)" : ""} ${it.hora ? `· ${this.escapeHtml(it.hora)}` : ""}
                   </span>
                   <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; font-weight: 700;">
                     ${this.escapeHtml(it.servicio || "")}
@@ -7828,7 +7829,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.3",
+  currentAppVersion: "1.12.4",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
