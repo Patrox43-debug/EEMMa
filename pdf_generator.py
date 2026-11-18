@@ -1205,11 +1205,43 @@ def generate_entregas_pdf(entregas: list, fecha_inicio: str = None, fecha_fin: s
     return buf.getvalue()
 
 
+def _format_fecha_acta_es(fecha_raw: Any) -> str:
+    """Formatea una fecha en formato legible en español (ej: 18 de noviembre de 2026)."""
+    if not fecha_raw:
+        return datetime.now().strftime("%d/%m/%Y")
+    s = str(fecha_raw).strip()
+    dt = None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            dt = datetime.strptime(s[:19], fmt)
+            break
+        except Exception:
+            pass
+    if not dt:
+        return s
+    meses = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    ]
+    return f"{dt.day} de {meses[dt.month - 1]} de {dt.year}"
+
+
 def generate_entrega_equipo_pdf(record: dict) -> bytes:
     """
-    Genera el acta oficial de entrega individual de equipo médico para el Hospital Claudio Vicuña.
-    Incluye datos del equipo (nombre, marca, modelo, inventario), servicio de destino,
-    funcionario receptor, técnico responsable de EEMM, firma digital y condiciones de entrega.
+    Genera el acta oficial de entrega de equipos médicos adaptada al formato institucional
+    del Hospital Claudio Vicuña.
+    Estructura:
+      - Encabezado institucional con logo Hospital Claudio Vicuña y metadatos (Folio, Fecha, Emisión)
+      - Título: ACTA ENTREGA EQUIPOS MÉDICOS
+      - Texto introductorio: 'Con fecha [FECHA], se hace entrega del equipamiento indicado, al servicio:'
+      - Tabla de equipamiento (7 columnas):
+          | SERVICIO CLÍNICO: (colspan 3) | [SERVICIO] (colspan 4) |
+          | N° | EQUIPO | MARCA | MODELO | N° SERIE | AÑO FABRICACIÓN | INVENTARIO |
+      - Sección Observaciones
+      - Sección Para constancia y fe:
+          | CARGO | NOMBRE | FIRMA Y TIMBRE |
+          | REFERENTE CLÍNICO | [Nombre] | [Firma Digital / Timbre] |
+          | ENCARGADO EQUIPOS MÉDICOS | [Nombre] | [Firma y Timbre EEMM] |
     """
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -1218,7 +1250,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         leftMargin=36,
         rightMargin=36,
         topMargin=36,
-        bottomMargin=42
+        bottomMargin=38
     )
 
     styles = getSampleStyleSheet()
@@ -1265,6 +1297,23 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         alignment=TA_RIGHT,
         textColor=colors.HexColor('#64748b')
     )
+    acta_header_title = ParagraphStyle(
+        'ActaHeaderTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        leading=15,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#0f172a')
+    )
+    intro_style = ParagraphStyle(
+        'IntroStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8.5,
+        leading=12,
+        textColor=colors.HexColor('#1e293b')
+    )
     sec_heading = ParagraphStyle(
         'SecHeadEq',
         parent=styles['Normal'],
@@ -1273,28 +1322,89 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         leading=11,
         textColor=colors.HexColor('#0f172a')
     )
-    cell_lbl = ParagraphStyle(
-        'CellLblEq',
+    cell_lbl_srv = ParagraphStyle(
+        'CellLblSrv',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=8,
-        leading=10,
-        textColor=colors.HexColor('#475569')
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#0f172a')
+    )
+    cell_val_srv = ParagraphStyle(
+        'CellValSrv',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#0284c7')
+    )
+    hdr_table = ParagraphStyle(
+        'HdrTable',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=7.2,
+        leading=9.2,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#ffffff')
+    )
+    hdr_table_left = ParagraphStyle(
+        'HdrTableLeft',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=7.2,
+        leading=9.2,
+        alignment=TA_LEFT,
+        textColor=colors.HexColor('#ffffff')
     )
     cell_val = ParagraphStyle(
         'CellValEq',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=8.5,
-        leading=11,
+        fontSize=7.8,
+        leading=10,
         textColor=colors.HexColor('#0f172a')
     )
     cell_val_bold = ParagraphStyle(
         'CellValBoldEq',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=8.5,
-        leading=11,
+        fontSize=7.8,
+        leading=10,
+        textColor=colors.HexColor('#0f172a')
+    )
+    cell_center = ParagraphStyle(
+        'CellCenterEq',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7.5,
+        leading=9.5,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#0f172a')
+    )
+    cell_code = ParagraphStyle(
+        'CellCodeEq',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=7.2,
+        leading=9.2,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#0f172a')
+    )
+    hdr_firmas = ParagraphStyle(
+        'HdrFirmas',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=7.8,
+        leading=10,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#ffffff')
+    )
+    cell_cargo = ParagraphStyle(
+        'CellCargo',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=10.5,
         textColor=colors.HexColor('#0f172a')
     )
     cell_txt_center = ParagraphStyle(
@@ -1302,7 +1412,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         parent=styles['Normal'],
         fontName='Helvetica',
         fontSize=7.5,
-        leading=10,
+        leading=9.5,
         alignment=TA_CENTER,
         textColor=colors.HexColor('#475569')
     )
@@ -1321,14 +1431,15 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     ]
 
     folio = record.get("folio") or f"ENT-EQ-{record.get('id', '0001')}"
-    fecha_str = str(record.get("fecha_fmt") or record.get("fecha") or datetime.now().strftime("%d/%m/%Y %H:%M"))
+    fecha_orig = record.get("fecha_fmt") or record.get("fecha") or datetime.now().strftime("%d/%m/%Y %H:%M")
+    fecha_larga = _format_fecha_acta_es(record.get("fecha") or record.get("fecha_fmt"))
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     col_der = [
-        Paragraph("ACTA DE ENTREGA DE EQUIPO", meta_title),
+        Paragraph("ACTA DE ENTREGA", meta_title),
         Spacer(1, 2),
         Paragraph(f"<b>Folio:</b> {folio}", meta_sub),
-        Paragraph(f"<b>Fecha Entrega:</b> {fecha_str}", meta_sub),
+        Paragraph(f"<b>Fecha:</b> {fecha_orig}", meta_sub),
         Paragraph(f"<b>Emisión:</b> {now_str}", meta_sub)
     ]
 
@@ -1341,155 +1452,121 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
     story.append(header_table)
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#0284c7'), spaceBefore=6, spaceAfter=8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#0284c7'), spaceBefore=5, spaceAfter=8))
 
-    # 2. IDENTIFICACIÓN DEL EQUIPO MÉDICO (SOPORTA MÚLTIPLES EQUIPOS O EQUIPO ÚNICO)
-    items_eq = record.get("items") or []
-    if len(items_eq) > 1:
-        story.append(Paragraph(f"1. IDENTIFICACIÓN DE EQUIPOS MÉDICOS ENTREGADOS ({len(items_eq)} EQUIPOS)", sec_heading))
-        story.append(Spacer(1, 3))
+    # 2. TÍTULO DEL DOCUMENTO
+    story.append(Paragraph("ACTA ENTREGA EQUIPOS MÉDICOS", acta_header_title))
+    story.append(Spacer(1, 6))
 
-        hdr_eq = ParagraphStyle('EqHdrMulti', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=7.8, leading=10, alignment=TA_CENTER, textColor=colors.HexColor('#ffffff'))
-        eq_rows = [[
-            Paragraph("<b>N°</b>", hdr_eq),
-            Paragraph("<b>Nombre del Equipo</b>", hdr_eq),
-            Paragraph("<b>Marca</b>", hdr_eq),
-            Paragraph("<b>Modelo</b>", hdr_eq),
-            Paragraph("<b>N° Serie / Inventario</b>", hdr_eq),
-        ]]
-        for idx_i, eq_it in enumerate(items_eq, 1):
-            n_i = eq_it.get("nombre_equipo") or "No especificado"
-            m_i = eq_it.get("marca") or "N/A"
-            mo_i = eq_it.get("modelo") or "N/A"
-            s_i = eq_it.get("serie") or ""
-            inv_i = eq_it.get("inventario") or ""
-            id_txt = f"{s_i} / {inv_i}" if (s_i and inv_i and s_i != inv_i) else (s_i or inv_i or "S/I")
-            eq_rows.append([
-                Paragraph(f"<b>{idx_i}</b>", cell_txt_center),
-                Paragraph(f"<b>{n_i}</b>", cell_val_bold),
-                Paragraph(m_i, cell_val),
-                Paragraph(mo_i, cell_val),
-                Paragraph(f"<b>{id_txt}</b>", cell_val_bold),
-            ])
+    # 3. TEXTO INTRODUCTORIO
+    intro_text = f"Con fecha <b>{fecha_larga}</b>, se hace entrega del equipamiento indicado, al servicio:"
+    story.append(Paragraph(intro_text, intro_style))
+    story.append(Spacer(1, 6))
 
-        eq_table = Table(eq_rows, colWidths=[28, 172, 95, 100, 145], repeatRows=1)
-        eq_styles = [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0284c7')),
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ]
-        for r_i in range(1, len(eq_rows)):
-            eq_styles.append(('BACKGROUND', (0, r_i), (-1, r_i), colors.HexColor('#ffffff') if r_i % 2 != 0 else colors.HexColor('#f8fafc')))
-        eq_table.setStyle(TableStyle(eq_styles))
-    else:
-        story.append(Paragraph("1. IDENTIFICACIÓN DEL EQUIPO MÉDICO", sec_heading))
-        story.append(Spacer(1, 3))
-
-        src = items_eq[0] if len(items_eq) == 1 else record
-        nombre_eq = src.get("nombre_equipo") or record.get("nombre_equipo") or "No especificado"
-        marca_eq = src.get("marca") or record.get("marca") or "N/A"
-        modelo_eq = src.get("modelo") or record.get("modelo") or "N/A"
-        inv_eq = src.get("inventario") or record.get("inventario") or ""
-        serie_eq = src.get("serie") or src.get("numero_serie") or record.get("serie") or ""
-
-        if serie_eq and inv_eq and serie_eq != inv_eq:
-            eq_data = [
-                [
-                    Paragraph("Nombre del Equipo:", cell_lbl),
-                    Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
-                    Paragraph("N° de Serie:", cell_lbl),
-                    Paragraph(f"<b>{serie_eq}</b>", cell_val_bold)
-                ],
-                [
-                    Paragraph("Marca:", cell_lbl),
-                    Paragraph(marca_eq, cell_val),
-                    Paragraph("Modelo:", cell_lbl),
-                    Paragraph(modelo_eq, cell_val)
-                ],
-                [
-                    Paragraph("N° Inventario / Activo:", cell_lbl),
-                    Paragraph(f"<b>{inv_eq}</b>", cell_val_bold),
-                    Paragraph("", cell_lbl),
-                    Paragraph("", cell_val)
-                ]
-            ]
-        else:
-            label_id = "N° de Serie / Inventario:" if (serie_eq or inv_eq) else "N° de Inventario / Activo:"
-            val_id = serie_eq or inv_eq or "S/I"
-            eq_data = [
-                [
-                    Paragraph("Nombre del Equipo:", cell_lbl),
-                    Paragraph(f"<b>{nombre_eq}</b>", cell_val_bold),
-                    Paragraph(label_id, cell_lbl),
-                    Paragraph(f"<b>{val_id}</b>", cell_val_bold)
-                ],
-                [
-                    Paragraph("Marca:", cell_lbl),
-                    Paragraph(marca_eq, cell_val),
-                    Paragraph("Modelo:", cell_lbl),
-                    Paragraph(modelo_eq, cell_val)
-                ]
-            ]
-
-        eq_table = Table(eq_data, colWidths=[120, 150, 140, 130])
-        eq_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ]))
-    story.append(eq_table)
-    story.append(Spacer(1, 8))
-
-    # 3. DESTINO Y RESPONSABLES
-    story.append(Paragraph("2. DESTINO Y RESPONSABLES DEL DESPACHO", sec_heading))
-    story.append(Spacer(1, 3))
-
+    # 4. TABLA DE EQUIPOS MÉDICOS ENTREGADOS (7 COLUMNAS + FILA SERVICIO CLÍNICO)
     servicio_rec = record.get("servicio") or "No asignado"
-    nombre_rec = record.get("nombre_receptor") or "No especificado"
-    tecnico_ent = record.get("usuario_entrega") or "Técnico EEMM"
 
-    resp_data = [
-        [
-            Paragraph("Servicio Clínico Receptor:", cell_lbl),
-            Paragraph(f"<b>{servicio_rec}</b>", cell_val_bold),
-            Paragraph("Fecha y Hora:", cell_lbl),
-            Paragraph(fecha_str, cell_val)
-        ],
-        [
-            Paragraph("Funcionario que Recibe:", cell_lbl),
-            Paragraph(f"<b>{nombre_rec}</b>", cell_val_bold),
-            Paragraph("Técnico EEMM que Entrega:", cell_lbl),
-            Paragraph(f"<b>{tecnico_ent}</b>", cell_val)
-        ]
+    raw_items = record.get("items") or []
+    if not raw_items and record.get("nombre_equipo"):
+        raw_items = [{
+            "nombre_equipo": record.get("nombre_equipo") or "",
+            "marca": record.get("marca") or "",
+            "modelo": record.get("modelo") or "",
+            "serie": record.get("serie") or "",
+            "inventario": record.get("inventario") or "S/I",
+            "anio_fabricacion": record.get("anio_fabricacion") or ""
+        }]
+
+    # ColWidths suma 540 pt: 22 + 120 + 68 + 68 + 92 + 76 + 94 = 540 pt
+    col_widths = [22, 120, 68, 68, 92, 76, 94]
+
+    row_srv = [
+        Paragraph("SERVICIO CLÍNICO:", cell_lbl_srv),
+        "", "",
+        Paragraph(f"<b>{servicio_rec.upper()}</b>", cell_val_srv),
+        "", "", ""
     ]
 
-    resp_table = Table(resp_data, colWidths=[130, 140, 140, 130])
-    resp_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    story.append(resp_table)
-    story.append(Spacer(1, 8))
+    row_hdr = [
+        Paragraph("<b>N°</b>", hdr_table),
+        Paragraph("<b>EQUIPO</b>", hdr_table_left),
+        Paragraph("<b>MARCA</b>", hdr_table),
+        Paragraph("<b>MODELO</b>", hdr_table),
+        Paragraph("<b>N° SERIE</b>", hdr_table),
+        Paragraph("<b>AÑO FABRICACIÓN</b>", hdr_table),
+        Paragraph("<b>INVENTARIO</b>", hdr_table),
+    ]
 
-    # 4. OBSERVACIONES Y CONDICIONES
-    story.append(Paragraph("3. OBSERVACIONES TÉCNICAS Y CONDICIONES DE ENTREGA", sec_heading))
+    eq_table_data = [row_srv, row_hdr]
+
+    for idx, it in enumerate(raw_items, 1):
+        nom_i = it.get("nombre_equipo") or "No especificado"
+        mar_i = it.get("marca") or "-"
+        mod_i = it.get("modelo") or "-"
+        ser_i = it.get("serie") or "-"
+        anio_i = it.get("anio_fabricacion") or record.get("anio_fabricacion") or "-"
+        inv_i = it.get("inventario") or "-"
+        eq_table_data.append([
+            Paragraph(f"<b>{idx}</b>", cell_center),
+            Paragraph(f"<b>{nom_i}</b>", cell_val_bold),
+            Paragraph(mar_i, cell_center),
+            Paragraph(mod_i, cell_center),
+            Paragraph(f"<b>{ser_i}</b>", cell_code),
+            Paragraph(str(anio_i), cell_center),
+            Paragraph(f"<b>{inv_i}</b>", cell_code),
+        ])
+
+    # Mantener al menos 3 filas para formato visual uniforme como en el acta oficial
+    min_rows = max(3, len(raw_items))
+    for idx in range(len(raw_items) + 1, min_rows + 1):
+        eq_table_data.append([
+            Paragraph(f"<font color='#94a3b8'>{idx}</font>", cell_center),
+            Paragraph("&nbsp;", cell_val),
+            Paragraph("&nbsp;", cell_center),
+            Paragraph("&nbsp;", cell_center),
+            Paragraph("&nbsp;", cell_code),
+            Paragraph("&nbsp;", cell_center),
+            Paragraph("&nbsp;", cell_code),
+        ])
+
+    eq_table_style = [
+        ('SPAN', (0, 0), (2, 0)),
+        ('SPAN', (3, 0), (6, 0)),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f1f5f9')),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, 0), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+        ('LEFTPADDING', (0, 0), (-1, 0), 6),
+        ('RIGHTPADDING', (0, 0), (-1, 0), 6),
+
+        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#0284c7')),
+        ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),
+        ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
+        ('TOPPADDING', (0, 1), (-1, 1), 5),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 5),
+        ('LEFTPADDING', (0, 1), (-1, 1), 3),
+        ('RIGHTPADDING', (0, 1), (-1, 1), 3),
+
+        ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#94a3b8')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('VALIGN', (0, 2), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 2), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 2), (-1, -1), 5),
+        ('LEFTPADDING', (0, 2), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 2), (-1, -1), 4),
+    ]
+
+    for r_i in range(2, len(eq_table_data)):
+        bg = colors.HexColor('#ffffff') if r_i % 2 == 0 else colors.HexColor('#f8fafc')
+        eq_table_style.append(('BACKGROUND', (0, r_i), (-1, r_i), bg))
+
+    eq_table = Table(eq_table_data, colWidths=col_widths, repeatRows=2)
+    eq_table.setStyle(TableStyle(eq_table_style))
+    story.append(eq_table)
+    story.append(Spacer(1, 10))
+
+    # 5. OBSERVACIONES
+    story.append(Paragraph("<b>Observaciones:</b>", sec_heading))
     story.append(Spacer(1, 3))
 
     obs = record.get("observaciones") or ""
@@ -1503,27 +1580,24 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),
         ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
     story.append(obs_table)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 12))
 
-    # 5. FIRMA DE RECEPCIÓN
+    # 6. PARA CONSTANCIA Y FE (TABLA DE FIRMAS INSTITUCIONALES)
+    nombre_rec = record.get("nombre_receptor") or "No especificado"
+    tecnico_ent = record.get("usuario_entrega") or "Técnico EEMM"
+
+    story.append(Paragraph("<b>Para constancia y fe:</b>", sec_heading))
+    story.append(Spacer(1, 3))
+
     firma_ruta = record.get("firma_data") or record.get("firma")
-    sig_img = get_scaled_image(firma_ruta, max_width=200, max_height=75)
-
-    tag_style_center = ParagraphStyle(
-        'DocTagEqCenter',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=7.5,
-        leading=10,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#64748b')
-    )
+    sig_img = get_scaled_image(firma_ruta, max_width=180, max_height=55)
 
     if sig_img:
-        rec_sig_cell = [
-            Table([[sig_img]], colWidths=[280], style=[
+        rec_firma_cell = [
+            Table([[sig_img]], colWidths=[200], style=[
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -1531,37 +1605,60 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
                 ('TOPPADDING', (0, 0), (-1, -1), 0),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]),
-            Spacer(1, 3),
-            Paragraph("__________________________________________", cell_txt_center),
-            Spacer(1, 3),
-            Paragraph(f"<b>{nombre_rec}</b>", cell_txt_center),
-            Paragraph(f"Receptor Conforme / {servicio_rec}", tag_style_center)
+            Paragraph("___________________________________", cell_txt_center),
+            Paragraph("<font size=7 color='#64748b'>Firma Digital Receptor</font>", cell_txt_center)
         ]
     else:
-        rec_sig_cell = [
-            Spacer(1, 45),
-            Paragraph("__________________________________________", cell_txt_center),
-            Spacer(1, 3),
-            Paragraph(f"<b>{nombre_rec}</b>", cell_txt_center),
-            Paragraph(f"Receptor Conforme / {servicio_rec}", tag_style_center)
+        rec_firma_cell = [
+            Spacer(1, 30),
+            Paragraph("___________________________________", cell_txt_center),
+            Paragraph("<font size=7 color='#64748b'>Firma y Timbre Receptor</font>", cell_txt_center)
         ]
 
-    # Tabla centrada para la firma de recepción (ancho total 540 pt)
-    t_firmas = Table([["", rec_sig_cell, ""]], colWidths=[130, 280, 130])
-    t_firmas.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    eem_firma_cell = [
+        Spacer(1, 30),
+        Paragraph("___________________________________", cell_txt_center),
+        Paragraph("<font size=7 color='#64748b'>Firma y Timbre EEMM</font>", cell_txt_center)
+    ]
+
+    firmas_data = [
+        [
+            Paragraph("<b>CARGO</b>", hdr_firmas),
+            Paragraph("<b>NOMBRE</b>", hdr_firmas),
+            Paragraph("<b>FIRMA Y TIMBRE</b>", hdr_firmas)
+        ],
+        [
+            Paragraph("<b>REFERENTE CLÍNICO</b>", cell_cargo),
+            Paragraph(f"<b>{nombre_rec}</b>", cell_val_bold),
+            rec_firma_cell
+        ],
+        [
+            Paragraph("<b>ENCARGADO EQUIPOS MÉDICOS</b>", cell_cargo),
+            Paragraph(f"<b>{tecnico_ent}</b>", cell_val_bold),
+            eem_firma_cell
+        ]
+    ]
+
+    firmas_table = Table(firmas_data, colWidths=[145, 175, 220])
+    firmas_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0284c7')),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, 0), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+
+        ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#94a3b8')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 7),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#ffffff')),
+        ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#f8fafc')),
     ]))
 
-    closing_elements = [
-        Spacer(1, 20),
-        t_firmas
-    ]
-    story.append(KeepTogether(closing_elements))
+    story.append(KeepTogether([firmas_table]))
 
     doc.build(story, onFirstPage=build_pdf_header_footer, onLaterPages=build_pdf_header_footer)
     buf.seek(0)

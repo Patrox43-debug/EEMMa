@@ -489,13 +489,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.4",
-        "version_code": 33,
-        "release_tag": "v1.12.4",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.4/EEMM.apk",
+        "version_name": "1.12.5",
+        "version_code": 34,
+        "release_tag": "v1.12.5",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.5/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Corrección en Tareas Diarias: ahora la pestaña y alertas de Pendientes muestran también las tareas pendientes o en proceso creadas durante el día de hoy (no solo días anteriores).",
-        "published_at": "2026-11-11T21:00:00-03:00"
+        "notes": "• Nueva Acta de Entrega de Equipos Médicos: adaptación completa al formato oficial con tabla de 7 columnas (N°, Equipo, Marca, Modelo, N° Serie, Año Fabricación, Inventario), fila de servicio clínico, observaciones y firmas institucionales de Referente Clínico y Encargado de Equipos Médicos.",
+        "published_at": "2026-11-18T08:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -2636,6 +2636,7 @@ class EntregaEquipoItemDetail(BaseModel):
     modelo: Optional[str] = None
     serie: Optional[str] = None
     inventario: Optional[str] = None
+    anio_fabricacion: Optional[str] = None
 
 
 class EntregaEquipoCreate(BaseModel):
@@ -2645,6 +2646,7 @@ class EntregaEquipoCreate(BaseModel):
     modelo: Optional[str] = None
     serie: Optional[str] = None
     inventario: Optional[str] = None
+    anio_fabricacion: Optional[str] = None
     servicio: str
     nombre_receptor: str
     usuario_entrega: Optional[str] = None
@@ -2670,6 +2672,7 @@ def _parse_entrega_equipo_row(row_dict: dict) -> dict:
             "modelo": row_dict.get("modelo") or "",
             "serie": row_dict.get("serie") or "",
             "inventario": row_dict.get("inventario") or "S/I",
+            "anio_fabricacion": row_dict.get("anio_fabricacion") or "",
         }]
     row_dict["items"] = parsed
     return row_dict
@@ -2699,7 +2702,8 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
                 "marca": (it.marca or "").strip(),
                 "modelo": (it.modelo or "").strip(),
                 "serie": ser,
-                "inventario": inv_v
+                "inventario": inv_v,
+                "anio_fabricacion": (getattr(it, "anio_fabricacion", None) or "").strip()
             })
     elif item.nombre_equipo and item.nombre_equipo.strip():
         ser = (item.serie or "").strip()
@@ -2709,7 +2713,8 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
             "marca": (item.marca or "").strip(),
             "modelo": (item.modelo or "").strip(),
             "serie": ser,
-            "inventario": inv_v
+            "inventario": inv_v,
+            "anio_fabricacion": (getattr(item, "anio_fabricacion", None) or "").strip()
         })
 
     if not items_to_deliver:

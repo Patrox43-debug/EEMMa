@@ -164,7 +164,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>Hospital Claudio Vicuña · <strong>v1.12.4</strong></span>
+              <span>Hospital Claudio Vicuña · <strong>v1.12.5</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -222,7 +222,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            Hospital Claudio Vicuña · Versión <strong>1.12.4</strong>
+            Hospital Claudio Vicuña · Versión <strong>1.12.5</strong>
           </div>
         </form>
       </section>
@@ -2007,8 +2007,8 @@
               <datalist id="list-equipos-entrega-autocomplete"></datalist>
             </div>
 
-            <!-- Fila 1: Nombre del Equipo e Inventario / Serie -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <!-- Fila 1: Nombre del Equipo, Marca y Modelo -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.85rem; margin-bottom: 0.85rem;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label for="entrega-eq-nombre" class="form-label">
                   Nombre del Equipo: <span style="color: var(--danger, #ef4444);">*</span>
@@ -2017,27 +2017,41 @@
               </div>
 
               <div class="form-group" style="margin-bottom: 0;">
-                <label for="entrega-eq-inventario" class="form-label">
-                  N° de Serie / Inventario: <span style="color: var(--danger, #ef4444);">*</span>
-                </label>
-                <input type="text" id="entrega-eq-inventario" class="form-control" placeholder="Ej: HCV-EQ-10492 o N° de Serie" autocomplete="off">
-              </div>
-            </div>
-
-            <!-- Fila 2: Marca y Modelo -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 0.85rem;">
-              <div class="form-group" style="margin-bottom: 0;">
                 <label for="entrega-eq-marca" class="form-label">
                   Marca:
                 </label>
-                <input type="text" id="entrega-eq-marca" class="form-control" placeholder="Ej: PHILIPS, MINDRAY, GENERAL ELECTRIC..." autocomplete="off">
+                <input type="text" id="entrega-eq-marca" class="form-control" placeholder="Ej: PHILIPS, MINDRAY, SAMSUNG..." autocomplete="off">
               </div>
 
               <div class="form-group" style="margin-bottom: 0;">
                 <label for="entrega-eq-modelo" class="form-label">
                   Modelo:
                 </label>
-                <input type="text" id="entrega-eq-modelo" class="form-control" placeholder="Ej: INTELLIVUE MX450, BENEVISION..." autocomplete="off">
+                <input type="text" id="entrega-eq-modelo" class="form-control" placeholder="Ej: INTELLIVUE MX450, HS40..." autocomplete="off">
+              </div>
+            </div>
+
+            <!-- Fila 2: N° de Serie, Año Fabricación e Inventario -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.85rem; margin-bottom: 0.85rem;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="entrega-eq-serie" class="form-label">
+                  N° de Serie:
+                </label>
+                <input type="text" id="entrega-eq-serie" class="form-control" placeholder="Ej: S3C1M3MX300003R" autocomplete="off">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="entrega-eq-anio" class="form-label">
+                  Año de Fabricación:
+                </label>
+                <input type="text" id="entrega-eq-anio" class="form-control" placeholder="Ej: 2024" autocomplete="off">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="entrega-eq-inventario" class="form-label">
+                  N° de Inventario: <span style="color: var(--danger, #ef4444);">*</span>
+                </label>
+                <input type="text" id="entrega-eq-inventario" class="form-control" placeholder="Ej: HCV-EQ-10492 o N° de Serie" autocomplete="off">
               </div>
             </div>
 

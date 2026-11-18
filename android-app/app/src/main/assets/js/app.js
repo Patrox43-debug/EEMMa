@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.4";
+        this.currentAppVersion = "1.12.5";
       }
     } else {
-      this.currentAppVersion = "1.12.4";
+      this.currentAppVersion = "1.12.5";
     }
 
     setTimeout(() => {
@@ -6358,13 +6358,22 @@ const app = {
       const inputNombre = document.getElementById("entrega-eq-nombre");
       const inputMarca = document.getElementById("entrega-eq-marca");
       const inputModelo = document.getElementById("entrega-eq-modelo");
+      const inputSerie = document.getElementById("entrega-eq-serie");
+      const inputAnio = document.getElementById("entrega-eq-anio");
       const inputInv = document.getElementById("entrega-eq-inventario");
 
       if (inputNombre && matched.nombre) inputNombre.value = matched.nombre;
       if (inputMarca && matched.marca) inputMarca.value = matched.marca;
       if (inputModelo && matched.modelo) inputModelo.value = matched.modelo;
+      if (inputSerie && matched.serie) inputSerie.value = matched.serie;
       if (inputInv && (matched.serie || matched.codigo_origen)) {
-        inputInv.value = matched.serie || `INV-${matched.codigo_origen}`;
+        inputInv.value = matched.codigo_origen ? `INV-${matched.codigo_origen}` : matched.serie;
+      }
+      if (inputAnio && matched.detalles) {
+        const matchAnio = String(matched.detalles).match(/Año\s*Fabricaci[oó]n:?\s*([0-9\-\/]{4,10})/i);
+        if (matchAnio && matchAnio[1]) {
+          inputAnio.value = matchAnio[1].trim();
+        }
       }
     }
   },
@@ -6373,13 +6382,19 @@ const app = {
 
   addEquipoToEntregaList() {
     const nombreInput = document.getElementById("entrega-eq-nombre");
+    const serieInput = document.getElementById("entrega-eq-serie");
     const invInput = document.getElementById("entrega-eq-inventario");
+    const anioInput = document.getElementById("entrega-eq-anio");
     const marcaInput = document.getElementById("entrega-eq-marca");
     const modeloInput = document.getElementById("entrega-eq-modelo");
     const autoSearch = document.getElementById("entrega-eq-autosearch");
 
     const nombre = nombreInput ? nombreInput.value.trim() : "";
-    const inventario = invInput ? invInput.value.trim() : "";
+    const rawSerie = serieInput ? serieInput.value.trim() : "";
+    const rawInv = invInput ? invInput.value.trim() : "";
+    const inventario = rawInv || rawSerie;
+    const finalSerie = rawSerie || rawInv;
+    const anio = anioInput ? anioInput.value.trim() : "";
     const marca = marcaInput ? marcaInput.value.trim() : "";
     const modelo = modeloInput ? modeloInput.value.trim() : "";
 
@@ -6388,8 +6403,8 @@ const app = {
       if (nombreInput) nombreInput.focus();
       return;
     }
-    if (!inventario) {
-      this.showToast("Ingresa el N° de serie / inventario del equipo", "warning");
+    if (!inventario && !finalSerie) {
+      this.showToast("Ingresa el N° de serie o inventario del equipo", "warning");
       if (invInput) invInput.focus();
       return;
     }
@@ -6398,12 +6413,15 @@ const app = {
       nombre_equipo: nombre,
       marca: marca,
       modelo: modelo,
-      serie: inventario,
-      inventario: inventario
+      serie: finalSerie,
+      inventario: inventario || finalSerie,
+      anio_fabricacion: anio
     });
 
     if (nombreInput) nombreInput.value = "";
+    if (serieInput) serieInput.value = "";
     if (invInput) invInput.value = "";
+    if (anioInput) anioInput.value = "";
     if (marcaInput) marcaInput.value = "";
     if (modeloInput) modeloInput.value = "";
     if (autoSearch) autoSearch.value = "";
@@ -6444,7 +6462,9 @@ const app = {
             </div>
             <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 2px;">
               ${mm ? `<span>${this.escapeHtml(mm)}</span> · ` : ""}
-              <span>Serie / Inv.: <strong>${this.escapeHtml(it.inventario || it.serie || "S/I")}</strong></span>
+              <span>Serie: <strong>${this.escapeHtml(it.serie || "S/S")}</strong></span> · 
+              <span>Inv: <strong>${this.escapeHtml(it.inventario || "S/I")}</strong></span>
+              ${it.anio_fabricacion ? ` · <span>Año: ${this.escapeHtml(it.anio_fabricacion)}</span>` : ""}
             </div>
           </div>
           <button type="button" class="btn btn-danger btn-xs" onclick="app.removeEquipoFromEntregaList(${idx})" title="Quitar de la entrega" style="padding: 4px 8px; flex-shrink: 0;">
@@ -6460,6 +6480,10 @@ const app = {
     if (form) form.reset();
     const autoSearch = document.getElementById("entrega-eq-autosearch");
     if (autoSearch) autoSearch.value = "";
+    const serieInput = document.getElementById("entrega-eq-serie");
+    if (serieInput) serieInput.value = "";
+    const anioInput = document.getElementById("entrega-eq-anio");
+    if (anioInput) anioInput.value = "";
     this.entregaEquiposCart = [];
     this.renderEntregaEquiposCart();
     this.clearEntregaEquipoSignature();
@@ -6473,7 +6497,9 @@ const app = {
 
   async submitEntregaEquipo() {
     const nombreInput = document.getElementById("entrega-eq-nombre");
+    const serieInput = document.getElementById("entrega-eq-serie");
     const invInput = document.getElementById("entrega-eq-inventario");
+    const anioInput = document.getElementById("entrega-eq-anio");
     const marcaInput = document.getElementById("entrega-eq-marca");
     const modeloInput = document.getElementById("entrega-eq-modelo");
     const servicioSelect = document.getElementById("entrega-eq-servicio");
@@ -6482,7 +6508,11 @@ const app = {
     const submitBtn = document.getElementById("btn-submit-entrega-equipo");
 
     const nombre = nombreInput ? nombreInput.value.trim() : "";
-    const inventario = invInput ? invInput.value.trim() : "";
+    const rawSerie = serieInput ? serieInput.value.trim() : "";
+    const rawInv = invInput ? invInput.value.trim() : "";
+    const inventario = rawInv || rawSerie;
+    const finalSerie = rawSerie || rawInv;
+    const anio = anioInput ? anioInput.value.trim() : "";
     const marca = marcaInput ? marcaInput.value.trim() : "";
     const modelo = modeloInput ? modeloInput.value.trim() : "";
     const servicio = servicioSelect ? servicioSelect.value.trim() : "";
@@ -6490,14 +6520,14 @@ const app = {
     const obs = obsInput ? obsInput.value.trim() : "";
 
     const itemsToSend = [...this.entregaEquiposCart];
-    if (nombre || inventario) {
+    if (nombre || inventario || finalSerie) {
       if (!nombre) {
         this.showToast("Ingresa el nombre del equipo médico pendiente o limpia el campo", "warning");
         if (nombreInput) nombreInput.focus();
         return;
       }
-      if (!inventario) {
-        this.showToast("Ingresa el N° de serie / inventario del equipo pendiente", "warning");
+      if (!inventario && !finalSerie) {
+        this.showToast("Ingresa el N° de serie o inventario del equipo pendiente", "warning");
         if (invInput) invInput.focus();
         return;
       }
@@ -6505,8 +6535,9 @@ const app = {
         nombre_equipo: nombre,
         marca: marca,
         modelo: modelo,
-        serie: inventario,
-        inventario: inventario
+        serie: finalSerie,
+        inventario: inventario || finalSerie,
+        anio_fabricacion: anio
       });
     }
 
@@ -7829,7 +7860,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.4",
+  currentAppVersion: "1.12.5",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
