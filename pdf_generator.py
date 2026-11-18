@@ -2074,10 +2074,10 @@ def _build_tareas_header(st: dict, subtitle_desc: str, right_meta: list) -> list
 def _build_tareas_table(items: list, st: dict, include_tecnico: bool = False) -> Table:
     """Genera la tabla estandarizada de tareas/trabajos realizados."""
     if include_tecnico:
-        col_w = [40, 82, 95, 100, 168, 55]
+        col_w = [48, 80, 93, 98, 166, 55]
         headers = ["Hora", "Técnico", "Servicio Clínico", "Tipo / Equipo", "Descripción del Trabajo", "Estado"]
     else:
-        col_w = [44, 108, 118, 212, 58]
+        col_w = [52, 104, 116, 210, 58]
         headers = ["Hora", "Servicio Clínico", "Tipo / Equipo", "Descripción del Trabajo", "Estado"]
 
     rows = [[Paragraph(f"<b>{h}</b>", st["cell_hdr"]) for h in headers]]
@@ -2088,7 +2088,13 @@ def _build_tareas_table(items: list, st: dict, include_tecnico: bool = False) ->
         rows.append(empty_row)
     else:
         for it in items:
-            hora = str(it.get("hora") or "--:--").strip()
+            hora_ini = str(it.get("hora") or "--:--").strip()
+            hora_fin = str(it.get("hora_fin") or "").strip()
+            if hora_fin and hora_fin != hora_ini:
+                hora_txt = f"{hora_ini}<br/>a {hora_fin}"
+            else:
+                hora_txt = hora_ini
+
             serv = str(it.get("servicio") or "GENERAL").strip()
             tipo = str(it.get("tipo_tarea") or "Labor Técnica").strip()
             equipo = str(it.get("equipo") or "").strip()
@@ -2100,7 +2106,7 @@ def _build_tareas_table(items: list, st: dict, include_tecnico: bool = False) ->
                 labor_html += f"<br/><font color='#475569' size='7'>Equipo: {equipo}</font>"
 
             est_color = "#15803d" if estado_t.lower() == "completada" else ("#b45309" if "proceso" in estado_t.lower() else "#b91c1c")
-            c_hora = Paragraph(f"<b>{hora}</b>", st["cell_txt_center"])
+            c_hora = Paragraph(f"<b>{hora_txt}</b>", st["cell_txt_center"])
             c_serv = Paragraph(f"<b>{serv}</b>", st["cell_txt"])
             c_labor = Paragraph(labor_html, st["cell_txt"])
             c_desc = Paragraph(desc.replace("\n", "<br/>"), st["cell_txt"])

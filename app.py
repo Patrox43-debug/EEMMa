@@ -195,7 +195,8 @@ def _ensure_tareas_tables(cursor):
     for col_stmt in [
         "ALTER TABLE tareas_diarias_items ADD COLUMN fecha_resolucion DATETIME;",
         "ALTER TABLE tareas_diarias_items ADD COLUMN resuelta_por TEXT;",
-        "ALTER TABLE tareas_diarias_items ADD COLUMN nota_resolucion TEXT;"
+        "ALTER TABLE tareas_diarias_items ADD COLUMN nota_resolucion TEXT;",
+        "ALTER TABLE tareas_diarias_items ADD COLUMN hora_fin TEXT;"
     ]:
         try:
             cursor.execute(col_stmt)
@@ -489,13 +490,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.5",
-        "version_code": 34,
-        "release_tag": "v1.12.5",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.5/EEMM.apk",
+        "version_name": "1.12.6",
+        "version_code": 35,
+        "release_tag": "v1.12.6",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.6/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Nueva Acta de Entrega de Equipos Médicos: adaptación completa al formato oficial con tabla de 7 columnas (N°, Equipo, Marca, Modelo, N° Serie, Año Fabricación, Inventario), fila de servicio clínico, observaciones y firmas institucionales de Referente Clínico y Encargado de Equipos Médicos.",
-        "published_at": "2026-11-18T08:00:00-03:00"
+        "notes": "• Tareas Diarias: registro con hora de inicio automática 'En Proceso' y acción rápida para registrar hora de término completando la tarea.",
+        "published_at": "2026-11-18T17:00:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -2942,21 +2943,32 @@ def delete_entrega_equipo(id: int):
 class TareaDiariaItemCreate(BaseModel):
     tecnico: str
     fecha: Optional[str] = None
-    hora: Optional[str] = None
+    hora: Optional[str] = None       # Hora de inicio
+    hora_fin: Optional[str] = None   # Hora de término (opcional al iniciar)
     servicio: str
     tipo_tarea: Optional[str] = "Mantención Correctiva"
     equipo: Optional[str] = None
     descripcion: str
-    estado_tarea: Optional[str] = "Completada"
+    estado_tarea: Optional[str] = None  # Si es None: 'En Proceso' si no hay hora_fin, 'Completada' si hay hora_fin
 
 
 class TareaDiariaItemUpdate(BaseModel):
     hora: Optional[str] = None
+    hora_fin: Optional[str] = None
     servicio: str
     tipo_tarea: Optional[str] = "Mantención Correctiva"
     equipo: Optional[str] = None
     descripcion: str
+    estado_tarea: Optional[str] = None
+
+
+class TareaDiariaTerminar(BaseModel):
+    hora_fin: Optional[str] = None
+    hora: Optional[str] = None
+    hora_inicio: Optional[str] = None
     estado_tarea: Optional[str] = "Completada"
+    nota_resolucion: Optional[str] = None
+    tecnico_resuelve: Optional[str] = None
 
 
 class TareaDiariaObsUpdate(BaseModel):
@@ -2995,7 +3007,7 @@ def _fetch_reporte_completo(cursor, reporte_id: int) -> Optional[dict]:
         return None
     rep = dict(row)
     cursor.execute("""
-        SELECT id, reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
+        SELECT id, reporte_id, hora, hora_fin, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
                fecha_resolucion,
                strftime('%d/%m/%Y %H:%M', fecha_resolucion) as fecha_resolucion_fmt,
                resuelta_por, nota_resolucion,
@@ -3046,7 +3058,7 @@ def _query_reportes_con_items(cursor, fecha_inicio: str, fecha_fin: str, tecnico
     reportes = [dict(r) for r in cursor.fetchall()]
     for rep in reportes:
         cursor.execute("""
-            SELECT id, reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea
+            SELECT id, reporte_id, hora, hora_fin, servicio, tipo_tarea, equipo, descripcion, estado_tarea
             FROM tareas_diarias_items
             WHERE reporte_id = ?
             ORDER BY COALESCE(hora, '00:00') ASC, id ASC
@@ -3129,9 +3141,18 @@ def add_tarea_diaria_item(item: TareaDiariaItemCreate):
 
     fecha_norm = _norm_fecha_tarea(item.fecha)
     hora_val = (item.hora or datetime.now().strftime("%H:%M")).strip()
+    hora_fin_val = (item.hora_fin or "").strip() or None
     tipo_val = (item.tipo_tarea or "Mantención Correctiva").strip()
     eq_val = (item.equipo or "").strip()
-    est_val = (item.estado_tarea or "Completada").strip()
+
+    # Si no se indica hora_fin y no se especifica explícitamente estado, queda automáticamente 'En Proceso'
+    if item.estado_tarea and item.estado_tarea.strip():
+        est_val = item.estado_tarea.strip()
+    else:
+        est_val = "Completada" if hora_fin_val else "En Proceso"
+
+    if hora_fin_val and est_val.lower() == "en proceso":
+        est_val = "Completada"
 
     conn = get_db()
     cursor = conn.cursor()
@@ -3150,10 +3171,10 @@ def add_tarea_diaria_item(item: TareaDiariaItemCreate):
 
     cursor.execute(f"""
         INSERT INTO tareas_diarias_items (
-            reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
+            reporte_id, hora, hora_fin, servicio, tipo_tarea, equipo, descripcion, estado_tarea,
             fecha_resolucion, resuelta_por, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, {fecha_res_expr}, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
-    """, (rep["id"], hora_val, serv, tipo_val, eq_val, desc, est_val, resuelta_por_val))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, {fecha_res_expr}, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+    """, (rep["id"], hora_val, hora_fin_val, serv, tipo_val, eq_val, desc, est_val, resuelta_por_val))
 
     cursor.execute(
         "UPDATE tareas_diarias_reportes SET updated_at = datetime('now', 'localtime') WHERE id = ?",
@@ -3192,17 +3213,26 @@ def update_tarea_diaria_item(item_id: int, item: TareaDiariaItemUpdate):
         conn.close()
         raise HTTPException(status_code=400, detail="El reporte diario ya fue realizado y está bloqueado para edición.")
 
-    new_est = (item.estado_tarea or "Completada").strip()
+    hora_fin_val = (item.hora_fin or "").strip() or None
+    if item.estado_tarea and item.estado_tarea.strip():
+        new_est = item.estado_tarea.strip()
+    else:
+        new_est = "Completada" if hora_fin_val else "En Proceso"
+
+    if hora_fin_val and new_est.lower() == "en proceso":
+        new_est = "Completada"
+
     fecha_res_sql = "COALESCE(fecha_resolucion, datetime('now', 'localtime'))" if new_est.lower() == "completada" else "NULL"
 
     cursor.execute(f"""
         UPDATE tareas_diarias_items
-        SET hora = ?, servicio = ?, tipo_tarea = ?, equipo = ?, descripcion = ?, estado_tarea = ?,
+        SET hora = ?, hora_fin = ?, servicio = ?, tipo_tarea = ?, equipo = ?, descripcion = ?, estado_tarea = ?,
             fecha_resolucion = {fecha_res_sql},
             updated_at = datetime('now', 'localtime')
         WHERE id = ?
     """, (
         (item.hora or "").strip() or None,
+        hora_fin_val,
         serv,
         (item.tipo_tarea or "Mantención Correctiva").strip(),
         (item.equipo or "").strip(),
@@ -3210,6 +3240,62 @@ def update_tarea_diaria_item(item_id: int, item: TareaDiariaItemUpdate):
         new_est,
         item_id
     ))
+    cursor.execute(
+        "UPDATE tareas_diarias_reportes SET updated_at = datetime('now', 'localtime') WHERE id = ?",
+        (reporte_id,)
+    )
+    conn.commit()
+    full_rep = _fetch_reporte_completo(cursor, reporte_id)
+    conn.close()
+    return full_rep
+
+
+@app.post("/api/tareas-diarias/items/{item_id}/terminar")
+def terminar_tarea_diaria_item(item_id: int, payload: TareaDiariaTerminar):
+    """Establece la hora de término de una tarea en proceso y la marca como completada."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_tareas_tables(cursor)
+    cursor.execute("""
+        SELECT ti.reporte_id, ti.hora, ti.estado_tarea, tr.estado, tr.tecnico
+        FROM tareas_diarias_items ti
+        JOIN tareas_diarias_reportes tr ON tr.id = ti.reporte_id
+        WHERE ti.id = ?
+    """, (item_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    reporte_id, hora_orig, est_orig, estado_rep, tec = row[0], row[1], row[2], row[3], row[4]
+    if estado_rep == "FINALIZADO":
+        conn.close()
+        raise HTTPException(status_code=400, detail="El reporte diario ya fue realizado y no permite modificar tareas.")
+
+    hora_inicio = (payload.hora or payload.hora_inicio or hora_orig or datetime.now().strftime("%H:%M")).strip()
+    hora_fin = (payload.hora_fin or datetime.now().strftime("%H:%M")).strip()
+    new_est = (payload.estado_tarea or "Completada").strip()
+    nota = (payload.nota_resolucion or "").strip()
+    quien = (payload.tecnico_resuelve or tec or "").strip()
+
+    nota_update_sql = "nota_resolucion = ?," if nota else ""
+    params_update = [hora_inicio, hora_fin, new_est]
+    if nota:
+        params_update.append(nota)
+    params_update.extend([quien, item_id])
+
+    cursor.execute(f"""
+        UPDATE tareas_diarias_items
+        SET hora = ?,
+            hora_fin = ?,
+            estado_tarea = ?,
+            {nota_update_sql}
+            fecha_resolucion = datetime('now', 'localtime'),
+            resuelta_por = COALESCE(resuelta_por, ?),
+            updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+    """, tuple(params_update))
+
     cursor.execute(
         "UPDATE tareas_diarias_reportes SET updated_at = datetime('now', 'localtime') WHERE id = ?",
         (reporte_id,)
@@ -3401,7 +3487,7 @@ def list_tareas_diarias_historial(
     reportes = [dict(r) for r in cursor.fetchall()]
     for rep in reportes:
         cursor.execute("""
-            SELECT id, reporte_id, hora, servicio, tipo_tarea, equipo, descripcion, estado_tarea
+            SELECT id, reporte_id, hora, hora_fin, servicio, tipo_tarea, equipo, descripcion, estado_tarea
             FROM tareas_diarias_items
             WHERE reporte_id = ?
             ORDER BY COALESCE(hora, '00:00') ASC, id ASC
@@ -3471,7 +3557,7 @@ def _query_tareas_items_joined(
     )
 
     cursor.execute(f"""
-        SELECT ti.id, ti.reporte_id, ti.hora, ti.servicio, ti.tipo_tarea, ti.equipo,
+        SELECT ti.id, ti.reporte_id, ti.hora, ti.hora_fin, ti.servicio, ti.tipo_tarea, ti.equipo,
                ti.descripcion, ti.estado_tarea,
                ti.fecha_resolucion,
                strftime('%d/%m/%Y %H:%M', ti.fecha_resolucion) as fecha_resolucion_fmt,

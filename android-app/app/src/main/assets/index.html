@@ -164,7 +164,7 @@
 
             <!-- Versión de la Aplicación -->
             <div style="padding: 0.45rem 0.65rem 0.25rem 0.65rem; font-size: 0.68rem; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); margin-top: 2px;">
-              <span>Hospital Claudio Vicuña · <strong>v1.12.5</strong></span>
+              <span>Hospital Claudio Vicuña · <strong>v1.12.6</strong></span>
               <button type="button" onclick="app.closeUserDropdown(); app.checkForUpdates(false);" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0;" title="Comprobar si hay una versión más nueva">Actualizar</button>
             </div>
           </div>
@@ -222,7 +222,7 @@
             Ingresar al Sistema
           </button>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: var(--text-tertiary);">
-            Hospital Claudio Vicuña · Versión <strong>1.12.5</strong>
+            Hospital Claudio Vicuña · Versión <strong>1.12.6</strong>
           </div>
         </form>
       </section>
@@ -2433,10 +2433,21 @@
             <form id="form-tarea-diaria-item" onsubmit="event.preventDefault(); app.saveTareaDiariaItem();">
               <input type="hidden" id="td-edit-item-id" value="">
 
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.85rem; margin-bottom: 0.9rem;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 0.9rem;">
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label for="td-item-hora" class="form-label">Hora:</label>
-                  <input type="time" id="td-item-hora" class="form-control">
+                  <label for="td-item-hora" class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Hora Inicio: <span style="color: var(--danger, #ef4444);">*</span></span>
+                    <span style="font-size: 0.68rem; color: #7c3aed; font-weight: 700;">⏱️ Inicio</span>
+                  </label>
+                  <input type="time" id="td-item-hora" class="form-control" title="Hora de inicio de la tarea">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="td-item-hora-fin" class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Hora Término:</span>
+                    <span style="font-size: 0.68rem; color: var(--text-tertiary); font-weight: 400;">(Opcional)</span>
+                  </label>
+                  <input type="time" id="td-item-hora-fin" class="form-control" title="Déjalo vacío para que quede En Proceso, o ingresa hora para completarla" onchange="app.handleTareaHoraFinInput(this.value)">
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
@@ -2475,10 +2486,10 @@
 
                 <div class="form-group" style="margin-bottom: 0;">
                   <label for="td-item-estado" class="form-label">Estado:</label>
-                  <select id="td-item-estado" class="form-control">
-                    <option value="Completada">Completada</option>
-                    <option value="En Proceso">En Proceso</option>
-                    <option value="Pendiente / Seguimiento">Pendiente / Seguimiento</option>
+                  <select id="td-item-estado" class="form-control" onchange="app.handleTareaEstadoChange(this.value)">
+                    <option value="En Proceso" selected>⏳ En Proceso</option>
+                    <option value="Completada">✅ Completada</option>
+                    <option value="Pendiente / Seguimiento">⚠️ Pendiente / Seguimiento</option>
                   </select>
                 </div>
               </div>
@@ -2487,7 +2498,7 @@
                 <label for="td-item-descripcion" class="form-label">
                   Descripción del Trabajo / Tarea Realizada: <span style="color: var(--danger, #ef4444);">*</span>
                 </label>
-                <textarea id="td-item-descripcion" class="form-control" rows="2" placeholder="Detalla el trabajo realizado, falla encontrada, repuesto instalado o gestión completada..." required></textarea>
+                <textarea id="td-item-descripcion" class="form-control" rows="2" placeholder="Detalla el trabajo realizado, falla encontrada, repuesto instalado o gestión en curso..." required></textarea>
               </div>
 
               <div style="display: flex; justify-content: flex-end; gap: 0.65rem; flex-wrap: wrap;">
@@ -2496,7 +2507,7 @@
                 </button>
                 <button type="submit" id="btn-td-save-item" class="btn btn-primary" style="background: #7c3aed; border-color: #7c3aed; color: white; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  Agregar Tarea al Día
+                  <span id="btn-td-save-item-text">▶️ Cargar Tarea (En Proceso)</span>
                 </button>
               </div>
             </form>
@@ -2749,6 +2760,62 @@
       </section>
 
     </main>
+
+    <!-- ====================================================================
+         MODAL: FINALIZAR TAREA (Registrar Hora de Término y Completar)
+         ==================================================================== -->
+    <div id="modal-td-terminar-tarea" class="modal-overlay" onclick="if(event.target === this) app.closeFinalizarTareaModal();" style="display: none;">
+      <div class="modal-card" style="max-width: 440px;">
+        <div class="panel-header" style="margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+          <h3 class="panel-title" style="margin: 0; font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 0.45rem;">
+            <span>⏱️</span> Finalizar Tarea Diaria
+          </h3>
+          <button type="button" class="btn-icon" onclick="app.closeFinalizarTareaModal()">✕</button>
+        </div>
+
+        <div style="margin-bottom: 0.85rem; padding: 0.75rem 0.85rem; background: var(--bg-subtle); border: 1px solid var(--border); border-left: 4px solid #10b981; border-radius: 6px; font-size: 0.82rem;">
+          <div id="td-term-info-servicio" style="font-weight: 700; color: #0284c7; margin-bottom: 2px;"></div>
+          <div id="td-term-info-desc" style="color: var(--text-primary); line-height: 1.35; white-space: pre-wrap;"></div>
+        </div>
+
+        <form id="form-td-terminar-tarea" onsubmit="event.preventDefault(); app.confirmarTerminarTarea();">
+          <input type="hidden" id="td-term-item-id" value="">
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="td-term-hora-inicio" class="form-label" style="font-size: 0.76rem;">Hora Inicio:</label>
+              <input type="time" id="td-term-hora-inicio" class="form-control" style="height: 38px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="td-term-hora-fin" class="form-label" style="font-size: 0.76rem; font-weight: 700; color: #059669;">
+                Hora Término: <span style="color: var(--danger, #ef4444);">*</span>
+              </label>
+              <input type="time" id="td-term-hora-fin" class="form-control" style="height: 38px; border-color: #10b981;" required>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0.85rem;">
+            <label for="td-term-estado" class="form-label" style="font-size: 0.76rem;">Estado Final:</label>
+            <select id="td-term-estado" class="form-control" style="height: 36px; font-weight: 600;">
+              <option value="Completada" selected>✅ Completada</option>
+              <option value="Pendiente / Seguimiento">⚠️ Pendiente / Seguimiento</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.15rem;">
+            <label for="td-term-nota" class="form-label" style="font-size: 0.76rem;">Nota de Solución / Cierre (Opcional):</label>
+            <input type="text" id="td-term-nota" class="form-control" placeholder="Ej: Equipo verificado operativo con el servicio" style="height: 36px;">
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-subtle); padding-top: 0.85rem;">
+            <button type="button" class="btn btn-subtle btn-sm" onclick="app.closeFinalizarTareaModal()">Cancelar</button>
+            <button type="submit" id="btn-submit-term-tarea" class="btn btn-sm" style="background: #10b981; border-color: #10b981; color: white; font-weight: 700; padding: 0.45rem 1.1rem; display: inline-flex; align-items: center; gap: 5px;">
+              ✅ Guardar Término y Completar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- ====================================================================
          MODAL DETALLE DE CHEQUEO (Fotos y Firma)

@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.5";
+        this.currentAppVersion = "1.12.6";
       }
     } else {
-      this.currentAppVersion = "1.12.5";
+      this.currentAppVersion = "1.12.6";
     }
 
     setTimeout(() => {
@@ -6979,6 +6979,71 @@ const app = {
     });
   },
 
+  _formatIntervaloHoras(horaIni, horaFin) {
+    const ini = (horaIni || "").trim();
+    const fin = (horaFin || "").trim();
+    if (!ini && !fin) return "--:--";
+    if (ini && !fin) return `${ini} · ⏳ En Proceso`;
+    if (!ini && fin) return `Fin: ${fin}`;
+
+    // Ambos están presentes: calcular minutos de duración
+    try {
+      const pIni = ini.split(":");
+      const pFin = fin.split(":");
+      const h1 = parseInt(pIni[0], 10);
+      const m1 = parseInt(pIni[1], 10);
+      const h2 = parseInt(pFin[0], 10);
+      const m2 = parseInt(pFin[1], 10);
+      if (!isNaN(h1) && !isNaN(m1) && !isNaN(h2) && !isNaN(m2)) {
+        let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+        if (diff < 0) diff += 24 * 60; // Si cruzó la medianoche
+        if (diff === 0) return `${ini} a ${fin}`;
+        const hrs = Math.floor(diff / 60);
+        const mins = diff % 60;
+        let durStr = "";
+        if (hrs > 0 && mins > 0) durStr = `${hrs}h ${mins}m`;
+        else if (hrs > 0) durStr = `${hrs}h`;
+        else durStr = `${mins}m`;
+        return `${ini} a ${fin} (${durStr})`;
+      }
+    } catch (e) {}
+    return `${ini} a ${fin}`;
+  },
+
+  handleTareaHoraFinInput(val) {
+    const estSel = document.getElementById("td-item-estado");
+    const hasFin = Boolean(val && val.trim());
+    if (estSel) {
+      if (hasFin) {
+        if (estSel.value === "En Proceso") {
+          estSel.value = "Completada";
+        }
+      } else {
+        if (estSel.value === "Completada") {
+          estSel.value = "En Proceso";
+        }
+      }
+      this.handleTareaEstadoChange(estSel.value);
+    }
+  },
+
+  handleTareaEstadoChange(val) {
+    const editIdEl = document.getElementById("td-edit-item-id");
+    const isEditing = Boolean(editIdEl && editIdEl.value.trim());
+    if (isEditing) return; // En modo edición no cambiamos el texto del botón
+
+    const btnText = document.getElementById("btn-td-save-item-text");
+    if (!btnText) return;
+
+    if (val === "En Proceso") {
+      btnText.textContent = "▶️ Cargar Tarea (En Proceso)";
+    } else if (val === "Completada") {
+      btnText.textContent = "✅ Agregar Tarea Completada";
+    } else {
+      btnText.textContent = "⚠️ Registrar Tarea (Pendiente)";
+    }
+  },
+
   async loadTareasDiariasView() {
     const now = new Date();
     const todayStr = this._formatLocalDateYMD(now);
@@ -6990,12 +7055,17 @@ const app = {
     const fResDesde = document.getElementById("td-res-desde");
     const fResHasta = document.getElementById("td-res-hasta");
     const horaInput = document.getElementById("td-item-hora");
+    const horaFinInput = document.getElementById("td-item-hora-fin");
+    const estInput = document.getElementById("td-item-estado");
 
     if (fJornada && !fJornada.value) fJornada.value = todayStr;
     if (fDiario && !fDiario.value) fDiario.value = todayStr;
     if (fResDesde && !fResDesde.value) fResDesde.value = firstDayMonthStr;
     if (fResHasta && !fResHasta.value) fResHasta.value = todayStr;
     if (horaInput && !horaInput.value) horaInput.value = this._getCurrentTimeHHMM();
+    if (horaFinInput && !horaFinInput.value) horaFinInput.value = "";
+    if (estInput && !estInput.value) estInput.value = "En Proceso";
+    this.handleTareaEstadoChange(estInput ? estInput.value : "En Proceso");
 
     if (fSemDesde && fSemHasta && (!fSemDesde.value || !fSemHasta.value)) {
       const day = now.getDay();
@@ -7125,13 +7195,23 @@ const app = {
     }
 
     listCont.innerHTML = items.map((it, idx) => {
-      const est = it.estado_tarea || "Completada";
+      const est = it.estado_tarea || (it.hora_fin ? "Completada" : "En Proceso");
+      const isEnProceso = est === "En Proceso";
       const estStyle = est === "Completada"
         ? "background: rgba(16, 185, 129, 0.12); color: #059669;"
-        : (est === "En Proceso" ? "background: rgba(245, 158, 11, 0.14); color: #d97706;" : "background: rgba(239, 68, 68, 0.12); color: #dc2626;");
+        : (isEnProceso ? "background: rgba(245, 158, 11, 0.14); color: #d97706;" : "background: rgba(239, 68, 68, 0.12); color: #dc2626;");
+
+      const timeLabel = this._formatIntervaloHoras(it.hora, it.hora_fin);
+
+      const btnTerminar = (isEnProceso && !isFinalizado) ? `
+        <button type="button" class="btn btn-sm" onclick="app.openFinalizarTareaModal(${it.id})" title="Registrar hora de término y completar tarea" style="background: #10b981; border-color: #10b981; color: white; font-weight: 700; padding: 4px 10px; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(16, 185, 129, 0.25);">
+          ⏱️ Colocar Término
+        </button>
+      ` : "";
 
       const actionsHtml = isFinalizado ? "" : `
-        <div style="display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0;">
+        <div style="display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
+          ${btnTerminar}
           <button type="button" class="btn btn-outline btn-xs" onclick="app.editTareaItem(${it.id})" title="Editar tarea" style="padding: 4px 8px; font-weight: 600;">
             ✏️ Editar
           </button>
@@ -7142,17 +7222,17 @@ const app = {
       `;
 
       return `
-        <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.85rem; flex-wrap: wrap;">
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border); ${isEnProceso ? 'border-left: 4px solid #f59e0b;' : ''} border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.85rem; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 240px;">
             <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
               <span class="badge" style="background: rgba(124, 58, 237, 0.12); color: #7c3aed; font-weight: 700; font-family: monospace;">
-                #${idx + 1} · ${this.escapeHtml(it.hora || "--:--")}
+                #${idx + 1} · ${this.escapeHtml(timeLabel)}
               </span>
               <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; font-weight: 700;">
                 ${this.escapeHtml(it.servicio || "")}
               </span>
               <span class="badge" style="${estStyle} font-weight: 700;">
-                ${this.escapeHtml(est)}
+                ${isEnProceso ? "⏳ " : (est === "Completada" ? "✅ " : "⚠️ ")}${this.escapeHtml(est)}
               </span>
               <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">
                 ${this.escapeHtml(it.tipo_tarea || "")}
@@ -7170,6 +7250,7 @@ const app = {
   async saveTareaDiariaItem() {
     const editIdEl = document.getElementById("td-edit-item-id");
     const horaEl = document.getElementById("td-item-hora");
+    const horaFinEl = document.getElementById("td-item-hora-fin");
     const servEl = document.getElementById("td-item-servicio");
     const tipoEl = document.getElementById("td-item-tipo");
     const eqEl = document.getElementById("td-item-equipo");
@@ -7182,6 +7263,7 @@ const app = {
     const editId = editIdEl ? editIdEl.value.trim() : "";
     const servicio = servEl ? servEl.value.trim() : "";
     const descripcion = descEl ? descEl.value.trim() : "";
+    const horaFinVal = horaFinEl ? horaFinEl.value.trim() : "";
 
     if (!servicio) {
       this.showToast("Selecciona el servicio clínico o área", "warning");
@@ -7197,15 +7279,25 @@ const app = {
     const tecnico = (tecSel && tecSel.value.trim()) || (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "Técnico EEMM";
     const fecha = (fechaEl && fechaEl.value.trim()) || this._formatLocalDateYMD(new Date());
 
+    let estado_tarea = estEl ? estEl.value : "";
+    if (!estado_tarea) {
+      estado_tarea = horaFinVal ? "Completada" : "En Proceso";
+    } else if (!horaFinVal && estado_tarea === "Completada") {
+      estado_tarea = "En Proceso";
+    } else if (horaFinVal && estado_tarea === "En Proceso") {
+      estado_tarea = "Completada";
+    }
+
     const payload = {
       tecnico,
       fecha,
       hora: (horaEl && horaEl.value.trim()) || this._getCurrentTimeHHMM(),
+      hora_fin: horaFinVal || null,
       servicio,
       tipo_tarea: tipoEl ? tipoEl.value : "Mantención Correctiva / Reparación",
       equipo: eqEl ? eqEl.value.trim() : "",
       descripcion,
-      estado_tarea: estEl ? estEl.value : "Completada"
+      estado_tarea: estado_tarea
     };
 
     if (btnSave) btnSave.disabled = true;
@@ -7227,7 +7319,7 @@ const app = {
       this.cancelEditTareaItem(true);
       this.renderTareaDiariaActual();
       this.refreshTareasPendientesYResueltasCounters();
-      this.showToast(editId ? "Tarea actualizada correctamente" : "Tarea agregada a tu jornada", "success");
+      this.showToast(editId ? "Tarea actualizada correctamente" : (payload.estado_tarea === "En Proceso" ? "Tarea cargada y En Proceso" : "Tarea agregada a tu jornada"), "success");
     } catch (err) {
       this.showToast(err.message || "Error al guardar tarea", "error");
     } finally {
@@ -7243,6 +7335,7 @@ const app = {
 
     const editIdEl = document.getElementById("td-edit-item-id");
     const horaEl = document.getElementById("td-item-hora");
+    const horaFinEl = document.getElementById("td-item-hora-fin");
     const servEl = document.getElementById("td-item-servicio");
     const tipoEl = document.getElementById("td-item-tipo");
     const eqEl = document.getElementById("td-item-equipo");
@@ -7250,20 +7343,24 @@ const app = {
     const estEl = document.getElementById("td-item-estado");
     const btnCancel = document.getElementById("btn-td-cancel-edit");
     const btnSave = document.getElementById("btn-td-save-item");
+    const btnText = document.getElementById("btn-td-save-item-text");
     const pill = document.getElementById("td-edit-mode-pill");
     const formCard = document.getElementById("td-form-card");
 
     if (editIdEl) editIdEl.value = item.id;
     if (horaEl) horaEl.value = item.hora || "";
+    if (horaFinEl) horaFinEl.value = item.hora_fin || "";
     if (servEl) servEl.value = item.servicio || "";
     if (tipoEl) tipoEl.value = item.tipo_tarea || "Mantención Correctiva / Reparación";
     if (eqEl) eqEl.value = item.equipo || "";
     if (descEl) descEl.value = item.descripcion || "";
-    if (estEl) estEl.value = item.estado_tarea || "Completada";
+    if (estEl) estEl.value = item.estado_tarea || (item.hora_fin ? "Completada" : "En Proceso");
 
     if (btnCancel) btnCancel.style.display = "inline-flex";
     if (pill) pill.style.display = "inline-flex";
-    if (btnSave) {
+    if (btnText) {
+      btnText.textContent = "💾 Guardar Cambios";
+    } else if (btnSave) {
       btnSave.innerHTML = `💾 Guardar Cambios`;
     }
     if (formCard) {
@@ -7278,17 +7375,128 @@ const app = {
     if (editIdEl) editIdEl.value = "";
     const horaEl = document.getElementById("td-item-hora");
     if (horaEl && keepHoraFresh) horaEl.value = this._getCurrentTimeHHMM();
+    const horaFinEl = document.getElementById("td-item-hora-fin");
+    if (horaFinEl) horaFinEl.value = "";
+    const estEl = document.getElementById("td-item-estado");
+    if (estEl) estEl.value = "En Proceso";
 
     const btnCancel = document.getElementById("btn-td-cancel-edit");
     const pill = document.getElementById("td-edit-mode-pill");
     const btnSave = document.getElementById("btn-td-save-item");
+    const btnText = document.getElementById("btn-td-save-item-text");
+
     if (btnCancel) btnCancel.style.display = "none";
     if (pill) pill.style.display = "none";
-    if (btnSave) {
+    if (btnText) {
+      btnText.textContent = "▶️ Cargar Tarea (En Proceso)";
+    } else if (btnSave) {
       btnSave.innerHTML = `
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        Agregar Tarea al Día
+        <span id="btn-td-save-item-text">▶️ Cargar Tarea (En Proceso)</span>
       `;
+    }
+  },
+
+  openFinalizarTareaModal(itemId) {
+    let item = null;
+    if (this.currentTareaDiariaReport && Array.isArray(this.currentTareaDiariaReport.items)) {
+      item = this.currentTareaDiariaReport.items.find(it => it.id === itemId);
+    }
+    if (!item) {
+      this.showToast("No se encontró la tarea seleccionada", "warning");
+      return;
+    }
+
+    const modal = document.getElementById("modal-td-terminar-tarea");
+    const idInput = document.getElementById("td-term-item-id");
+    const servInfo = document.getElementById("td-term-info-servicio");
+    const descInfo = document.getElementById("td-term-info-desc");
+    const horaIniInput = document.getElementById("td-term-hora-inicio");
+    const horaFinInput = document.getElementById("td-term-hora-fin");
+    const estadoSelect = document.getElementById("td-term-estado");
+    const notaInput = document.getElementById("td-term-nota");
+
+    if (idInput) idInput.value = item.id;
+    if (servInfo) servInfo.textContent = `${item.servicio || 'Servicio'}${item.equipo ? ` · ${item.equipo}` : ''}`;
+    if (descInfo) descInfo.textContent = item.descripcion || "";
+    if (horaIniInput) horaIniInput.value = item.hora || "";
+    if (horaFinInput) horaFinInput.value = this._getCurrentTimeHHMM();
+    if (estadoSelect) estadoSelect.value = "Completada";
+    if (notaInput) notaInput.value = "";
+
+    if (modal) {
+      modal.style.display = "flex";
+      modal.classList.add("active");
+    }
+    if (horaFinInput) {
+      setTimeout(() => horaFinInput.focus(), 120);
+    }
+  },
+
+  closeFinalizarTareaModal() {
+    const modal = document.getElementById("modal-td-terminar-tarea");
+    if (modal) {
+      modal.style.display = "none";
+      modal.classList.remove("active");
+    }
+  },
+
+  async confirmarTerminarTarea() {
+    const idInput = document.getElementById("td-term-item-id");
+    const horaFinInput = document.getElementById("td-term-hora-fin");
+    const horaIniInput = document.getElementById("td-term-hora-inicio");
+    const estadoSelect = document.getElementById("td-term-estado");
+    const notaInput = document.getElementById("td-term-nota");
+    const btnSubmit = document.getElementById("btn-submit-term-tarea");
+
+    const itemId = idInput ? idInput.value.trim() : "";
+    const horaFin = horaFinInput ? horaFinInput.value.trim() : "";
+    const horaIni = horaIniInput ? horaIniInput.value.trim() : "";
+    const estadoFinal = estadoSelect ? estadoSelect.value : "Completada";
+    const nota = notaInput ? notaInput.value.trim() : "";
+
+    if (!itemId) {
+      this.showToast("ID de tarea no válido", "error");
+      return;
+    }
+    if (!horaFin) {
+      this.showToast("Ingresa la hora de término de la tarea", "warning");
+      if (horaFinInput) horaFinInput.focus();
+      return;
+    }
+
+    const quien = (this.currentUser && (this.currentUser.tecnico || this.currentUser.nombre)) || "Técnico EEMM";
+
+    if (btnSubmit) btnSubmit.disabled = true;
+
+    try {
+      const res = await fetch(`/api/tareas-diarias/items/${itemId}/terminar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hora_fin: horaFin,
+          hora_inicio: horaIni || null,
+          estado_tarea: estadoFinal,
+          nota_resolucion: nota,
+          tecnico_resuelve: quien
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || "No se pudo registrar el término de la tarea");
+      }
+
+      this.closeFinalizarTareaModal();
+      this.showToast("✅ Tarea finalizada y guardada como completada", "success");
+
+      await Promise.all([
+        this.loadTareaDiariaActual(),
+        this.refreshTareasPendientesYResueltasCounters()
+      ]);
+    } catch (err) {
+      this.showToast(err.message || "Error al finalizar tarea", "error");
+    } finally {
+      if (btnSubmit) btnSubmit.disabled = false;
     }
   },
 
@@ -7460,7 +7668,7 @@ const app = {
           : `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #d97706; font-weight: 700;">📝 Borrador</span>`;
 
         const previewItems = items.slice(0, 4).map(it =>
-          `<li><strong style="color: #7c3aed;">${this.escapeHtml(it.hora || "--:--")}</strong> [${this.escapeHtml(it.servicio)}] — ${this.escapeHtml(it.descripcion)}</li>`
+          `<li><strong style="color: #7c3aed;">${this.escapeHtml(this._formatIntervaloHoras(it.hora, it.hora_fin))}</strong> [${this.escapeHtml(it.servicio)}] — ${this.escapeHtml(it.descripcion)}</li>`
         ).join("");
         const moreHtml = items.length > 4 ? `<div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 2px;">... y ${items.length - 4} tareas más</div>` : "";
 
@@ -7663,7 +7871,7 @@ const app = {
               <div style="flex: 1; min-width: 240px;">
                 <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.4rem;">
                   <span class="badge" style="background: rgba(124, 58, 237, 0.12); color: #7c3aed; font-weight: 700;">
-                    📅 ${this.escapeHtml(it.fecha_fmt || it.fecha)}${esHoy ? " (Hoy)" : ""} ${it.hora ? `· ${this.escapeHtml(it.hora)}` : ""}
+                    📅 ${this.escapeHtml(it.fecha_fmt || it.fecha)}${esHoy ? " (Hoy)" : ""} · ${this.escapeHtml(this._formatIntervaloHoras(it.hora, it.hora_fin))}
                   </span>
                   <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; font-weight: 700;">
                     ${this.escapeHtml(it.servicio || "")}
@@ -7811,7 +8019,7 @@ const app = {
               <div style="font-weight: 700; font-size: 0.78rem; color: var(--text-primary);">
                 ${this.escapeHtml(it.fecha_fmt || it.fecha)}
               </div>
-              <div style="font-size: 0.72rem; color: var(--text-tertiary);">${this.escapeHtml(it.hora || "")}</div>
+              <div style="font-size: 0.72rem; color: var(--text-tertiary);">${this.escapeHtml(this._formatIntervaloHoras(it.hora, it.hora_fin))}</div>
               ${cierreTxt}
             </td>
             <td>
@@ -7860,7 +8068,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.5",
+  currentAppVersion: "1.12.6",
   pendingUpdateInfo: null,
   updateDownloading: false,
 
