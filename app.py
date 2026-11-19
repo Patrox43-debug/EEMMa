@@ -3,6 +3,7 @@ Backend API para la aplicación EEMM (Gestión de Equipos Médicos).
 Construido con FastAPI y SQLite local.
 """
 
+from __future__ import annotations
 import os
 import re
 import io

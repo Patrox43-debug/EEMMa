@@ -3,6 +3,8 @@ Generador de Reportes PDF Profesionales para EEMM (Ingeniería Clínica).
 Construye informes de chequeos preventivos en formato PDF bajo demanda.
 """
 
+from __future__ import annotations
+from typing import Any, Optional, Union, List, Dict
 import io
 import os
 from datetime import datetime
