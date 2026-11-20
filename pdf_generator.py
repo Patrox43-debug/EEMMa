@@ -1511,7 +1511,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     eq_table_data = [row_srv, row_hdr]
 
     for idx, it in enumerate(raw_items, 1):
-        nom_i = it.get("nombre_equipo") or "No especificado"
+        nom_i = (it.get("nombre_equipo") or "No especificado").replace("geringa", "jeringa").replace("Geringa", "Jeringa")
         mar_i = it.get("marca") or "-"
         mod_i = it.get("modelo") or "-"
         ser_i = it.get("serie") or "-"
@@ -1919,7 +1919,7 @@ def generate_entregas_equipos_consolidado_pdf(entregas: list, fecha_inicio: str 
                 c_inv = inv_lines
             else:
                 src = items_eq[0] if len(items_eq) == 1 else e
-                nom_eq = str(src.get("nombre_equipo") or e.get("nombre_equipo") or "")
+                nom_eq = str(src.get("nombre_equipo") or e.get("nombre_equipo") or "").replace("geringa", "jeringa").replace("Geringa", "Jeringa")
                 marca_mod = f"{src.get('marca') or ''} {src.get('modelo') or ''}".strip() or "S/M"
                 inv_e = str(src.get("serie") or src.get("inventario") or e.get("inventario") or "S/I")
                 c_equipo = [

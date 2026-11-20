@@ -471,6 +471,40 @@ def ensure_db_initialized():
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                     """, batch)
 
+        # Corrección de ortografía en registros existentes (e.g. geringa -> jeringa)
+        try:
+            cursor.execute("""
+                UPDATE entregas_equipos
+                SET nombre_equipo = REPLACE(REPLACE(nombre_equipo, 'geringa', 'jeringa'), 'Geringa', 'Jeringa'),
+                    items_json = REPLACE(REPLACE(items_json, 'geringa', 'jeringa'), 'Geringa', 'Jeringa')
+                WHERE nombre_equipo LIKE '%geringa%' OR items_json LIKE '%geringa%'
+            """)
+            cursor.execute("""
+                UPDATE equipos
+                SET nombre = REPLACE(REPLACE(nombre, 'geringa', 'jeringa'), 'Geringa', 'Jeringa'),
+                    modelo = REPLACE(REPLACE(modelo, 'geringa', 'jeringa'), 'Geringa', 'Jeringa'),
+                    detalles = REPLACE(REPLACE(detalles, 'geringa', 'jeringa'), 'Geringa', 'Jeringa')
+                WHERE nombre LIKE '%geringa%' OR modelo LIKE '%geringa%' OR detalles LIKE '%geringa%'
+            """)
+            cursor.execute("""
+                UPDATE registros
+                SET nombre_equipo = REPLACE(REPLACE(nombre_equipo, 'geringa', 'jeringa'), 'Geringa', 'Jeringa')
+                WHERE nombre_equipo LIKE '%geringa%'
+            """)
+            cursor.execute("""
+                UPDATE reparaciones
+                SET equipo = REPLACE(REPLACE(equipo, 'geringa', 'jeringa'), 'Geringa', 'Jeringa')
+                WHERE equipo LIKE '%geringa%'
+            """)
+            cursor.execute("""
+                UPDATE tareas_diarias_items
+                SET equipo = REPLACE(REPLACE(equipo, 'geringa', 'jeringa'), 'Geringa', 'Jeringa'),
+                    descripcion = REPLACE(REPLACE(descripcion, 'geringa', 'jeringa'), 'Geringa', 'Jeringa')
+                WHERE equipo LIKE '%geringa%' OR descripcion LIKE '%geringa%'
+            """)
+        except Exception as e:
+            print(f"[WARN] Error en corrección de ortografía (geringa -> jeringa): {e}")
+
         conn.commit()
         conn.close()
     except Exception as e:
@@ -496,13 +530,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.8",
-        "version_code": 37,
-        "release_tag": "v1.12.8",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.8/EEMM.apk",
+        "version_name": "1.12.9",
+        "version_code": 38,
+        "release_tag": "v1.12.9",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.9/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Perfil de usuario: editar correo, contraseña y subir o dibujar firma digital personal.\n• Actas de Entrega: firma digital estampada automáticamente sobre el nombre del técnico emisor.",
-        "published_at": "2026-11-19T23:30:00-03:00"
+        "notes": "• Corrección en actas de entrega: corrección ortográfica de 'Bomba de infusión de jeringa' y normalización de textos.\n• Endpoint de edición y corrección de actas de entrega.",
+        "published_at": "2026-11-20T09:15:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -2491,7 +2525,7 @@ def create_entrega_accesorio(item: EntregaAccesorioCreate):
 
     # 2. Descontar stock y registrar movimientos para cada insumo
     usuario_ent = (item.usuario_entrega or "Técnico EEMM").strip()
-    obs_txt = (item.observaciones or "").strip()
+    obs_txt = (item.observaciones or "").strip().replace("geringa", "jeringa").replace("Geringa", "Jeringa")
     total_unidades = 0
     resumen_items = []
     updated_cajas = []
@@ -2766,7 +2800,7 @@ class EntregaEquipoCreate(BaseModel):
 
 
 def _parse_entrega_equipo_row(row_dict: dict) -> dict:
-    """Deserializa items_json en lista estructurada de equipos manteniendo retrocompatibilidad."""
+    """Deserializa items_json en lista estructurada de equipos manteniendo retrocompatibilidad y normalizando ortografía."""
     raw_items = row_dict.get("items_json")
     parsed = []
     if raw_items:
@@ -2785,6 +2819,16 @@ def _parse_entrega_equipo_row(row_dict: dict) -> dict:
             "inventario": row_dict.get("inventario") or "S/I",
             "anio_fabricacion": row_dict.get("anio_fabricacion") or "",
         }]
+
+    # Corrección ortográfica automática (geringa -> jeringa)
+    if row_dict.get("nombre_equipo"):
+        row_dict["nombre_equipo"] = row_dict["nombre_equipo"].replace("geringa", "jeringa").replace("Geringa", "Jeringa")
+    if row_dict.get("observaciones"):
+        row_dict["observaciones"] = row_dict["observaciones"].replace("geringa", "jeringa").replace("Geringa", "Jeringa")
+    for it in parsed:
+        if it.get("nombre_equipo"):
+            it["nombre_equipo"] = it["nombre_equipo"].replace("geringa", "jeringa").replace("Geringa", "Jeringa")
+
     row_dict["items"] = parsed
     return row_dict
 
@@ -2803,7 +2847,7 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
     items_to_deliver = []
     if item.items and len(item.items) > 0:
         for it in item.items:
-            nom = (it.nombre_equipo or "").strip()
+            nom = (it.nombre_equipo or "").strip().replace("geringa", "jeringa").replace("Geringa", "Jeringa")
             if not nom:
                 continue
             ser = (it.serie or "").strip()
@@ -2820,7 +2864,7 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
         ser = (item.serie or "").strip()
         inv_v = (item.inventario or ser or "S/I").strip()
         items_to_deliver.append({
-            "nombre_equipo": item.nombre_equipo.strip(),
+            "nombre_equipo": item.nombre_equipo.strip().replace("geringa", "jeringa").replace("Geringa", "Jeringa"),
             "marca": (item.marca or "").strip(),
             "modelo": (item.modelo or "").strip(),
             "serie": ser,
@@ -2848,7 +2892,7 @@ def create_entrega_equipo(item: EntregaEquipoCreate):
         inv = ", ".join(it["inventario"] for it in items_to_deliver if it["inventario"]) or "Varios"
 
     usuario_ent = (item.usuario_entrega or "Técnico EEMM").strip()
-    obs_txt = (item.observaciones or "").strip()
+    obs_txt = (item.observaciones or "").strip().replace("geringa", "jeringa").replace("Geringa", "Jeringa")
     items_json_str = json.dumps(items_to_deliver, ensure_ascii=False)
 
     conn = get_db()
@@ -3070,6 +3114,127 @@ def delete_entrega_equipo(id: int):
     conn.commit()
     conn.close()
     return {"status": "ok", "message": "Entrega de equipo eliminada correctamente"}
+
+
+class EntregaEquipoUpdate(BaseModel):
+    nombre_equipo: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    serie: Optional[str] = None
+    inventario: Optional[str] = None
+    servicio: Optional[str] = None
+    nombre_receptor: Optional[str] = None
+    usuario_entrega: Optional[str] = None
+    observaciones: Optional[str] = None
+    items: Optional[List[EntregaEquipoItemDetail]] = None
+
+
+@app.put("/api/entregas-equipos/{id}")
+def update_entrega_equipo(id: int, payload: EntregaEquipoUpdate):
+    """Permite actualizar los datos o corregir erratas en un acta de entrega de equipo."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_entregas_equipos_table(cursor)
+    cursor.execute("SELECT id, items_json FROM entregas_equipos WHERE id = ?", (id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Acta no encontrada")
+
+    updates = []
+    params = []
+
+    if payload.nombre_equipo is not None:
+        nom = payload.nombre_equipo.strip().replace("geringa", "jeringa").replace("Geringa", "Jeringa")
+        updates.append("nombre_equipo = ?")
+        params.append(nom)
+
+    if payload.marca is not None:
+        updates.append("marca = ?")
+        params.append(payload.marca.strip())
+
+    if payload.modelo is not None:
+        updates.append("modelo = ?")
+        params.append(payload.modelo.strip())
+
+    if payload.serie is not None:
+        updates.append("serie = ?")
+        params.append(payload.serie.strip())
+
+    if payload.inventario is not None:
+        updates.append("inventario = ?")
+        params.append(payload.inventario.strip())
+
+    if payload.servicio is not None:
+        updates.append("servicio = ?")
+        params.append(payload.servicio.strip())
+
+    if payload.nombre_receptor is not None:
+        updates.append("nombre_receptor = ?")
+        params.append(payload.nombre_receptor.strip())
+
+    if payload.usuario_entrega is not None:
+        updates.append("usuario_entrega = ?")
+        params.append(payload.usuario_entrega.strip())
+
+    if payload.observaciones is not None:
+        obs = payload.observaciones.strip().replace("geringa", "jeringa").replace("Geringa", "Jeringa")
+        updates.append("observaciones = ?")
+        params.append(obs)
+
+    if payload.items is not None:
+        clean_items = []
+        for it in payload.items:
+            clean_items.append({
+                "nombre_equipo": (it.nombre_equipo or "").strip().replace("geringa", "jeringa").replace("Geringa", "Jeringa"),
+                "marca": (it.marca or "").strip(),
+                "modelo": (it.modelo or "").strip(),
+                "serie": (it.serie or "").strip(),
+                "inventario": (it.inventario or "").strip(),
+                "anio_fabricacion": (getattr(it, "anio_fabricacion", None) or "").strip(),
+            })
+        updates.append("items_json = ?")
+        params.append(json.dumps(clean_items, ensure_ascii=False))
+
+    if updates:
+        params.append(id)
+        cursor.execute(f"UPDATE entregas_equipos SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+
+    conn.close()
+    return {"status": "ok", "message": "Acta actualizada correctamente"}
+
+
+@app.api_route("/api/entregas-equipos/fix-typos", methods=["GET", "POST"])
+def fix_entregas_equipos_typos():
+    """Corrige automáticamente erratas conocidas (e.g. geringa -> jeringa) en todas las tablas."""
+    conn = get_db()
+    cursor = conn.cursor()
+    _ensure_entregas_equipos_table(cursor)
+    cursor.execute("""
+        UPDATE entregas_equipos
+        SET nombre_equipo = REPLACE(REPLACE(nombre_equipo, 'geringa', 'jeringa'), 'Geringa', 'Jeringa'),
+            items_json = REPLACE(REPLACE(items_json, 'geringa', 'jeringa'), 'Geringa', 'Jeringa')
+        WHERE nombre_equipo LIKE '%geringa%' OR items_json LIKE '%geringa%'
+    """)
+    aff_ent = cursor.rowcount
+
+    cursor.execute("""
+        UPDATE equipos
+        SET nombre = REPLACE(REPLACE(nombre, 'geringa', 'jeringa'), 'Geringa', 'Jeringa'),
+            modelo = REPLACE(REPLACE(modelo, 'geringa', 'jeringa'), 'Geringa', 'Jeringa'),
+            detalles = REPLACE(REPLACE(detalles, 'geringa', 'jeringa'), 'Geringa', 'Jeringa')
+        WHERE nombre LIKE '%geringa%' OR modelo LIKE '%geringa%' OR detalles LIKE '%geringa%'
+    """)
+    aff_eq = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return {
+        "status": "ok",
+        "message": "Erratas ortográficas corregidas exitosamente (geringa -> jeringa)",
+        "affected_entregas": aff_ent,
+        "affected_equipos": aff_eq
+    }
 
 
 # ==============================================================================
