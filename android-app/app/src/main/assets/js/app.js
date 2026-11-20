@@ -303,10 +303,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.6";
+        this.currentAppVersion = "1.12.7";
       }
     } else {
-      this.currentAppVersion = "1.12.6";
+      this.currentAppVersion = "1.12.7";
     }
 
     setTimeout(() => {
@@ -8068,7 +8068,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.6",
+  currentAppVersion: "1.12.7",
   pendingUpdateInfo: null,
   updateDownloading: false,
 

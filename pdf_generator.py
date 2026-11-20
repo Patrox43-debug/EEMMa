@@ -1228,22 +1228,35 @@ def _format_fecha_acta_es(fecha_raw: Any) -> str:
     return f"{dt.day} de {meses[dt.month - 1]} de {dt.year}"
 
 
+def _build_acta_entrega_footer(canvas, doc):
+    """Pie de página institucional en negro para Acta de Entrega de Equipos Médicos."""
+    canvas.saveState()
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(colors.HexColor("#000000"))
+    canvas.setStrokeColor(colors.HexColor("#000000"))
+    canvas.setLineWidth(0.5)
+    canvas.line(36, 30, 576, 30)
+    canvas.drawString(36, 20, "Hospital Claudio Vicuña · Unidad de Equipos Médicos (EEMM)")
+    canvas.drawRightString(576, 20, f"Pág. {doc.page}")
+    canvas.restoreState()
+
+
 def generate_entrega_equipo_pdf(record: dict) -> bytes:
     """
     Genera el acta oficial de entrega de equipos médicos adaptada al formato institucional
-    del Hospital Claudio Vicuña.
+    del Hospital Claudio Vicuña en formato monocromático negro / formal.
     Estructura:
-      - Encabezado institucional con logo Hospital Claudio Vicuña y metadatos (Folio, Fecha, Emisión)
+      - Encabezado institucional con logo Hospital Claudio Vicuña y Folio (sin fecha superior)
       - Título: ACTA ENTREGA EQUIPOS MÉDICOS
       - Texto introductorio: 'Con fecha [FECHA], se hace entrega del equipamiento indicado, al servicio:'
-      - Tabla de equipamiento (7 columnas):
+      - Tabla de equipamiento (7 columnas con líneas y textos en negro):
           | SERVICIO CLÍNICO: (colspan 3) | [SERVICIO] (colspan 4) |
           | N° | EQUIPO | MARCA | MODELO | N° SERIE | AÑO FABRICACIÓN | INVENTARIO |
       - Sección Observaciones
       - Sección Para constancia y fe:
           | CARGO | NOMBRE | FIRMA Y TIMBRE |
           | REFERENTE CLÍNICO | [Nombre] | [Firma Digital / Timbre] |
-          | ENCARGADO EQUIPOS MÉDICOS | [Nombre] | [Firma y Timbre EEMM] |
+          | UNIDAD DE EQUIPOS MÉDICOS | [Nombre] | [Firma y Timbre Unidad de Equipos Médicos] |
     """
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -1263,7 +1276,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica-Bold',
         fontSize=11,
         leading=13,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     subtitle_style = ParagraphStyle(
         'DocSubEq',
@@ -1271,7 +1284,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica-Bold',
         fontSize=8.5,
         leading=11,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     tag_style = ParagraphStyle(
         'DocTagEq',
@@ -1279,7 +1292,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica',
         fontSize=7.5,
         leading=10,
-        textColor=colors.HexColor('#64748b')
+        textColor=colors.HexColor('#000000')
     )
     meta_title = ParagraphStyle(
         'MetaTitleEq',
@@ -1288,7 +1301,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=9.5,
         leading=12,
         alignment=TA_RIGHT,
-        textColor=colors.HexColor('#0284c7')
+        textColor=colors.HexColor('#000000')
     )
     meta_sub = ParagraphStyle(
         'MetaSubEq',
@@ -1297,7 +1310,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=7.5,
         leading=10,
         alignment=TA_RIGHT,
-        textColor=colors.HexColor('#64748b')
+        textColor=colors.HexColor('#000000')
     )
     acta_header_title = ParagraphStyle(
         'ActaHeaderTitle',
@@ -1306,7 +1319,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=12,
         leading=15,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     intro_style = ParagraphStyle(
         'IntroStyle',
@@ -1314,7 +1327,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica',
         fontSize=8.5,
         leading=12,
-        textColor=colors.HexColor('#1e293b')
+        textColor=colors.HexColor('#000000')
     )
     sec_heading = ParagraphStyle(
         'SecHeadEq',
@@ -1322,7 +1335,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica-Bold',
         fontSize=8.5,
         leading=11,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     cell_lbl_srv = ParagraphStyle(
         'CellLblSrv',
@@ -1330,7 +1343,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica-Bold',
         fontSize=8.5,
         leading=11,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     cell_val_srv = ParagraphStyle(
         'CellValSrv',
@@ -1338,7 +1351,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica-Bold',
         fontSize=8.5,
         leading=11,
-        textColor=colors.HexColor('#0284c7')
+        textColor=colors.HexColor('#000000')
     )
     hdr_table = ParagraphStyle(
         'HdrTable',
@@ -1347,7 +1360,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=7.2,
         leading=9.2,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#ffffff')
+        textColor=colors.HexColor('#000000')
     )
     hdr_table_left = ParagraphStyle(
         'HdrTableLeft',
@@ -1356,7 +1369,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=7.2,
         leading=9.2,
         alignment=TA_LEFT,
-        textColor=colors.HexColor('#ffffff')
+        textColor=colors.HexColor('#000000')
     )
     cell_val = ParagraphStyle(
         'CellValEq',
@@ -1364,7 +1377,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica',
         fontSize=7.8,
         leading=10,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     cell_val_bold = ParagraphStyle(
         'CellValBoldEq',
@@ -1372,7 +1385,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica-Bold',
         fontSize=7.8,
         leading=10,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     cell_center = ParagraphStyle(
         'CellCenterEq',
@@ -1381,7 +1394,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=7.5,
         leading=9.5,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     cell_code = ParagraphStyle(
         'CellCodeEq',
@@ -1390,7 +1403,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=7.2,
         leading=9.2,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     hdr_firmas = ParagraphStyle(
         'HdrFirmas',
@@ -1399,7 +1412,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=7.8,
         leading=10,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#ffffff')
+        textColor=colors.HexColor('#000000')
     )
     cell_cargo = ParagraphStyle(
         'CellCargo',
@@ -1407,7 +1420,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontName='Helvetica-Bold',
         fontSize=8,
         leading=10.5,
-        textColor=colors.HexColor('#0f172a')
+        textColor=colors.HexColor('#000000')
     )
     cell_txt_center = ParagraphStyle(
         'CellTxtCenterEq',
@@ -1416,7 +1429,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         fontSize=7.5,
         leading=9.5,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#475569')
+        textColor=colors.HexColor('#000000')
     )
 
     story = []
@@ -1433,16 +1446,12 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     ]
 
     folio = record.get("folio") or f"ENT-EQ-{record.get('id', '0001')}"
-    fecha_orig = record.get("fecha_fmt") or record.get("fecha") or datetime.now().strftime("%d/%m/%Y %H:%M")
     fecha_larga = _format_fecha_acta_es(record.get("fecha") or record.get("fecha_fmt"))
-    now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     col_der = [
         Paragraph("ACTA DE ENTREGA", meta_title),
         Spacer(1, 2),
-        Paragraph(f"<b>Folio:</b> {folio}", meta_sub),
-        Paragraph(f"<b>Fecha:</b> {fecha_orig}", meta_sub),
-        Paragraph(f"<b>Emisión:</b> {now_str}", meta_sub)
+        Paragraph(f"<b>Folio:</b> {folio}", meta_sub)
     ]
 
     header_table = Table([[col_izq, col_centro, col_der]], colWidths=[80, 280, 180])
@@ -1454,7 +1463,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
     story.append(header_table)
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#0284c7'), spaceBefore=5, spaceAfter=8))
+    story.append(HRFlowable(width="100%", thickness=1.0, color=colors.HexColor('#000000'), spaceBefore=5, spaceAfter=8))
 
     # 2. TÍTULO DEL DOCUMENTO
     story.append(Paragraph("ACTA ENTREGA EQUIPOS MÉDICOS", acta_header_title))
@@ -1522,7 +1531,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     min_rows = max(3, len(raw_items))
     for idx in range(len(raw_items) + 1, min_rows + 1):
         eq_table_data.append([
-            Paragraph(f"<font color='#94a3b8'>{idx}</font>", cell_center),
+            Paragraph(f"<font color='#000000'>{idx}</font>", cell_center),
             Paragraph("&nbsp;", cell_val),
             Paragraph("&nbsp;", cell_center),
             Paragraph("&nbsp;", cell_center),
@@ -1534,14 +1543,14 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     eq_table_style = [
         ('SPAN', (0, 0), (2, 0)),
         ('SPAN', (3, 0), (6, 0)),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f1f5f9')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f2f2f2')),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, 0), 5),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
         ('LEFTPADDING', (0, 0), (-1, 0), 6),
         ('RIGHTPADDING', (0, 0), (-1, 0), 6),
 
-        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#0284c7')),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#f2f2f2')),
         ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),
         ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
         ('TOPPADDING', (0, 1), (-1, 1), 5),
@@ -1549,8 +1558,8 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
         ('LEFTPADDING', (0, 1), (-1, 1), 3),
         ('RIGHTPADDING', (0, 1), (-1, 1), 3),
 
-        ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#94a3b8')),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#000000')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#000000')),
         ('VALIGN', (0, 2), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 2), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 2), (-1, -1), 5),
@@ -1559,8 +1568,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     ]
 
     for r_i in range(2, len(eq_table_data)):
-        bg = colors.HexColor('#ffffff') if r_i % 2 == 0 else colors.HexColor('#f8fafc')
-        eq_table_style.append(('BACKGROUND', (0, r_i), (-1, r_i), bg))
+        eq_table_style.append(('BACKGROUND', (0, r_i), (-1, r_i), colors.HexColor('#ffffff')))
 
     eq_table = Table(eq_table_data, colWidths=col_widths, repeatRows=2)
     eq_table.setStyle(TableStyle(eq_table_style))
@@ -1576,8 +1584,8 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
 
     obs_table = Table([[Paragraph(obs_txt, cell_val)]], colWidths=[540])
     obs_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#ffffff')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#000000')),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),
@@ -1608,19 +1616,19 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]),
             Paragraph("___________________________________", cell_txt_center),
-            Paragraph("<font size=7 color='#64748b'>Firma Digital Receptor</font>", cell_txt_center)
+            Paragraph("<font size=7 color='#000000'>Firma Digital Receptor</font>", cell_txt_center)
         ]
     else:
         rec_firma_cell = [
             Spacer(1, 30),
             Paragraph("___________________________________", cell_txt_center),
-            Paragraph("<font size=7 color='#64748b'>Firma y Timbre Receptor</font>", cell_txt_center)
+            Paragraph("<font size=7 color='#000000'>Firma y Timbre Receptor</font>", cell_txt_center)
         ]
 
     eem_firma_cell = [
         Spacer(1, 30),
         Paragraph("___________________________________", cell_txt_center),
-        Paragraph("<font size=7 color='#64748b'>Firma y Timbre EEMM</font>", cell_txt_center)
+        Paragraph("<font size=7 color='#000000'>Firma y Timbre Unidad de Equipos Médicos</font>", cell_txt_center)
     ]
 
     firmas_data = [
@@ -1635,7 +1643,7 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
             rec_firma_cell
         ],
         [
-            Paragraph("<b>ENCARGADO EQUIPOS MÉDICOS</b>", cell_cargo),
+            Paragraph("<b>UNIDAD DE EQUIPOS MÉDICOS</b>", cell_cargo),
             Paragraph(f"<b>{tecnico_ent}</b>", cell_val_bold),
             eem_firma_cell
         ]
@@ -1643,26 +1651,26 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
 
     firmas_table = Table(firmas_data, colWidths=[145, 175, 220])
     firmas_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0284c7')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f2f2f2')),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('TOPPADDING', (0, 0), (-1, 0), 5),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
 
-        ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#94a3b8')),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor('#000000')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#000000')),
         ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 1), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ('LEFTPADDING', (0, 0), (-1, -1), 7),
         ('RIGHTPADDING', (0, 0), (-1, -1), 7),
         ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#ffffff')),
-        ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#f8fafc')),
+        ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ffffff')),
     ]))
 
     story.append(KeepTogether([firmas_table]))
 
-    doc.build(story, onFirstPage=build_pdf_header_footer, onLaterPages=build_pdf_header_footer)
+    doc.build(story, onFirstPage=_build_acta_entrega_footer, onLaterPages=_build_acta_entrega_footer)
     buf.seek(0)
     return buf.getvalue()
 

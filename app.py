@@ -491,13 +491,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.6",
-        "version_code": 35,
-        "release_tag": "v1.12.6",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.6/EEMM.apk",
+        "version_name": "1.12.7",
+        "version_code": 36,
+        "release_tag": "v1.12.7",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.7/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Tareas Diarias: registro con hora de inicio automática 'En Proceso' y acción rápida para registrar hora de término completando la tarea.",
-        "published_at": "2026-11-18T17:00:00-03:00"
+        "notes": "• Acta de Entrega de Equipos Médicos: formato formal en negro con bordes nítidos, pie institucional de Unidad de Equipos Médicos y folio superior derecho sin fecha.",
+        "published_at": "2026-11-19T22:45:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
