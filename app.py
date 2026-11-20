@@ -224,9 +224,14 @@ def ensure_db_initialized():
             funcion TEXT NOT NULL,
             tecnico TEXT NOT NULL,
             rol TEXT NOT NULL DEFAULT 'tecnico',
+            firma TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        try:
+            cursor.execute("ALTER TABLE perfiles ADD COLUMN firma TEXT;")
+        except Exception:
+            pass
 
         # 2. Tabla equipos
         cursor.execute("""
@@ -491,13 +496,13 @@ def get_app_version():
     Permite a la aplicación Android detectar versiones nuevas y descargarlas directamente.
     """
     return {
-        "version_name": "1.12.7",
-        "version_code": 36,
-        "release_tag": "v1.12.7",
-        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.7/EEMM.apk",
+        "version_name": "1.12.8",
+        "version_code": 37,
+        "release_tag": "v1.12.8",
+        "download_url": "https://github.com/Patrox43-debug/EEMMa/releases/download/v1.12.8/EEMM.apk",
         "latest_url": "https://github.com/Patrox43-debug/EEMMa/releases/latest/download/EEMM.apk",
-        "notes": "• Acta de Entrega de Equipos Médicos: formato formal en negro con bordes nítidos, pie institucional de Unidad de Equipos Médicos y folio superior derecho sin fecha.",
-        "published_at": "2026-11-19T22:45:00-03:00"
+        "notes": "• Perfil de usuario: editar correo, contraseña y subir o dibujar firma digital personal.\n• Actas de Entrega: firma digital estampada automáticamente sobre el nombre del técnico emisor.",
+        "published_at": "2026-11-19T23:30:00-03:00"
     }
 
 def save_base64_image(data_uri: str, prefix: str) -> Optional[str]:
@@ -584,6 +589,13 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
+class UserProfileUpdate(BaseModel):
+    user_id: int
+    correo: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+    firma: Optional[str] = None  # Base64 data URI o "CLEAR"
+
 class EquipoCreate(BaseModel):
     nombre: str
     marca: Optional[str] = ""
@@ -634,7 +646,7 @@ def login(creds: LoginRequest):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, nombre, rut, correo, password, funcion, tecnico, rol
+        SELECT id, nombre, rut, correo, password, funcion, tecnico, rol, firma
         FROM perfiles
     """)
     users = cursor.fetchall()
@@ -662,7 +674,8 @@ def login(creds: LoginRequest):
             "correo": matched_user["correo"],
             "funcion": matched_user["funcion"],
             "tecnico": matched_user["tecnico"] or matched_user["nombre"],
-            "rol": matched_user["rol"]
+            "rol": matched_user["rol"],
+            "firma": matched_user["firma"] if ("firma" in matched_user.keys() and matched_user["firma"]) else None
         }
     }
 
@@ -691,6 +704,102 @@ def change_password(data: ChangePasswordRequest):
 
     return {"status": "ok", "message": "Contraseña actualizada exitosamente"}
 
+@app.get("/api/auth/profile/{user_id}")
+def get_user_profile(user_id: int):
+    """Obtiene los datos del perfil activo, incluyendo su firma registrada."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, nombre, rut, correo, funcion, tecnico, rol, firma
+        FROM perfiles
+        WHERE id = ?
+    """, (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    user_dict = dict(user)
+    if "tecnico" in user_dict and not user_dict["tecnico"]:
+        user_dict["tecnico"] = user_dict["nombre"]
+    return user_dict
+
+@app.put("/api/auth/profile")
+def update_user_profile(payload: UserProfileUpdate):
+    """
+    Permite al usuario autenticado editar sus datos de contacto (correo),
+    actualizar su contraseña y registrar o actualizar su firma digital personal.
+    """
+    user_id = payload.user_id
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Identificador de usuario inválido")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, nombre, rut, correo, password, funcion, tecnico, rol, firma
+        FROM perfiles
+        WHERE id = ?
+    """, (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # 1. Modificar correo si se especifica
+    new_correo = (payload.correo or "").strip()
+    if new_correo and new_correo.lower() != (user["correo"] or "").lower():
+        if "@" not in new_correo or "." not in new_correo:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Por favor ingresa un correo electrónico válido")
+        cursor.execute("SELECT id FROM perfiles WHERE LOWER(correo) = LOWER(?) AND id != ?", (new_correo, user_id))
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="El correo electrónico ya está registrado por otro usuario")
+        cursor.execute("UPDATE perfiles SET correo = ? WHERE id = ?", (new_correo, user_id))
+
+    # 2. Modificar contraseña si se especifica
+    if payload.new_password and payload.new_password.strip():
+        new_pwd = payload.new_password.strip()
+        if len(new_pwd) < 4:
+            conn.close()
+            raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 4 caracteres")
+        if not payload.current_password or str(user["password"]).strip() != str(payload.current_password).strip():
+            conn.close()
+            raise HTTPException(status_code=400, detail="La contraseña actual ingresada es incorrecta")
+        cursor.execute("UPDATE perfiles SET password = ? WHERE id = ?", (new_pwd, user_id))
+
+    # 3. Modificar o eliminar firma si se especifica
+    if payload.firma is not None:
+        if payload.firma in ("CLEAR", ""):
+            cursor.execute("UPDATE perfiles SET firma = NULL WHERE id = ?", (user_id,))
+        elif isinstance(payload.firma, str) and payload.firma.startswith("data:image"):
+            saved_ruta = save_base64_image(payload.firma, f"firma_usuario_{user_id}")
+            if saved_ruta:
+                cursor.execute("UPDATE perfiles SET firma = ? WHERE id = ?", (saved_ruta, user_id))
+            else:
+                conn.close()
+                raise HTTPException(status_code=400, detail="No se pudo procesar la imagen de la firma enviada")
+
+    conn.commit()
+
+    cursor.execute("""
+        SELECT id, nombre, rut, correo, funcion, tecnico, rol, firma
+        FROM perfiles
+        WHERE id = ?
+    """, (user_id,))
+    updated_user = dict(cursor.fetchone())
+    conn.close()
+
+    if "tecnico" in updated_user and not updated_user["tecnico"]:
+        updated_user["tecnico"] = updated_user["nombre"]
+
+    return {
+        "status": "ok",
+        "message": "Perfil y firma actualizados correctamente",
+        "user": updated_user
+    }
+
 # ==============================================================================
 # Rutas de Administración de Usuarios (CRUD)
 # ==============================================================================
@@ -700,7 +809,7 @@ def get_admin_users():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, nombre, rut, correo, password, funcion, tecnico, rol, created_at
+        SELECT id, nombre, rut, correo, password, funcion, tecnico, rol, created_at, firma
         FROM perfiles
         ORDER BY id ASC
     """)
@@ -2887,7 +2996,7 @@ def export_entregas_equipos_pdf(
 
 
 @app.get("/api/entregas-equipos/{id}/pdf")
-def get_entrega_equipo_pdf(id: int, download: bool = False):
+def get_entrega_equipo_pdf(id: int, download: bool = False, user_id: Optional[int] = None):
     conn = get_db()
     cursor = conn.cursor()
     _ensure_entregas_equipos_table(cursor)
@@ -2899,12 +3008,37 @@ def get_entrega_equipo_pdf(id: int, download: bool = False):
         WHERE id = ?
     """, (id,))
     row = cursor.fetchone()
-    conn.close()
 
     if not row:
+        conn.close()
         raise HTTPException(status_code=404, detail="Acta de entrega de equipo no encontrada")
     
     record = _parse_entrega_equipo_row(dict(row))
+
+    # Buscar firma personal del técnico en perfiles para estamparla en el acta oficial
+    tec_nom = (record.get("usuario_entrega") or "").strip()
+    firma_encontrada = None
+    if tec_nom:
+        cursor.execute("""
+            SELECT firma FROM perfiles
+            WHERE (tecnico = ? OR nombre = ? OR correo = ?) AND firma IS NOT NULL AND firma != ''
+            LIMIT 1
+        """, (tec_nom, tec_nom, tec_nom))
+        f_row = cursor.fetchone()
+        if f_row and f_row["firma"]:
+            firma_encontrada = f_row["firma"]
+
+    if not firma_encontrada and user_id:
+        cursor.execute("SELECT firma FROM perfiles WHERE id = ? AND firma IS NOT NULL AND firma != '' LIMIT 1", (user_id,))
+        f_row = cursor.fetchone()
+        if f_row and f_row["firma"]:
+            firma_encontrada = f_row["firma"]
+
+    if firma_encontrada:
+        record["firma_tecnico"] = firma_encontrada
+
+    conn.close()
+
     try:
         pdf_bytes = generate_entrega_equipo_pdf(record)
         disposition = "attachment" if download else "inline"
@@ -3732,12 +3866,18 @@ def get_tareas_diario_por_tecnico_pdf(
     cursor = conn.cursor()
     _ensure_tareas_tables(cursor)
     reportes = _query_reportes_con_items(cursor, fecha_norm, fecha_norm, tecnico)
+    tec_firma = None
+    if tecnico and tecnico.strip():
+        cursor.execute("SELECT firma FROM perfiles WHERE (tecnico = ? OR nombre = ?) AND firma IS NOT NULL AND firma != '' LIMIT 1", (tecnico.strip(), tecnico.strip()))
+        f_row = cursor.fetchone()
+        if f_row and f_row["firma"]:
+            tec_firma = f_row["firma"]
     conn.close()
 
     if not reportes and tecnico and tecnico.strip():
         reportes = [{"tecnico": tecnico.strip(), "fecha": fecha_norm, "estado": "SIN REGISTROS", "items": []}]
 
-    pdf_bytes = generate_tareas_diarias_pdf(reportes, fecha_norm, tecnico)
+    pdf_bytes = generate_tareas_diarias_pdf(reportes, fecha_norm, tecnico, tecnico_firma=tec_firma)
     tec_slug = f"_{re.sub(r'[^A-Za-z0-9_-]+', '_', tecnico.strip())}" if (tecnico and tecnico.strip()) else "_Todos"
     return _pdf_response(pdf_bytes, f"Reporte_Diario_Tareas{tec_slug}_{fecha_norm}.pdf", download)
 

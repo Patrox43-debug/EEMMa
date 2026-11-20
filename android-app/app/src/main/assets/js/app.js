@@ -38,6 +38,10 @@ const app = {
   entregaEquipoSignaturePad: null,
   entregasEquiposData: [],
 
+  // Estado para Perfil de Usuario y Firma Digital
+  profileSignaturePad: null,
+  profilePendingSignature: null,
+
   // Catálogo Oficial de 50 Servicios Clínicos y Unidades Hospitalarias
   serviciosClinicosOficiales: [
     "ABASTECIMIENTO",
@@ -303,10 +307,10 @@ const app = {
       try {
         this.currentAppVersion = window.AndroidBridge.getAppVersionName();
       } catch (e) {
-        this.currentAppVersion = "1.12.7";
+        this.currentAppVersion = "1.12.8";
       }
     } else {
-      this.currentAppVersion = "1.12.7";
+      this.currentAppVersion = "1.12.8";
     }
 
     setTimeout(() => {
@@ -887,6 +891,277 @@ const app = {
       wrapper.classList.remove("open");
       const btn = document.getElementById("user-dropdown-btn");
       if (btn) btn.setAttribute("aria-expanded", "false");
+    }
+  },
+
+  /* ==========================================================================
+     MODAL EDITAR PERFIL DE USUARIO Y FIRMA DIGITAL
+     ========================================================================== */
+  async openEditProfileModal() {
+    this.closeUserDropdown();
+    if (!this.currentUser) {
+      this.showToast("Debes iniciar sesión para editar tu perfil.", "warning");
+      return;
+    }
+
+    const modal = document.getElementById("modal-edit-profile");
+    if (!modal) return;
+
+    // Llenar datos informativos de cabecera
+    const initials = (this.currentUser.nombre || this.currentUser.tecnico || "U").charAt(0).toUpperCase();
+    const initialsEl = document.getElementById("ep-avatar-initials");
+    if (initialsEl) initialsEl.textContent = initials;
+
+    const nameEl = document.getElementById("ep-user-name");
+    if (nameEl) nameEl.textContent = this.currentUser.nombre || this.currentUser.tecnico || "Usuario";
+
+    const rutEl = document.getElementById("ep-user-rut");
+    if (rutEl) rutEl.textContent = this.currentUser.rut ? `RUT: ${this.currentUser.rut}` : "RUT: No registrado";
+
+    const roleEl = document.getElementById("ep-user-role-badge");
+    if (roleEl) {
+      const r = this.currentUser.rol || "tecnico";
+      roleEl.textContent = r === "administrador" ? "Administrador" : (r === "ingeniero" ? "Ingeniero" : "Técnico");
+      roleEl.className = `badge ${r === "administrador" ? "badge-admin" : (r === "ingeniero" ? "badge-ingeniero" : "badge-tecnico")}`;
+    }
+
+    // Campo correo
+    const correoInput = document.getElementById("ep-correo");
+    if (correoInput) correoInput.value = this.currentUser.correo || "";
+
+    // Limpiar campos de contraseña
+    const currPass = document.getElementById("ep-current-password");
+    if (currPass) currPass.value = "";
+    const newPass = document.getElementById("ep-new-password");
+    if (newPass) newPass.value = "";
+    const confPass = document.getElementById("ep-confirm-password");
+    if (confPass) confPass.value = "";
+
+    // Resetear firma pendiente y archivo
+    this.profilePendingSignature = null;
+    const fileInput = document.getElementById("ep-firma-file-input");
+    if (fileInput) fileInput.value = "";
+
+    // Mostrar estado de firma actual
+    this.renderCurrentProfileSignaturePreview();
+
+    // Mostrar modal
+    modal.classList.add("active");
+
+    // Inicializar signature pad
+    setTimeout(() => {
+      if (!this.profileSignaturePad) {
+        if (typeof SignaturePad !== "undefined") {
+          this.profileSignaturePad = new SignaturePad("ep-signature-canvas");
+        }
+      } else {
+        this.profileSignaturePad.clear();
+        this.profileSignaturePad.initCanvas();
+      }
+    }, 150);
+
+    // Consultar datos frescos del servidor
+    try {
+      const res = await fetch(`/api/auth/profile/${this.currentUser.id}`);
+      if (res.ok) {
+        const freshUser = await res.json();
+        this.currentUser.correo = freshUser.correo;
+        this.currentUser.firma = freshUser.firma;
+        if (correoInput) correoInput.value = freshUser.correo || "";
+        this.renderCurrentProfileSignaturePreview();
+        localStorage.setItem("eemm_user", JSON.stringify(this.currentUser));
+      }
+    } catch (e) {}
+  },
+
+  renderCurrentProfileSignaturePreview() {
+    const previewBox = document.getElementById("ep-current-firma-preview");
+    if (!previewBox) return;
+
+    if (this.profilePendingSignature === "CLEAR") {
+      previewBox.innerHTML = `
+        <span style="font-size: 0.78rem; color: var(--danger, #ef4444); font-weight: 600;">
+          Firma marcada para eliminación. Guarda los cambios para confirmar.
+        </span>
+      `;
+      return;
+    }
+
+    if (this.profilePendingSignature && this.profilePendingSignature.startsWith("data:image")) {
+      previewBox.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <img src="${this.profilePendingSignature}" alt="Nueva firma cargada" style="max-height: 52px; max-width: 220px; object-fit: contain;">
+          <span style="font-size: 0.72rem; color: var(--success, #10b981); font-weight: 600;">
+            Nueva imagen de firma cargada (Lista para guardar)
+          </span>
+        </div>
+      `;
+      return;
+    }
+
+    const currentFirma = this.currentUser && this.currentUser.firma;
+    if (currentFirma) {
+      previewBox.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+          <img src="${currentFirma}?t=${Date.now()}" alt="Firma digital registrada" style="max-height: 52px; max-width: 220px; object-fit: contain;">
+          <span style="font-size: 0.72rem; color: var(--text-secondary);">
+            Firma digital activa guardada en tu cuenta
+          </span>
+        </div>
+      `;
+    } else {
+      previewBox.innerHTML = `
+        <span style="font-size: 0.75rem; color: var(--text-tertiary);">
+          No tienes una firma guardada aún. Sube un archivo PNG/JPG o dibújala abajo.
+        </span>
+      `;
+    }
+  },
+
+  closeEditProfileModal() {
+    const modal = document.getElementById("modal-edit-profile");
+    if (modal) modal.classList.remove("active");
+    this.profilePendingSignature = null;
+    if (this.profileSignaturePad) {
+      this.profileSignaturePad.clear();
+    }
+  },
+
+  handleProfileFirmaUpload(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      this.showToast("Por favor selecciona un archivo de imagen válido (PNG, JPG o WebP)", "warning");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.profilePendingSignature = e.target.result;
+      if (this.profileSignaturePad) {
+        this.profileSignaturePad.clear();
+      }
+      this.renderCurrentProfileSignaturePreview();
+      this.showToast("Imagen de firma cargada. Haz clic en 'Guardar Cambios' para confirmarla.", "info");
+    };
+    reader.onerror = () => {
+      this.showToast("Error al leer el archivo de firma", "error");
+    };
+    reader.readAsDataURL(file);
+  },
+
+  clearProfileCanvas() {
+    if (this.profileSignaturePad) {
+      this.profileSignaturePad.clear();
+    }
+  },
+
+  clearProfileSignature() {
+    this.profilePendingSignature = "CLEAR";
+    if (this.profileSignaturePad) {
+      this.profileSignaturePad.clear();
+    }
+    const fileInput = document.getElementById("ep-firma-file-input");
+    if (fileInput) fileInput.value = "";
+    this.renderCurrentProfileSignaturePreview();
+    this.showToast("Firma seleccionada para borrar. Haz clic en 'Guardar Cambios' para aplicar.", "warning");
+  },
+
+  async submitEditProfile(e) {
+    e.preventDefault();
+    if (!this.currentUser) {
+      this.showToast("Debes iniciar sesión para actualizar tu perfil.", "error");
+      return;
+    }
+
+    const correoInput = document.getElementById("ep-correo");
+    const correo = correoInput ? correoInput.value.trim() : "";
+    if (!correo || !correo.includes("@") || !correo.includes(".")) {
+      this.showToast("Por favor ingresa un correo electrónico válido.", "warning");
+      if (correoInput) correoInput.focus();
+      return;
+    }
+
+    const currentPwd = document.getElementById("ep-current-password") ? document.getElementById("ep-current-password").value : "";
+    const newPwd = document.getElementById("ep-new-password") ? document.getElementById("ep-new-password").value : "";
+    const confirmPwd = document.getElementById("ep-confirm-password") ? document.getElementById("ep-confirm-password").value : "";
+
+    if (newPwd) {
+      if (newPwd.length < 4) {
+        this.showToast("La nueva contraseña debe tener al menos 4 caracteres.", "warning");
+        return;
+      }
+      if (newPwd !== confirmPwd) {
+        this.showToast("Las nuevas contraseñas no coinciden.", "warning");
+        return;
+      }
+      if (!currentPwd) {
+        this.showToast("Por favor ingresa tu contraseña actual para confirmar el cambio de clave.", "warning");
+        return;
+      }
+    }
+
+    // Determinar la firma a enviar
+    let firmaToSend = null;
+    if (this.profilePendingSignature === "CLEAR") {
+      firmaToSend = "CLEAR";
+    } else if (this.profilePendingSignature && this.profilePendingSignature.startsWith("data:image")) {
+      firmaToSend = this.profilePendingSignature;
+    } else if (this.profileSignaturePad && !this.profileSignaturePad.isEmpty()) {
+      firmaToSend = this.profileSignaturePad.toDataURL();
+    }
+
+    const submitBtn = document.getElementById("btn-submit-edit-profile");
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm" style="width:14px;height:14px;border-width:2px;"></span> Guardando...`;
+    }
+
+    try {
+      const payload = {
+        user_id: this.currentUser.id,
+        correo: correo
+      };
+      if (newPwd) {
+        payload.current_password = currentPwd;
+        payload.new_password = newPwd;
+      }
+      if (firmaToSend !== null) {
+        payload.firma = firmaToSend;
+      }
+
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Error al actualizar perfil");
+      }
+
+      // Actualizar datos del usuario en sesión local
+      if (data.user) {
+        this.currentUser = { ...this.currentUser, ...data.user };
+        localStorage.setItem("eemm_user", JSON.stringify(this.currentUser));
+      }
+
+      this.closeEditProfileModal();
+      this.showToast("¡Datos y firma actualizados correctamente!", "success");
+
+    } catch (err) {
+      console.error("Error al actualizar perfil:", err);
+      this.showToast(err.message || "Error al actualizar perfil y firma", "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Guardar Cambios
+        `;
+      }
     }
   },
 
@@ -6786,7 +7061,8 @@ const app = {
   downloadEntregaEquipoPdf(id, folio) {
     const folioClean = (folio || `EQ_${id}`).replace('/', '_');
     const filename = `Acta_Entrega_${folioClean}.pdf`;
-    this.handlePdfDownloadOrView(`/api/entregas-equipos/${id}/pdf?download=true`, filename);
+    const userIdParam = (this.currentUser && this.currentUser.id) ? `&user_id=${this.currentUser.id}` : '';
+    this.handlePdfDownloadOrView(`/api/entregas-equipos/${id}/pdf?download=true${userIdParam}`, filename);
   },
 
   exportEntregasEquiposPdf() {
@@ -8068,7 +8344,7 @@ const app = {
   /* ==========================================================================
      SISTEMA DE AUTO-ACTUALIZACIÓN DE LA APLICACIÓN (IN-APP UPDATER)
      ========================================================================== */
-  currentAppVersion: "1.12.7",
+  currentAppVersion: "1.12.8",
   pendingUpdateInfo: null,
   updateDownloading: false,
 

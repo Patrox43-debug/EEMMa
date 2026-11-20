@@ -1603,33 +1603,54 @@ def generate_entrega_equipo_pdf(record: dict) -> bytes:
     story.append(Spacer(1, 3))
 
     firma_ruta = record.get("firma_data") or record.get("firma")
-    sig_img = get_scaled_image(firma_ruta, max_width=180, max_height=55)
+    sig_img = get_scaled_image(firma_ruta, max_width=180, max_height=50)
 
     if sig_img:
         rec_firma_cell = [
             Table([[sig_img]], colWidths=[200], style=[
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                 ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             ]),
             Paragraph("___________________________________", cell_txt_center),
-            Paragraph("<font size=7 color='#000000'>Firma Digital Receptor</font>", cell_txt_center)
+            Paragraph(f"<font size=7.5 color='#000000'><b>{nombre_rec}</b></font>", cell_txt_center),
+            Paragraph("<font size=6.5 color='#000000'>Firma Digital Receptor</font>", cell_txt_center)
         ]
     else:
         rec_firma_cell = [
-            Spacer(1, 30),
+            Spacer(1, 28),
             Paragraph("___________________________________", cell_txt_center),
-            Paragraph("<font size=7 color='#000000'>Firma y Timbre Receptor</font>", cell_txt_center)
+            Paragraph(f"<font size=7.5 color='#000000'><b>{nombre_rec}</b></font>", cell_txt_center),
+            Paragraph("<font size=6.5 color='#000000'>Firma y Timbre Receptor</font>", cell_txt_center)
         ]
 
-    eem_firma_cell = [
-        Spacer(1, 30),
-        Paragraph("___________________________________", cell_txt_center),
-        Paragraph("<font size=7 color='#000000'>Firma y Timbre Unidad de Equipos Médicos</font>", cell_txt_center)
-    ]
+    firma_tecnico_ruta = record.get("firma_tecnico") or record.get("firma_usuario")
+    eem_sig_img = get_scaled_image(firma_tecnico_ruta, max_width=180, max_height=50)
+
+    if eem_sig_img:
+        eem_firma_cell = [
+            Table([[eem_sig_img]], colWidths=[200], style=[
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ]),
+            Paragraph("___________________________________", cell_txt_center),
+            Paragraph(f"<font size=7.5 color='#000000'><b>{tecnico_ent}</b></font>", cell_txt_center),
+            Paragraph("<font size=6.5 color='#000000'>Unidad de Equipos Médicos</font>", cell_txt_center)
+        ]
+    else:
+        eem_firma_cell = [
+            Spacer(1, 28),
+            Paragraph("___________________________________", cell_txt_center),
+            Paragraph(f"<font size=7.5 color='#000000'><b>{tecnico_ent}</b></font>", cell_txt_center),
+            Paragraph("<font size=6.5 color='#000000'>Firma y Timbre Unidad de Equipos Médicos</font>", cell_txt_center)
+        ]
 
     firmas_data = [
         [
@@ -2148,7 +2169,7 @@ def _build_tareas_table(items: list, st: dict, include_tecnico: bool = False) ->
     return tbl
 
 
-def generate_tareas_diarias_pdf(reportes: list, fecha: str = None, tecnico: str = None) -> bytes:
+def generate_tareas_diarias_pdf(reportes: list, fecha: str = None, tecnico: str = None, tecnico_firma: Optional[str] = None) -> bytes:
     """
     Genera el Reporte Diario oficial de Tareas / Trabajos realizados por técnico (o consolidado diario)
     para el Hospital Claudio Vicuña.
@@ -2242,9 +2263,24 @@ def generate_tareas_diarias_pdf(reportes: list, fecha: str = None, tecnico: str 
         story.append(obs_tbl)
         story.append(Spacer(1, 14))
 
+    tec_sig_img = get_scaled_image(tecnico_firma, max_width=180, max_height=42) if tecnico_firma else None
+    tec_flowables = []
+    if tec_sig_img:
+        tec_flowables.append(Table([[tec_sig_img]], colWidths=[200], style=[
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ]))
+    else:
+        tec_flowables.append(Spacer(1, 28))
+    tec_flowables.append(Paragraph(f"__________________________________________<br/><b>{tecnico_label}</b><br/>Unidad de Equipos Médicos (EEMM)", st["cell_txt_center"]))
+
     t_firmas = Table([[
-        Paragraph(f"__________________________________________<br/><b>{tecnico_label}</b><br/>Unidad de Equipos Médicos (EEMM)", st["cell_txt_center"]),
-        Paragraph("__________________________________________<br/><b>V°B° Jefatura / Supervisión EEMM</b><br/>Hospital Claudio Vicuña", st["cell_txt_center"])
+        tec_flowables,
+        [Spacer(1, 28), Paragraph("__________________________________________<br/><b>V°B° Jefatura / Supervisión EEMM</b><br/>Hospital Claudio Vicuña", st["cell_txt_center"])]
     ]], colWidths=[270, 270])
     t_firmas.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -2258,7 +2294,7 @@ def generate_tareas_diarias_pdf(reportes: list, fecha: str = None, tecnico: str 
     return buf.getvalue()
 
 
-def generate_tareas_semanal_pdf(reportes: list, fecha_inicio: str, fecha_fin: str, tecnico: str = None) -> bytes:
+def generate_tareas_semanal_pdf(reportes: list, fecha_inicio: str, fecha_fin: str, tecnico: str = None, tecnico_firma: Optional[str] = None) -> bytes:
     """
     Genera el Reporte Semanal consolidado de trabajos y tareas por técnico
     agrupado cronológicamente por jornada para el Hospital Claudio Vicuña.
@@ -2360,9 +2396,24 @@ def generate_tareas_semanal_pdf(reportes: list, fecha_inicio: str, fecha_fin: st
 
             story.append(Spacer(1, 10))
 
+    tec_sig_img = get_scaled_image(tecnico_firma, max_width=180, max_height=42) if tecnico_firma else None
+    tec_flowables = []
+    if tec_sig_img:
+        tec_flowables.append(Table([[tec_sig_img]], colWidths=[200], style=[
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ]))
+    else:
+        tec_flowables.append(Spacer(1, 28))
+    tec_flowables.append(Paragraph(f"__________________________________________<br/><b>{tecnico_label}</b><br/>Unidad de Equipos Médicos (EEMM)", st["cell_txt_center"]))
+
     t_firmas = Table([[
-        Paragraph(f"__________________________________________<br/><b>{tecnico_label}</b><br/>Unidad de Equipos Médicos (EEMM)", st["cell_txt_center"]),
-        Paragraph("__________________________________________<br/><b>V°B° Jefatura / Supervisión EEMM</b><br/>Hospital Claudio Vicuña", st["cell_txt_center"])
+        tec_flowables,
+        [Spacer(1, 28), Paragraph("__________________________________________<br/><b>V°B° Jefatura / Supervisión EEMM</b><br/>Hospital Claudio Vicuña", st["cell_txt_center"])]
     ]], colWidths=[270, 270])
     t_firmas.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
